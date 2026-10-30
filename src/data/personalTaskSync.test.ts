@@ -30,6 +30,14 @@ describe('personal task sync', () => {
     expect(merged[0]).toMatchObject({ estimateMin: 30, metadataComplete: false })
   })
 
+  it('preserves multiline notes and clearing notes through metadata sync', () => {
+    const notes = 'Call Alex\nAsk about the PC setup: https://example.com'
+    const task: Task = { ...provider, ...meta, notes }
+    const restored = mergePersonalTasks([provider], taskMetadata([task]))[0]
+    expect(restored.notes).toBe(notes)
+    expect(mergePersonalTasks([provider], taskMetadata([{ ...restored, notes: '' }]))[0].notes).toBe('')
+  })
+
   it('writes only sidecar-owned task fields', () => {
     const task = { ...provider, ...meta, taskId: provider.id }
     expect(taskMetadata([task])).toEqual([meta])

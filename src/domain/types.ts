@@ -24,6 +24,7 @@ export type ProviderTask = {
 }
 
 export type TaskMeta = {
+  notes?: string
   taskId: string
   domain: Domain
   estimateMin: number

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { configuredPersonalClientId, createPersonalGraphData, type PersonalGraphData } from './data/personalGraphData'
 import { mergePersonalTasks, personalTaskMetaFile, taskMetadata } from './data/personalTaskSync'
 import { demoProviderTasks, demoTaskMetadata } from './demoData'
@@ -11,6 +11,8 @@ import { completedParts, dueParts, toggleHabitPart } from './domain/habits'
 import type { Commitment, Domain, Energy, Goal, Habit, HabitEntry, Need, Place, Priority, Project, StoreType, Task } from './domain/types'
 import { loadProductState, saveProductState, type ProductState } from './productState'
 import { applySettings, defaultSettings, loadSettings, saveSettings, themeColorPresets, type AppSettings } from './settings'
+
+const NotesContext = createContext<(id: string) => void>(() => {})
 
 type View = 'now' | 'plan' | 'inbox' | 'progress' | 'stores' | 'settings' | 'add'
 type ConnectionStatus = 'unconfigured' | 'disconnected' | 'connected'
@@ -120,6 +122,7 @@ export function Workspace({ activeDomain, onDomain }: { activeDomain: Domain; on
   const [settings, setSettings] = useState(() => loadSettings(activeDomain))
   const [product, setProduct] = useState<ProductState>(() => loadProductState(activeDomain))
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null)
+  const [notesTaskId, setNotesTaskId] = useState<string>()
   const [editingTaskId, setEditingTaskId] = useState<string>()
   const [personalData, setPersonalData] = useState<PersonalGraphData>()
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>(
@@ -387,6 +390,7 @@ export function Workspace({ activeDomain, onDomain }: { activeDomain: Domain; on
   }
 
   return (
+    <NotesContext.Provider value={setNotesTaskId}>
     <main className="app-shell">
       <section className="app-surface" aria-label="My Brain tasks">
         <aside className="desktop-sidebar">
@@ -434,7 +438,32 @@ export function Workspace({ activeDomain, onDomain }: { activeDomain: Domain; on
         </div>
       </section>
     </main>
+    {notesTaskId && tasks.find((task) => task.id === notesTaskId) && <TaskNotesEditor key={notesTaskId} task={tasks.find((task) => task.id === notesTaskId)!} onClose={() => setNotesTaskId(undefined)} onSave={(notes) => {
+      const next = tasksRef.current.map((task) => task.id === notesTaskId ? { ...task, notes } : task)
+      commitTasks(next)
+      void persistPersonalMetadata(next)
+      setNotesTaskId(undefined)
+    }} />}
+    </NotesContext.Provider>
   )
+}
+
+function NotesButton({ task }: { task: Task }) {
+  const openNotes = useContext(NotesContext)
+  return <button className="task-notes-button" type="button" onClick={() => openNotes(task.id)} aria-label={`notes for ${task.title}`}>{task.notes ? 'notes' : 'add notes'}</button>
+}
+
+function TaskNotesEditor({ task, onSave, onClose }: { task: Task; onSave: (notes: string) => void; onClose: () => void }) {
+  const dialog = useRef<HTMLDialogElement>(null)
+  const [notes, setNotes] = useState(task.notes ?? '')
+  useEffect(() => { dialog.current?.showModal() }, [])
+  return <dialog className="task-notes-dialog" ref={dialog} aria-labelledby="notes-title" onCancel={onClose} onClose={onClose}>
+    <form onSubmit={(event) => { event.preventDefault(); onSave(notes) }}>
+      <h2 id="notes-title">{task.title}</h2>
+      <label className="field-label">notes<textarea autoFocus rows={8} value={notes} onChange={(event) => setNotes(event.target.value)} /></label>
+      <div className="form-actions"><button className="primary-action" type="submit">save notes</button><button className="secondary-action" type="button" onClick={onClose}>cancel</button></div>
+    </form>
+  </dialog>
 }
 
 function DomainSwitch({ domain, onDomain }: { domain: Domain; onDomain: (domain: Domain) => void }) {
@@ -530,7 +559,7 @@ function InboxView({ domain, tasks, onMine, onNotMine, onAdd }: {
   const task = inbox[0]
   return <section className="list-view" aria-labelledby="inbox-title">
     <div className="section-heading"><h1 id="inbox-title">inbox</h1></div>
-    {task ? <article className="plan-card"><p className="eyebrow">{inbox.length} to triage</p><h2>{task.title}</h2><div className="form-actions"><button className="primary-action" type="button" onClick={() => onMine(task.id)}>mine</button><button className="secondary-action" type="button" onClick={() => onNotMine(task.id)}>not mine</button></div></article> : <div className="list-empty"><p>inbox zero</p><button type="button" onClick={onAdd}>add task</button></div>}
+    {task ? <article className="plan-card"><p className="eyebrow">{inbox.length} to triage</p><h2>{task.title}</h2><NotesButton task={task} /><div className="form-actions"><button className="primary-action" type="button" onClick={() => onMine(task.id)}>mine</button><button className="secondary-action" type="button" onClick={() => onNotMine(task.id)}>not mine</button></div></article> : <div className="list-empty"><p>inbox zero</p><button type="button" onClick={onAdd}>add task</button></div>}
   </section>
 }
 
@@ -688,7 +717,7 @@ function DailyNowView({ availableMin, commitments, weeklyCommitments, currentDay
       <div className="today-card-heading"><div><p className="eyebrow">Must happen today</p><h2>{remaining ? `${remaining} still to do` : 'You’re clear'}</h2></div><span>{commitments.length - remaining}/{commitments.length}</span></div>
       {commitments.length ? <ul className="commitment-list">{commitments.map((task) => {
         const done = isDoneToday(task, currentDay)
-        return <li className={done ? 'is-complete' : ''} key={task.id}><button className="complete-toggle" type="button" onClick={() => onToggle(task.id)} aria-label={`${done ? 'Undo' : 'Complete'} ${task.title}`}><span /></button><div><p>{task.title}</p><small>{commitmentHint(task, currentDay, place)}</small></div><span>{duration(task.estimateMin)}</span></li>
+        return <li className={done ? 'is-complete' : ''} key={task.id}><button className="complete-toggle" type="button" onClick={() => onToggle(task.id)} aria-label={`${done ? 'Undo' : 'Complete'} ${task.title}`}><span /></button><div><p>{task.title}</p><NotesButton task={task} /><small>{commitmentHint(task, currentDay, place)}</small></div><span>{duration(task.estimateMin)}</span></li>
       })}</ul> : <p className="empty-copy">Nothing is required today.</p>}
     </section>
     <HabitCard date={currentDay} entries={habitEntries} habits={personalHabits} onToggle={onHabitPart} />
@@ -696,7 +725,7 @@ function DailyNowView({ availableMin, commitments, weeklyCommitments, currentDay
       <div className="today-card-heading"><div><p className="eyebrow">next up</p><h2 id="week-title">this week</h2></div><span>{weeklyCommitments.length}</span></div>
       {weeklyCommitments.length ? <ul className="commitment-list">{weeklyCommitments.map((task) => <li key={task.id}>
         <button className="complete-toggle" type="button" onClick={() => onToggle(task.id)} aria-label={`complete ${task.title}`}><span /></button>
-        <div><p>{task.title}</p><small>{weeklyCommitmentHint(task)}</small></div><span>{duration(task.estimateMin)}</span>
+        <div><p>{task.title}</p><NotesButton task={task} /><small>{weeklyCommitmentHint(task)}</small></div><span>{duration(task.estimateMin)}</span>
       </li>)}</ul> : <p className="empty-copy">nothing else due this week.</p>}
     </section>
     <section className="picker" aria-labelledby="picker-title">
@@ -708,7 +737,7 @@ function DailyNowView({ availableMin, commitments, weeklyCommitments, currentDay
     <article className="plan-card" aria-live="polite">
       <div className="card-rule" /><p className="eyebrow">suggested next · {energy === 'errand' ? 'out' : place === 'office' ? domain === 'personal' ? 'laptop or phone' : 'at work' : 'at home'}</p>
       <h2>{plan.tasks.length ? `${plan.tasks.length} things within reach` : 'Nothing honest fits'}</h2>
-      {plan.tasks.length ? <ul className="task-set">{plan.tasks.map((task) => <li key={task.id}><span>{task.title}</span><span>{duration(task.estimateMin)}</span></li>)}</ul> : <p className="empty-copy">Change the window or energy. The backlog stays safe.</p>}
+      {plan.tasks.length ? <ul className="task-set">{plan.tasks.map((task) => <li key={task.id}><div><span>{task.title}</span><NotesButton task={task} /></div><span>{duration(task.estimateMin)}</span></li>)}</ul> : <p className="empty-copy">Change the window or energy. The backlog stays safe.</p>}
       <div className="fit-line"><span>{duration(plan.totalMin)} planned</span><span>{duration(plan.availableMin - plan.totalMin)} left open</span></div><div className="fit-track" aria-hidden="true"><div style={{ width: `${(plan.totalMin / Math.max(plan.availableMin, 1)) * 100}%` }} /></div>
       <button className="primary-action" disabled={!plan.tasks.length} type="button">Take this set</button>
     </article>
@@ -751,7 +780,7 @@ function StoreLists({ activeStore, tasks, onStore, onToggle, onAdd }: {
     })}</div>
     <div className="store-heading"><div><h2>{storeLabel(activeStore)}</h2><p>{activeStore === 'grocery' ? 'Checked items stay here for next time.' : 'Bought items leave this list.'}</p></div>{activeStore === 'grocery' && checkedCount > 0 && <span>{checkedCount} stocked</span>}</div>
     <form className="quick-item" onSubmit={submit}><input aria-label={`Add item to ${storeLabel(activeStore)}`} value={title} onChange={(event) => setTitle(event.target.value)} placeholder={`Add to ${storeLabel(activeStore)}`} /><button type="submit" disabled={!title.trim()}>Add</button></form>
-    {items.length ? <ul className="shopping-list">{items.map((item) => <li className={item.completed ? 'is-complete' : ''} key={item.id}><button className="complete-toggle" type="button" onClick={() => onToggle(item.id)} aria-label={`${item.completed ? 'Need again' : 'Mark bought'}: ${item.title}`}><span /></button><span>{item.title}</span></li>)}</ul> : <div className="list-empty"><p>{activeStore === 'grocery' ? 'No grocery items yet.' : `Nothing to buy from ${storeLabel(activeStore)}.`}</p></div>}
+    {items.length ? <ul className="shopping-list">{items.map((item) => <li className={item.completed ? 'is-complete' : ''} key={item.id}><button className="complete-toggle" type="button" onClick={() => onToggle(item.id)} aria-label={`${item.completed ? 'Need again' : 'Mark bought'}: ${item.title}`}><span /></button><span>{item.title}</span><NotesButton task={item} /></li>)}</ul> : <div className="list-empty"><p>{activeStore === 'grocery' ? 'No grocery items yet.' : `Nothing to buy from ${storeLabel(activeStore)}.`}</p></div>}
   </section>
 }
 
@@ -764,6 +793,7 @@ function AddTask({ domain: initialDomain, existingTask, onAdd, onUpdate, onCance
 }) {
   const domain = existingTask?.domain ?? initialDomain
   const [title, setTitle] = useState(existingTask?.title ?? '')
+  const [notes, setNotes] = useState(existingTask?.notes ?? '')
   const [dueDate, setDueDate] = useState(existingTask?.dueDate ?? '')
   const [hiddenUntil, setHiddenUntil] = useState(existingTask?.hiddenUntil ?? '')
   const [estimateMin, setEstimateMin] = useState(existingTask?.estimateMin ?? 30)
@@ -794,7 +824,7 @@ function AddTask({ domain: initialDomain, existingTask, onAdd, onUpdate, onCance
     const cleanTitle = title.trim()
     if (!cleanTitle) return
     const id = existingTask?.id ?? globalThis.crypto?.randomUUID?.() ?? `task-${Date.now()}`
-    const task: Task = { ...existingTask, id, taskId: id, domain, title: cleanTitle, dueDate: dueDate || undefined, hiddenUntil: hiddenUntil || undefined, completed: existingTask?.completed ?? false,
+    const task: Task = { ...existingTask, id, taskId: id, domain, title: cleanTitle, notes, dueDate: dueDate || undefined, hiddenUntil: hiddenUntil || undefined, completed: existingTask?.completed ?? false,
       estimateMin, originalEstimateMin: estimateMin, priority, planDate: today(), energy,
       place: domain === 'personal' && places.length ? places : domain === 'work' ? ['office'] : undefined,
       needs: domain === 'personal' && needs.length ? needs : domain === 'work' ? ['computer'] : undefined,
@@ -824,6 +854,8 @@ function AddTask({ domain: initialDomain, existingTask, onAdd, onUpdate, onCance
     <div className="section-heading"><h1 id="add-title">{existingTask ? 'add details' : 'add a task'}</h1></div>
     <form onSubmit={submit}>
       <div className="quick-capture"><label className="field-label">task<input autoFocus value={title} onChange={(event) => setTitle(event.target.value)} placeholder="what needs doing?" required /></label></div>
+
+      <label className="field-label capture-notes">notes<textarea rows={3} value={notes} onChange={(event) => setNotes(event.target.value)} /></label>
 
       {showDetails && <>
       <fieldset className="form-section"><legend>when</legend><div className="field-pair"><label className="field-label">available from<input type="date" value={hiddenUntil} onChange={(event) => setHiddenUntil(event.target.value)} /></label><label className="field-label">due date<input type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} /></label></div></fieldset>
