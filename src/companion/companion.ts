@@ -108,6 +108,6 @@ export function mapCompanionError(error: unknown): CompanionError {
     return new CompanionError('vault', `github returned ${error.status}`)
   }
   if (error instanceof BridgeUnreachableError) return new CompanionError('unreachable', error.message)
-  if (error instanceof TypeError) return new CompanionError('unreachable', 'network request failed')
+  if (error instanceof TypeError) return new CompanionError('unreachable', `network request failed: ${error.message.toLowerCase()}`)
   return new CompanionError('http', error instanceof Error ? error.message.toLowerCase() : 'something went wrong')
 }
