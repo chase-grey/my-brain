@@ -102,11 +102,7 @@ export function mapCompanionError(error: unknown): CompanionError {
     if (error.status === 429 || error.status >= 500) return new CompanionError('busy', 'anthropic is busy, try again')
     return new CompanionError('http', `anthropic returned ${error.status}`)
   }
-  if (error instanceof GitHubError) {
-    if (error.status === 401 || error.status === 403) return new CompanionError('vault', 'github rejected the token')
-    if (error.status === 404) return new CompanionError('vault', 'vault repo or branch not found')
-    return new CompanionError('vault', `github returned ${error.status}`)
-  }
+  if (error instanceof GitHubError) return new CompanionError('vault', error.message)
   if (error instanceof BridgeUnreachableError) return new CompanionError('unreachable', error.message)
   if (error instanceof TypeError) return new CompanionError('unreachable', `network request failed: ${error.message.toLowerCase()}`)
   return new CompanionError('http', error instanceof Error ? error.message.toLowerCase() : 'something went wrong')
