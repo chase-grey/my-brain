@@ -3,8 +3,14 @@ export type VaultNote = { path: string; sha: string }
 
 export class GitHubError extends Error {
   constructor(readonly status: number, readonly responseBody: string) {
-    super(`github returned ${status}`)
+    super(describeGitHubStatus(status))
   }
+}
+
+export function describeGitHubStatus(status: number): string {
+  if (status === 401 || status === 403) return 'github rejected the token'
+  if (status === 404) return 'vault repo or branch not found; check the github repo and branch in settings'
+  return `github returned ${status}`
 }
 
 export interface VaultStore {
