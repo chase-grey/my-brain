@@ -13,4 +13,6 @@ it('renders each space using only its own stored tasks', () => {
   expect(work).not.toContain('personal care')
   expect(personal).toContain('Private dentist appointment')
   expect(personal).not.toContain('Work release review')
+  expect(work).toContain('>companion<')
+  expect(personal).toContain('>companion<')
 })

@@ -29,6 +29,25 @@ and set `VITE_MICROSOFT_CLIENT_ID` to the application client ID.
 Open settings and choose `connect microsoft`. Existing sessions restore and sync on
 startup. The app continues using demo data when the client ID is absent.
 
+## companion
+
+The companion view is a chat that can read and write your Obsidian notes, create tasks,
+and change goals. Each space has its own provider.
+
+**personal** calls Anthropic directly from the browser with your own key, and reads the
+HomeBase vault from a private GitHub repo, so it works on the phone and at home without VPN.
+In settings fill in the anthropic api key, the github repo as `owner/name`, the branch, and a
+fine-grained GitHub token with Contents read and write on that one repo. Keys stay in this
+browser's local storage and are never synced.
+
+**work** uses Claude Code on the work PC through the bridge, under your Epic login. Nothing
+from the Hivemind vault leaves the machine except through that sanctioned session. Run
+`npm run bridge`; it serves `/chat` with the vault folder as the working directory, so the
+vault's CLAUDE.md and skills apply. Outlook does not need to be running for chat. On the phone
+the work companion shows `only on the work pc`.
+
+Bridge options: `-VaultPath`, `-ChatAllowedTools`, `-ChatTimeoutSec`.
+
 ## Related
 
 - [`../workout-tracker`](../workout-tracker) — the Body domain's logging surface, and

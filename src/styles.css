@@ -273,6 +273,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .install-app { display: none; }
   .view-content { width: 100%; margin-inline: auto; }
   .view-now, .view-tasks, .view-stores, .view-settings, .view-add { max-width: none; }
+  .view-companion { max-width: 52rem; }
   .tabbar { display: none; }
   .picker h1, .section-heading h1, .now-heading h1 { font-size: 3.35rem; }
   .today-card, .week-card, .habit-card, .plan-card { padding: 1.4rem 1.55rem; }
@@ -312,3 +313,16 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .task-notes-dialog h2 { margin: 0 0 1rem; overflow-wrap: anywhere; }
 .field-label textarea { font-size: 16px; resize: vertical; min-height: 6rem; text-transform: none; }
 .capture-notes { margin: 1rem 0; }
+
+.companion-view { display: flex; flex: 1; flex-direction: column; min-height: 0; }
+.companion-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; }
+.text-action { border: 0; background: transparent; padding: 0.4rem 0; color: var(--theme-accent-light); font-size: 0.85rem; font-weight: 700; }
+.companion-turns { display: flex; flex: 1; flex-direction: column; gap: 0.6rem; margin-top: 1rem; overflow-y: auto; }
+.companion-turn { max-width: 88%; padding: 0.75rem 0.95rem; border-radius: 1rem; background: #151921; color: #f5f1e8; }
+.companion-turn p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.45; }
+.companion-turn.user { align-self: flex-end; background: var(--theme-accent-surface); border: 1px solid var(--theme-accent-border); }
+.companion-turn.assistant { align-self: flex-start; }
+.companion-turn.is-error { border: 1px solid #7a3b3b; color: #f2b8b8; }
+.companion-turn.is-pending { color: #8f949f; }
+.companion-composer { position: sticky; bottom: 0; margin-bottom: 0; padding-top: 0.5rem; background: linear-gradient(to top, #0b0e13 70%, transparent); }
+.companion-composer input { font-size: 16px; }
