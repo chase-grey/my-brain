@@ -6,6 +6,7 @@ export const personalTaskMetaFile = 'task-meta.v1.json'
 export function taskMetadata(tasks: Task[]): TaskMeta[] {
   return tasks.filter((task) => task.domain === 'personal').map((task) => ({
     taskId: task.id,
+    notes: task.notes,
     domain: task.domain,
     estimateMin: task.estimateMin,
     originalEstimateMin: task.originalEstimateMin,
