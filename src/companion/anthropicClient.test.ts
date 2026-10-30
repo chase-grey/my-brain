@@ -22,4 +22,19 @@ describe('anthropic client', () => {
     const client = new AnthropicClient('bad', async () => new Response('{"error":"auth"}', { status: 401 }))
     await expect(client.createMessage({ model: 'm', messages: [] })).rejects.toMatchObject({ status: 401 })
   })
+
+  it('calls the global fetch unbound, the way browsers require', async () => {
+    // Browsers throw "illegal invocation" when fetch runs with `this` set to anything but the window.
+    const strictFetch = vi.fn(function (this: unknown) {
+      if (this !== undefined && this !== globalThis) throw new TypeError("Failed to execute 'fetch' on 'Window': Illegal invocation")
+      return Promise.resolve(new Response(JSON.stringify({ id: 'msg', stop_reason: 'end_turn', content: [] }), { status: 200 }))
+    })
+    vi.stubGlobal('fetch', strictFetch)
+    try {
+      const client = new AnthropicClient('sk-ant-test')
+      await expect(client.createMessage({ model: 'm', messages: [] })).resolves.toMatchObject({ id: 'msg' })
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
 })

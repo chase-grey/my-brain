@@ -18,7 +18,7 @@ export class GraphError extends Error {
 export class GraphClient {
   constructor(
     private readonly getAccessToken: AccessTokenProvider,
-    private readonly fetcher: typeof fetch = fetch,
+    private readonly fetcher: typeof fetch = (input, init) => fetch(input, init),
     private readonly baseUrl = 'https://graph.microsoft.com/v1.0',
   ) {}
 

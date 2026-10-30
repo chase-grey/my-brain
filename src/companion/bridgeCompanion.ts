@@ -9,7 +9,7 @@ export class BridgeUnreachableError extends Error {
 }
 
 export class BridgeCompanionClient {
-  constructor(private readonly baseUrl = 'http://127.0.0.1:47321', private readonly fetcher: typeof fetch = fetch) {}
+  constructor(private readonly baseUrl = 'http://127.0.0.1:47321', private readonly fetcher: typeof fetch = (input, init) => fetch(input, init)) {}
 
   async status(): Promise<BridgeChatStatus> {
     return await this.request<BridgeChatStatus>('/chat/status')

@@ -16,7 +16,7 @@ export type WorkStatus = {
 }
 
 export class WorkBridgeProvider implements TaskProvider {
-  constructor(private readonly baseUrl = 'http://127.0.0.1:47321', private readonly fetcher: typeof fetch = fetch) {}
+  constructor(private readonly baseUrl = 'http://127.0.0.1:47321', private readonly fetcher: typeof fetch = (input, init) => fetch(input, init)) {}
 
   async status(): Promise<WorkStatus> {
     return await this.request<WorkStatus>('/status')

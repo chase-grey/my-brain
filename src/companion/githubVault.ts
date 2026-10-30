@@ -39,7 +39,7 @@ export class GitHubVault implements VaultStore {
 
   constructor(
     private readonly config: VaultConfig,
-    private readonly fetcher: typeof fetch = fetch,
+    private readonly fetcher: typeof fetch = (input, init) => fetch(input, init),
     private readonly baseUrl = 'https://api.github.com',
   ) {}
 
