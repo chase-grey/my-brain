@@ -10,11 +10,13 @@ import { buildWeekReceipt } from './domain/receipt'
 import { completedParts, dueParts, toggleHabitPart } from './domain/habits'
 import type { Commitment, Domain, Energy, Goal, Habit, HabitEntry, Need, Place, Priority, Project, StoreType, Task } from './domain/types'
 import { loadProductState, saveProductState, type ProductState } from './productState'
-import { applySettings, defaultSettings, loadSettings, saveSettings, themeColorPresets, type AppSettings } from './settings'
+import { applySettings, companionModelOptions, defaultSettings, loadSettings, saveSettings, themeColorPresets, type AppSettings } from './settings'
+import { CompanionView } from './companion/CompanionView'
+import { buildPlanSummary, companionGoal, companionTask, summarizeGoal, summarizeProject, summarizeTask, type CompanionActions, type GoalChanges } from './companion/companionTools'
 
 const NotesContext = createContext<(id: string) => void>(() => {})
 
-type View = 'now' | 'plan' | 'inbox' | 'progress' | 'stores' | 'settings' | 'add'
+type View = 'now' | 'plan' | 'inbox' | 'progress' | 'stores' | 'settings' | 'add' | 'companion'
 type ConnectionStatus = 'unconfigured' | 'disconnected' | 'connected'
 const taskStorageKey = (domain: Domain) => `my-brain.${domain}.tasks.v1`
 
@@ -133,6 +135,8 @@ export function Workspace({ activeDomain, onDomain }: { activeDomain: Domain; on
   const [syncError, setSyncError] = useState<string>()
   const authStarted = useRef(false)
   const tasksRef = useRef(tasks)
+  const productRef = useRef(product)
+  productRef.current = product
 
   const currentDay = today()
   const currentPlace = placeOverride ?? inferredPlace()
@@ -289,6 +293,17 @@ export function Workspace({ activeDomain, onDomain }: { activeDomain: Domain; on
 
   function addTask(task: Task, triageTask?: Task) {
     if (task.domain !== activeDomain || (triageTask && triageTask.domain !== activeDomain)) return
+    insertTask(task, triageTask)
+    if (task.storeType) {
+      setActiveStore(task.storeType)
+      setView('stores')
+    } else {
+      setView('inbox')
+    }
+  }
+
+  function insertTask(task: Task, triageTask?: Task) {
+    if (task.domain !== activeDomain || (triageTask && triageTask.domain !== activeDomain)) return
     const localNext = [...tasksRef.current, task, ...(triageTask ? [triageTask] : [])]
     commitTasks(localNext)
     if (personalData && connectionStatus === 'connected' && task.domain === 'personal' && !task.recurrence) {
@@ -310,12 +325,49 @@ export function Workspace({ activeDomain, onDomain }: { activeDomain: Domain; on
     } else {
       void persistPersonalMetadata(localNext)
     }
-    if (task.storeType) {
-      setActiveStore(task.storeType)
-      setView('stores')
-    } else {
-      setView('inbox')
-    }
+  }
+
+  function completeTask(id: string) {
+    const task = tasksRef.current.find((item) => item.id === id)
+    if (!task) return undefined
+    if (isDoneToday(task, currentDay)) return { id, title: task.title, alreadyDone: true }
+    toggleComplete(id)
+    return { id, title: task.title, alreadyDone: false }
+  }
+
+  function addGoal(input: Parameters<CompanionActions['addGoal']>[0]) {
+    const goal = companionGoal(activeDomain, input)
+    setProduct((current) => ({ ...current, goals: [...current.goals, goal] }))
+    productRef.current = { ...productRef.current, goals: [...productRef.current.goals, goal] }
+    return summarizeGoal(goal)
+  }
+
+  function updateGoal(id: string, changes: GoalChanges) {
+    const existing = productRef.current.goals.find((goal) => goal.id === id && goal.domain === activeDomain)
+    if (!existing) return undefined
+    const revisions = [...existing.revisions]
+    if (changes.targetDate !== undefined && changes.targetDate !== existing.targetDate) revisions.push({ on: currentDay, field: 'date', from: existing.targetDate ?? '', to: changes.targetDate })
+    if (changes.hoursCommitted !== undefined && changes.hoursCommitted !== existing.hoursCommitted) revisions.push({ on: currentDay, field: 'hours', from: existing.hoursCommitted ?? 0, to: changes.hoursCommitted })
+    const updated: Goal = { ...existing, ...changes, revisions }
+    const apply = (goals: Goal[]) => goals.map((goal) => goal.id === id ? updated : goal)
+    setProduct((current) => ({ ...current, goals: apply(current.goals) }))
+    productRef.current = { ...productRef.current, goals: apply(productRef.current.goals) }
+    return summarizeGoal(updated)
+  }
+
+  const companionActions: CompanionActions = {
+    listTasks: (options) => tasksRef.current.filter((task) => task.domain === activeDomain && !task.storeType && (options?.includeCompleted || !isDoneToday(task, currentDay))).map(summarizeTask),
+    createTask: (input) => {
+      const task = companionTask(activeDomain, input, currentDay)
+      insertTask(task)
+      return summarizeTask(task)
+    },
+    completeTask,
+    listGoals: () => productRef.current.goals.filter((goal) => goal.domain === activeDomain && goal.status === 'active').map(summarizeGoal),
+    addGoal,
+    updateGoal,
+    listProjects: () => productRef.current.projects.filter((project) => project.domain === activeDomain && project.status === 'active').map(summarizeProject),
+    todaySummary: () => buildPlanSummary({ today: currentDay, domain: activeDomain, tasks: tasksRef.current, commitments, weeklyCommitments, plan, goals: productRef.current.goals, projects: productRef.current.projects }),
   }
 
   function editTask(id: string) {
@@ -401,6 +453,7 @@ export function Workspace({ activeDomain, onDomain }: { activeDomain: Domain; on
             <button className={view === 'plan' ? 'active' : ''} onClick={() => setView('plan')} type="button"><span>plan</span></button>
             <button className={view === 'inbox' ? 'active' : ''} onClick={() => setView('inbox')} type="button"><span>inbox</span></button>
             <button className={view === 'progress' ? 'active' : ''} onClick={() => setView('progress')} type="button"><span>progress</span></button>
+            <button className={view === 'companion' ? 'active' : ''} onClick={() => setView('companion')} type="button"><span>companion</span></button>
             <button className={view === 'settings' ? 'active' : ''} onClick={() => setView('settings')} type="button"><span>settings</span></button>
           </nav>
           <div className="sidebar-ledger"><span>{openTasks.length} open</span><span>{duration(openEstimate)}</span></div>
@@ -425,6 +478,7 @@ export function Workspace({ activeDomain, onDomain }: { activeDomain: Domain; on
         {view === 'inbox' && <InboxView domain={activeDomain} tasks={tasks} onMine={editTask} onNotMine={delegateTask} onAdd={startAddingTask} />}
         {view === 'progress' && <ProgressView domain={activeDomain} product={product} onProduct={setProduct} />}
         {view === 'stores' && <StoreLists activeStore={activeStore} tasks={tasks} onStore={setActiveStore} onToggle={toggleComplete} onAdd={addStoreItem} />}
+        {view === 'companion' && <CompanionView domain={activeDomain} settings={settings} actions={companionActions} summary={companionActions.todaySummary()} />}
         {view === 'settings' && <SettingsView domain={activeDomain} accountName={accountName} connectionStatus={connectionStatus} settings={settings} syncing={syncing} syncError={syncError} onConnect={connectPersonal} onDisconnect={disconnectPersonal} onSync={() => syncPersonal()} onSettings={setSettings} />}
         {view === 'add' && <AddTask key={editingTaskId ?? 'new'} domain={activeDomain} existingTask={tasks.find((task) => task.id === editingTaskId)} onAdd={addTask} onUpdate={updateTask} onCancel={() => { setEditingTaskId(undefined); setView('inbox') }} />}
         </div>
@@ -434,6 +488,7 @@ export function Workspace({ activeDomain, onDomain }: { activeDomain: Domain; on
           <button className={view === 'plan' ? 'active' : ''} onClick={() => setView('plan')} type="button">plan</button>
           <button className={view === 'inbox' ? 'active' : ''} onClick={() => setView('inbox')} type="button">inbox</button>
           <button className={view === 'progress' ? 'active' : ''} onClick={() => setView('progress')} type="button">progress</button>
+          <button className={view === 'companion' ? 'active' : ''} onClick={() => setView('companion')} type="button">companion</button>
         </nav>}
         </div>
       </section>
@@ -615,6 +670,19 @@ function SettingsView({ domain, accountName, connectionStatus, settings, syncing
       </> : <button className="primary-action" disabled={syncing || connectionStatus === 'unconfigured'} type="button" onClick={() => void onConnect()}>{syncing ? 'connecting' : 'connect microsoft'}</button>}
       {connectionStatus === 'unconfigured' && <p className="field-help">add the microsoft app id to connect</p>}
       {syncError && <p className="field-help" role="alert">{syncError}</p>}
+    </fieldset>}
+    {domain === 'personal' ? <fieldset className="form-section">
+      <legend>companion</legend>
+      <label className="field-label">anthropic api key<input type="password" autoComplete="off" value={settings.anthropicApiKey} onChange={(event) => onSettings((current) => ({ ...current, anthropicApiKey: event.target.value }))} /></label>
+      <label className="field-label">model<select value={settings.anthropicModel} onChange={(event) => onSettings((current) => ({ ...current, anthropicModel: event.target.value }))}>{companionModelOptions.map((model) => <option key={model} value={model}>{model}</option>)}</select></label>
+      <div className="field-pair">
+        <label className="field-label">github repo<input autoComplete="off" value={settings.githubRepo} onChange={(event) => onSettings((current) => ({ ...current, githubRepo: event.target.value }))} placeholder="owner/name" /></label>
+        <label className="field-label">branch<input autoComplete="off" value={settings.vaultBranch} onChange={(event) => onSettings((current) => ({ ...current, vaultBranch: event.target.value }))} /></label>
+      </div>
+      <label className="field-label">github token<input type="password" autoComplete="off" value={settings.githubToken} onChange={(event) => onSettings((current) => ({ ...current, githubToken: event.target.value }))} /></label>
+    </fieldset> : <fieldset className="form-section">
+      <legend>companion</legend>
+      <p className="field-help">claude code on this pc, through the work bridge</p>
     </fieldset>}
     <fieldset className="form-section">
       <legend>capacity</legend>
