@@ -20,7 +20,7 @@ export class AnthropicError extends Error {
 export class AnthropicClient {
   constructor(
     private readonly apiKey: string,
-    private readonly fetcher: typeof fetch = fetch,
+    private readonly fetcher: typeof fetch = (input, init) => fetch(input, init),
     private readonly baseUrl = 'https://api.anthropic.com/v1',
   ) {}
 
