@@ -12,6 +12,7 @@ import type { Commitment, Domain, Energy, Goal, Habit, HabitEntry, Need, Place, 
 import { loadProductState, saveProductState, type ProductState } from './productState'
 import { applySettings, companionModelOptions, defaultSettings, loadSettings, saveSettings, themeColorPresets, type AppSettings } from './settings'
 import { CompanionView } from './companion/CompanionView'
+import { NavIcon } from './navIcons'
 import { buildPlanSummary, companionGoal, companionTask, summarizeGoal, summarizeProject, summarizeTask, type CompanionActions, type GoalChanges } from './companion/companionTools'
 
 const NotesContext = createContext<(id: string) => void>(() => {})
@@ -484,12 +485,9 @@ export function Workspace({ activeDomain, onDomain }: { activeDomain: Domain; on
         </div>
 
         {view !== 'add' && <nav className="tabbar" aria-label="Primary navigation">
-          <button className={view === 'now' ? 'active' : ''} onClick={() => setView('now')} type="button">now</button>
-          <button className={view === 'plan' ? 'active' : ''} onClick={() => setView('plan')} type="button">plan</button>
-          <button className={view === 'inbox' ? 'active' : ''} onClick={() => setView('inbox')} type="button">inbox</button>
-          <button className={view === 'progress' ? 'active' : ''} onClick={() => setView('progress')} type="button">progress</button>
-          <button className={view === 'companion' ? 'active' : ''} onClick={() => setView('companion')} type="button">companion</button>
-          <button className={view === 'settings' ? 'active' : ''} onClick={() => setView('settings')} type="button">settings</button>
+          {(['now', 'plan', 'inbox', 'progress', 'companion', 'settings'] as const).map((item) => (
+            <button key={item} className={view === item ? 'active' : ''} onClick={() => setView(item)} type="button" aria-label={item} title={item}><NavIcon name={item} /></button>
+          ))}
         </nav>}
         </div>
       </section>

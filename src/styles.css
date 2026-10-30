@@ -145,8 +145,10 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   background: rgba(9, 11, 15, 0.94);
   backdrop-filter: blur(1rem);
 }
-.tabbar button { border: 0; background: transparent; padding: 0.45rem; color: #6f737d; text-align: center; font-size: 0.8rem; }
-.tabbar button.active { color: var(--theme-accent-light); font-weight: 750; }
+.tabbar button { display: flex; align-items: center; justify-content: center; border: 0; background: transparent; padding: 0.45rem 0; color: #6f737d; }
+.tabbar button svg { width: 1.5rem; height: 1.5rem; }
+.tabbar button.active { color: var(--theme-accent-light); }
+.tabbar button.active svg { stroke-width: 2.4; }
 
 .list-view { display: flex; flex: 1; flex-direction: column; }
 .section-heading h1 { margin-bottom: 0; }

@@ -11,6 +11,11 @@ import { GitHubVault, vaultConfigured } from './githubVault'
 
 type BridgeState = 'checking' | 'ready' | 'offline'
 
+// Keys and tokens never contain whitespace; pasting on a phone often adds some.
+function compact(value: string): string {
+  return value.replace(/\s+/g, '')
+}
+
 export function CompanionView({ domain, settings, actions, summary, onSettings }: {
   domain: Domain
   settings: AppSettings
@@ -30,9 +35,10 @@ export function CompanionView({ domain, settings, actions, summary, onSettings }
   actionsRef.current = actions
   summaryRef.current = summary
 
-  const vaultConfig = { repo: settings.githubRepo.trim(), token: settings.githubToken.trim(), branch: settings.vaultBranch.trim() || 'main' }
+  const apiKey = compact(settings.anthropicApiKey)
+  const vaultConfig = { repo: compact(settings.githubRepo), token: compact(settings.githubToken), branch: compact(settings.vaultBranch) || 'main' }
   const hasVault = domain === 'personal' && vaultConfigured(vaultConfig)
-  const hasKey = domain === 'work' || settings.anthropicApiKey.trim().length > 0
+  const hasKey = domain === 'work' || apiKey.length > 0
 
   const companion = useMemo<Companion | undefined>(() => {
     const systemPrompt = () => buildSystemPrompt({ domain, summary: summaryRef.current, vaultAvailable: domain === 'work' ? true : hasVault })
@@ -41,7 +47,7 @@ export function CompanionView({ domain, settings, actions, summary, onSettings }
     }
     if (!hasKey) return undefined
     return createAnthropicCompanion({
-      client: new AnthropicClient(settings.anthropicApiKey.trim()),
+      client: new AnthropicClient(apiKey),
       model: settings.anthropicModel,
       history: () => conversationRef.current.turns,
       systemPrompt,
