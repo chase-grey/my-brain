@@ -11,11 +11,12 @@ import { GitHubVault, vaultConfigured } from './githubVault'
 
 type BridgeState = 'checking' | 'ready' | 'offline'
 
-export function CompanionView({ domain, settings, actions, summary }: {
+export function CompanionView({ domain, settings, actions, summary, onSettings }: {
   domain: Domain
   settings: AppSettings
   actions: CompanionActions
   summary: PlanSummary
+  onSettings?: () => void
 }) {
   const [conversation, setConversation] = useState<CompanionConversation>(() => loadConversation(domain))
   const [draft, setDraft] = useState('')
@@ -94,14 +95,17 @@ export function CompanionView({ domain, settings, actions, summary }: {
   }
 
   const unavailable = domain === 'personal' ? !hasKey : bridge === 'offline'
-  const emptyCopy = domain === 'personal' ? 'add an anthropic key in settings' : 'only on the work pc'
 
   return <section className="companion-view" aria-labelledby="companion-title">
     <div className="section-heading companion-heading">
       <h1 id="companion-title">companion</h1>
       {conversation.turns.length > 0 && <button className="text-action" type="button" onClick={reset}>new conversation</button>}
     </div>
-    {unavailable ? <div className="list-empty"><p>{emptyCopy}</p></div> : <>
+    {unavailable ? <div className="list-empty">
+      {domain === 'personal'
+        ? <button className="text-action" type="button" onClick={onSettings}>add an anthropic key in settings</button>
+        : <p>only on the work pc</p>}
+    </div> : <>
       <div className="companion-turns" aria-live="polite">
         {conversation.turns.map((turn, index) => <article className={`companion-turn ${turn.role}${turn.error ? ' is-error' : ''}`} key={`${turn.at}-${index}`}>
           <p>{turn.text}</p>

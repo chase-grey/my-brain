@@ -478,7 +478,7 @@ export function Workspace({ activeDomain, onDomain }: { activeDomain: Domain; on
         {view === 'inbox' && <InboxView domain={activeDomain} tasks={tasks} onMine={editTask} onNotMine={delegateTask} onAdd={startAddingTask} />}
         {view === 'progress' && <ProgressView domain={activeDomain} product={product} onProduct={setProduct} />}
         {view === 'stores' && <StoreLists activeStore={activeStore} tasks={tasks} onStore={setActiveStore} onToggle={toggleComplete} onAdd={addStoreItem} />}
-        {view === 'companion' && <CompanionView domain={activeDomain} settings={settings} actions={companionActions} summary={companionActions.todaySummary()} />}
+        {view === 'companion' && <CompanionView domain={activeDomain} settings={settings} actions={companionActions} summary={companionActions.todaySummary()} onSettings={() => setView('settings')} />}
         {view === 'settings' && <SettingsView domain={activeDomain} accountName={accountName} connectionStatus={connectionStatus} settings={settings} syncing={syncing} syncError={syncError} onConnect={connectPersonal} onDisconnect={disconnectPersonal} onSync={() => syncPersonal()} onSettings={setSettings} />}
         {view === 'add' && <AddTask key={editingTaskId ?? 'new'} domain={activeDomain} existingTask={tasks.find((task) => task.id === editingTaskId)} onAdd={addTask} onUpdate={updateTask} onCancel={() => { setEditingTaskId(undefined); setView('inbox') }} />}
         </div>
@@ -489,6 +489,7 @@ export function Workspace({ activeDomain, onDomain }: { activeDomain: Domain; on
           <button className={view === 'inbox' ? 'active' : ''} onClick={() => setView('inbox')} type="button">inbox</button>
           <button className={view === 'progress' ? 'active' : ''} onClick={() => setView('progress')} type="button">progress</button>
           <button className={view === 'companion' ? 'active' : ''} onClick={() => setView('companion')} type="button">companion</button>
+          <button className={view === 'settings' ? 'active' : ''} onClick={() => setView('settings')} type="button">settings</button>
         </nav>}
         </div>
       </section>
