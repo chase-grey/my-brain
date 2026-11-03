@@ -87,6 +87,18 @@ describe('companion prompt and store', () => {
     expect(buildSystemPrompt({ domain: 'work', vaultAvailable: false, summary: { today: 'd', openCount: 0, availableMin: 0, dueToday: [], overdue: [], thisWeek: [], suggested: [], goals: [], projects: [] } })).toContain('Hivemind vault is not reachable')
   })
 
+  it('tells the model what it remembers and where memory lives', () => {
+    const summary = { today: 'd', openCount: 0, availableMin: 0, dueToday: [], overdue: [], thisWeek: [], suggested: [], goals: [], projects: [] }
+    const personal = buildSystemPrompt({ domain: 'personal', vaultAvailable: true, summary, memoryIndex: '<!-- index -->\n- [gym](gym.md) — mornings\n' })
+    expect(personal).toContain('What you remember about the user (memory/MEMORY.md):\n- [gym](gym.md) — mornings')
+    expect(personal).toContain('save_memory')
+    expect(buildSystemPrompt({ domain: 'personal', vaultAvailable: true, summary, memoryIndex: '' })).toContain('- nothing yet')
+    expect(buildSystemPrompt({ domain: 'personal', vaultAvailable: true, summary })).toContain('could not be read this turn')
+    const work = buildSystemPrompt({ domain: 'work', vaultAvailable: true, summary })
+    expect(work).toContain('read 99 System/Memory/MEMORY.md at the start')
+    expect(work).not.toContain('save_memory')
+  })
+
   it('round-trips and trims the conversation', () => {
     const data = new Map<string, string>()
     const store = { getItem: (k: string) => data.get(k) ?? null, setItem: (k: string, v: string) => { data.set(k, v) }, removeItem: (k: string) => { data.delete(k) } }

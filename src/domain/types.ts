@@ -7,6 +7,7 @@ export type StoreType = 'grocery' | 'amazon' | 'hardware' | 'other'
 export type Recurrence = 'daily' | 'weekdays-135'
 export type TimeWindow = 'morning' | 'day' | 'evening' | 'anytime'
 export type Horizon = 'year' | 'season' | 'month'
+export type GoalShape = 'pace' | 'block'
 export type Kind = 'execution' | 'strategic' | 'habit' | 'delegated'
 export type Rhythm = 'pace' | 'burst'
 export type Drive = 'enforced' | 'intrinsic'
@@ -89,6 +90,9 @@ export type Goal = {
   hoursCommitted?: number
   targetDate?: string
   committedOn?: string
+  shape?: GoalShape
+  scheduledOn?: string
+  calendarEventId?: string
   revisions: Revision[]
 }
 

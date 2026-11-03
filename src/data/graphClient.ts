@@ -44,11 +44,11 @@ export class GraphClient {
     return response
   }
 
-  async collection<T>(path: string): Promise<T[]> {
+  async collection<T>(path: string, init: RequestInit = {}): Promise<T[]> {
     const values: T[] = []
     let next: string | undefined = path
     while (next) {
-      const page: GraphCollection<T> = await this.request(next)
+      const page: GraphCollection<T> = await this.request(next, init)
       values.push(...page.value)
       next = page['@odata.nextLink']
     }

@@ -1,9 +1,11 @@
+import type { CalendarBlock } from '../data/calendarGraphProvider'
 import type { Domain, Goal, Horizon, Plan, Priority, Project, Task } from '../domain/types'
 import type { AnthropicTool } from './anthropicClient'
 import type { VaultStore } from './githubVault'
+import { forgetMemory, memoryTypes, saveMemory } from './memory'
 
 export type TaskSummary = Pick<Task, 'id' | 'title' | 'dueDate' | 'completed' | 'estimateMin' | 'priority' | 'projectId' | 'notes'>
-export type GoalSummary = Pick<Goal, 'id' | 'title' | 'horizon' | 'status' | 'targetDate' | 'hoursCommitted'>
+export type GoalSummary = Pick<Goal, 'id' | 'title' | 'horizon' | 'status' | 'targetDate' | 'hoursCommitted' | 'shape' | 'scheduledOn'> & { held?: boolean }
 export type ProjectSummary = Pick<Project, 'id' | 'title' | 'status' | 'mode' | 'goalId'>
 export type PlanSummary = {
   today: string
@@ -15,11 +17,13 @@ export type PlanSummary = {
   availableMin: number
   goals: GoalSummary[]
   projects: ProjectSummary[]
+  calendar?: CalendarSummary[]
 }
+export type CalendarSummary = Pick<CalendarBlock, 'subject' | 'start' | 'end' | 'isAllDay'>
 
 export type NewTaskInput = { title: string; dueDate?: string; estimateMin?: number; priority?: Priority; notes?: string }
 export type NewGoalInput = { title: string; horizon?: Horizon; targetDate?: string }
-export type GoalChanges = Partial<Pick<Goal, 'title' | 'status' | 'targetDate' | 'hoursCommitted' | 'funded'>>
+export type GoalChanges = Partial<Pick<Goal, 'title' | 'status' | 'targetDate' | 'hoursCommitted' | 'funded' | 'shape' | 'scheduledOn'>>
 
 export interface CompanionActions {
   listTasks(options?: { includeCompleted?: boolean }): TaskSummary[]
@@ -29,10 +33,12 @@ export interface CompanionActions {
   addGoal(input: NewGoalInput): GoalSummary
   updateGoal(id: string, changes: GoalChanges): GoalSummary | undefined
   listProjects(): ProjectSummary[]
+  listCalendar(): CalendarBlock[]
+  holdGoal(id: string): Promise<GoalSummary>
   todaySummary(): PlanSummary
 }
 
-export type ToolContext = { actions: CompanionActions; vault?: VaultStore }
+export type ToolContext = { actions: CompanionActions; vault?: VaultStore; memoryFolder?: string }
 export type ToolOutcome = { ok: true; content: string } | { ok: false; error: string }
 
 const datePattern = /^\d{4}-\d{2}-\d{2}$/
@@ -45,18 +51,29 @@ const noteTools: AnthropicTool[] = [
   { name: 'append_note', description: 'Append text to the end of a vault note, creating it when missing.', input_schema: { type: 'object', properties: { path: { type: 'string' }, text: { type: 'string' } }, required: ['path', 'text'] } },
 ]
 
+const memoryTools: AnthropicTool[] = [
+  { name: 'save_memory', description: 'Remember something durable about the user: a preference, a fact about their life, a standing decision, or a correction. Writes one memory file and updates the index. Reuse an existing name to update that memory.', input_schema: { type: 'object', properties: { name: { type: 'string', description: 'short kebab-case slug, e.g. morning-routine' }, description: { type: 'string', description: 'one line shown in the index' }, content: { type: 'string', description: 'the memory itself; for a correction include why' }, type: { type: 'string', enum: [...memoryTypes] } }, required: ['name', 'description', 'content'] } },
+  { name: 'forget_memory', description: 'Delete one memory by name and drop it from the index.', input_schema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] } },
+]
+
 const taskTools: AnthropicTool[] = [
   { name: 'list_tasks', description: 'List the tasks in this space with their ids.', input_schema: { type: 'object', properties: { include_completed: { type: 'boolean' } } } },
   { name: 'create_task', description: 'Create a task in this space.', input_schema: { type: 'object', properties: { title: { type: 'string' }, due_date: dateSchema, estimate_min: { type: 'integer' }, priority: { type: 'integer', minimum: 1, maximum: 4, description: '1 is most urgent' }, notes: { type: 'string' } }, required: ['title'] } },
   { name: 'complete_task', description: 'Mark a task complete by id.', input_schema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] } },
   { name: 'list_goals', description: 'List active goals and projects with their ids.', input_schema: { type: 'object', properties: {} } },
   { name: 'add_goal', description: 'Add a goal.', input_schema: { type: 'object', properties: { title: { type: 'string' }, horizon: { type: 'string', enum: ['year', 'season', 'month'] }, target_date: dateSchema }, required: ['title'] } },
-  { name: 'update_goal', description: 'Change a goal by id.', input_schema: { type: 'object', properties: { id: { type: 'string' }, title: { type: 'string' }, status: { type: 'string', enum: ['active', 'met', 'abandoned'] }, target_date: dateSchema, hours_committed: { type: 'number' }, funded: { type: 'boolean' } }, required: ['id'] } },
-  { name: 'today_summary', description: 'Current view of today: due, overdue, this week, suggestions, available minutes.', input_schema: { type: 'object', properties: {} } },
+  { name: 'update_goal', description: 'Change a goal by id. A block goal is done in one sitting and has a scheduled_on day instead of hours; a pace goal has hours_committed by a target_date.', input_schema: { type: 'object', properties: { id: { type: 'string' }, title: { type: 'string' }, status: { type: 'string', enum: ['active', 'met', 'abandoned'] }, target_date: dateSchema, hours_committed: { type: 'number' }, funded: { type: 'boolean' }, shape: { type: 'string', enum: ['pace', 'block'] }, scheduled_on: dateSchema }, required: ['id'] } },
+  { name: 'today_summary', description: 'Current view of today: due, overdue, this week, suggestions, available minutes, calendar.', input_schema: { type: 'object', properties: {} } },
 ]
 
-export function companionTools(options: { hasVault: boolean }): AnthropicTool[] {
-  return options.hasVault ? [...noteTools, ...taskTools] : taskTools
+const calendarTools: AnthropicTool[] = [
+  { name: 'list_calendar', description: 'Personal calendar events for the next seven days, in local time.', input_schema: { type: 'object', properties: {} } },
+  { name: 'hold_in_calendar', description: 'Write a block goal\'s scheduled day into the personal calendar as a busy afternoon so the day stays free. Set scheduled_on with update_goal first.', input_schema: { type: 'object', properties: { id: { type: 'string', description: 'goal id' } }, required: ['id'] } },
+]
+
+export function companionTools(options: { hasVault: boolean; hasCalendar?: boolean }): AnthropicTool[] {
+  const tools = options.hasCalendar ? [...taskTools, ...calendarTools] : taskTools
+  return options.hasVault ? [...noteTools, ...memoryTools, ...tools] : tools
 }
 
 type Args = Record<string, unknown>
@@ -97,8 +114,21 @@ function optionalEnum<T extends string>(input: Args, key: string, allowed: reado
   return value as T | undefined
 }
 
-async function run(name: string, input: Args, { actions, vault }: ToolContext): Promise<unknown> {
+async function run(name: string, input: Args, { actions, vault, memoryFolder = 'memory' }: ToolContext): Promise<unknown> {
   switch (name) {
+    case 'save_memory': {
+      if (!vault) throw new Error('vault is not configured')
+      return await saveMemory(vault, memoryFolder, {
+        name: requireString(input, 'name'),
+        description: requireString(input, 'description'),
+        content: requireString(input, 'content'),
+        type: optionalEnum(input, 'type', memoryTypes),
+      })
+    }
+    case 'forget_memory': {
+      if (!vault) throw new Error('vault is not configured')
+      return await forgetMemory(vault, memoryFolder, requireString(input, 'name'))
+    }
     case 'list_notes': {
       if (!vault) throw new Error('vault is not configured')
       const folder = optionalString(input, 'folder')?.replace(/\/+$/, '')
@@ -147,15 +177,23 @@ async function run(name: string, input: Args, { actions, vault }: ToolContext): 
       const targetDate = optionalDate(input, 'target_date')
       const hoursCommitted = optionalNumber(input, 'hours_committed')
       const funded = arg(input, 'funded')
+      const shape = optionalEnum(input, 'shape', ['pace', 'block'] as const)
+      const scheduledOn = optionalDate(input, 'scheduled_on')
       if (title !== undefined) changes.title = title.trim()
       if (status !== undefined) changes.status = status
       if (targetDate !== undefined) changes.targetDate = targetDate
       if (hoursCommitted !== undefined) changes.hoursCommitted = hoursCommitted
       if (typeof funded === 'boolean') changes.funded = funded
+      if (shape !== undefined) changes.shape = shape
+      if (scheduledOn !== undefined) { changes.scheduledOn = scheduledOn; changes.shape = changes.shape ?? 'block' }
       const result = actions.updateGoal(requireString(input, 'id'), changes)
       if (!result) throw new Error('no goal with that id')
       return result
     }
+    case 'list_calendar':
+      return actions.listCalendar().map(summarizeEvent)
+    case 'hold_in_calendar':
+      return await actions.holdGoal(requireString(input, 'id'))
     case 'today_summary':
       return actions.todaySummary()
     default:
@@ -179,8 +217,13 @@ export function summarizeTask(task: Task): TaskSummary {
 }
 
 export function summarizeGoal(goal: Goal): GoalSummary {
-  const { id, title, horizon, status, targetDate, hoursCommitted } = goal
-  return { id, title, horizon, status, targetDate, hoursCommitted }
+  const { id, title, horizon, status, targetDate, hoursCommitted, shape, scheduledOn } = goal
+  return { id, title, horizon, status, targetDate, hoursCommitted, shape, scheduledOn, held: goal.calendarEventId ? true : undefined }
+}
+
+export function summarizeEvent(event: CalendarBlock): CalendarSummary {
+  const { subject, start, end, isAllDay } = event
+  return { subject, start, end, isAllDay }
 }
 
 export function summarizeProject(project: Project): ProjectSummary {
@@ -212,6 +255,7 @@ export function buildPlanSummary(input: {
   plan: Plan
   goals: Goal[]
   projects: Project[]
+  calendar?: CalendarBlock[]
 }): PlanSummary {
   const open = input.tasks.filter((task) => task.domain === input.domain && !task.completed && !task.storeType)
   return {
@@ -224,5 +268,6 @@ export function buildPlanSummary(input: {
     availableMin: input.plan.availableMin,
     goals: input.goals.filter((goal) => goal.domain === input.domain && goal.status === 'active').map(summarizeGoal),
     projects: input.projects.filter((project) => project.domain === input.domain && project.status === 'active').map(summarizeProject),
+    calendar: (input.calendar ?? []).map(summarizeEvent),
   }
 }

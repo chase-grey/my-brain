@@ -9,6 +9,7 @@ export const personalGraphScopes = [
   'Tasks.ReadWrite',
   'Files.ReadWrite.AppFolder',
   'Calendars.ReadWrite',
+  'Mail.Read',
 ] as const
 
 export class PersonalMicrosoftAuth {

@@ -3,6 +3,7 @@ import { OneDriveSidecar } from './oneDriveSidecar'
 import { PersonalMicrosoftAuth } from './personalMicrosoftAuth'
 import { TodoGraphProvider } from './todoGraphProvider'
 import { CalendarGraphProvider } from './calendarGraphProvider'
+import { MailGraphProvider } from './mailGraphProvider'
 import { RemoteEventLog } from './remoteEventLog'
 
 export type PersonalGraphData = {
@@ -10,6 +11,7 @@ export type PersonalGraphData = {
   tasks: TodoGraphProvider
   sidecar: OneDriveSidecar
   calendar: CalendarGraphProvider
+  mail: MailGraphProvider
   events: RemoteEventLog
 }
 
@@ -22,6 +24,7 @@ export async function createPersonalGraphData(clientId: string): Promise<Persona
     tasks: new TodoGraphProvider(graph),
     sidecar,
     calendar: new CalendarGraphProvider(graph),
+    mail: new MailGraphProvider(graph),
     events: new RemoteEventLog(sidecar),
   }
 }
