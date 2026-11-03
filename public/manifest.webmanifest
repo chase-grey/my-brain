@@ -1,13 +1,13 @@
 {
   "name": "My Brain",
   "short_name": "My Brain",
-  "description": "A quiet, context-aware planner for deciding what fits right now.",
+  "description": "tasks, goals, and a chat for work and home.",
   "id": "./",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#090b0f",
-  "theme_color": "#090b0f",
+  "background_color": "#101114",
+  "theme_color": "#101114",
   "orientation": "any",
   "categories": ["productivity", "lifestyle"],
   "icons": [

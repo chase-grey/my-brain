@@ -1,11 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { AssistantRuntimeProvider, ComposerPrimitive, MessagePrimitive, ThreadPrimitive, useExternalStoreRuntime, type AppendMessage, type ThreadMessageLike } from '@assistant-ui/react'
+import { MarkdownTextPrimitive } from '@assistant-ui/react-markdown'
 import type { Domain } from '../domain/types'
 import type { AppSettings } from '../settings'
+import { Icon } from '../navIcons'
+import { Empty } from '../ui'
 import { AnthropicClient } from './anthropicClient'
 import { BridgeCompanionClient } from './bridgeCompanion'
 import { CompanionError, createAnthropicCompanion, createBridgeCompanion, type Companion } from './companion'
 import { buildSystemPrompt } from './companionPrompt'
-import { clearConversation, loadConversation, saveConversation, type CompanionConversation } from './companionStore'
+import { memoryFolders } from './memory'
+import { clearConversation, loadConversation, saveConversation, type CompanionConversation, type CompanionTurn } from './companionStore'
 import type { CompanionActions, PlanSummary } from './companionTools'
 import { GitHubVault, vaultConfigured } from './githubVault'
 
@@ -16,21 +21,49 @@ function compact(value: string): string {
   return value.replace(/\s+/g, '')
 }
 
-export function CompanionView({ domain, settings, actions, summary, onSettings }: {
+function toMessage(turn: CompanionTurn, index: number): ThreadMessageLike {
+  return {
+    id: `${turn.at}-${index}`,
+    role: turn.role,
+    content: [{ type: 'text', text: turn.text }],
+    createdAt: new Date(turn.at),
+    ...(turn.error ? { status: { type: 'incomplete', reason: 'error', error: turn.text } } : {}),
+  }
+}
+
+function textOf(message: AppendMessage): string {
+  return message.content.map((part) => part.type === 'text' ? part.text : '').join('').trim()
+}
+
+function UserMessage() {
+  return <MessagePrimitive.Root className="turn user"><MessagePrimitive.Content /></MessagePrimitive.Root>
+}
+
+function MarkdownText() {
+  return <MarkdownTextPrimitive className="md" />
+}
+
+function AssistantMessage() {
+  return <MessagePrimitive.Root className="turn assistant"><MessagePrimitive.Content components={{ Text: MarkdownText }} /></MessagePrimitive.Root>
+}
+
+export function ChatView({ domain, settings, actions, summary, hasCalendar = false, onSettings, docked = false }: {
   domain: Domain
   settings: AppSettings
   actions: CompanionActions
+  hasCalendar?: boolean
   summary: PlanSummary
   onSettings?: () => void
+  docked?: boolean
 }) {
   const [conversation, setConversation] = useState<CompanionConversation>(() => loadConversation(domain))
-  const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
   const [bridge, setBridge] = useState<BridgeState>(domain === 'work' ? 'checking' : 'ready')
   const conversationRef = useRef(conversation)
   const actionsRef = useRef(actions)
+  const hasCalendarRef = useRef(hasCalendar)
+  hasCalendarRef.current = hasCalendar
   const summaryRef = useRef(summary)
-  const endRef = useRef<HTMLDivElement>(null)
   conversationRef.current = conversation
   actionsRef.current = actions
   summaryRef.current = summary
@@ -41,7 +74,7 @@ export function CompanionView({ domain, settings, actions, summary, onSettings }
   const hasKey = domain === 'work' || apiKey.length > 0
 
   const companion = useMemo<Companion | undefined>(() => {
-    const systemPrompt = () => buildSystemPrompt({ domain, summary: summaryRef.current, vaultAvailable: domain === 'work' ? true : hasVault })
+    const systemPrompt = (memoryIndex?: string) => buildSystemPrompt({ domain, summary: summaryRef.current, vaultAvailable: domain === 'work' ? true : hasVault, memoryIndex })
     if (domain === 'work') {
       return createBridgeCompanion({ client: new BridgeCompanionClient(), sessionId: () => conversationRef.current.sessionId, systemPrompt })
     }
@@ -53,6 +86,8 @@ export function CompanionView({ domain, settings, actions, summary, onSettings }
       systemPrompt,
       actions: () => actionsRef.current,
       vault: hasVault ? new GitHubVault(vaultConfig) : undefined,
+      memoryFolder: memoryFolders[domain],
+      hasCalendar: () => hasCalendarRef.current,
     })
   }, [domain, hasKey, hasVault, settings.anthropicApiKey, settings.anthropicModel, vaultConfig.repo, vaultConfig.token, vaultConfig.branch])
 
@@ -65,31 +100,25 @@ export function CompanionView({ domain, settings, actions, summary, onSettings }
     return () => { cancelled = true }
   }, [domain])
 
-  useEffect(() => {
-    endRef.current?.scrollIntoView({ block: 'end' })
-  }, [conversation.turns.length, sending])
-
   function update(next: CompanionConversation) {
     conversationRef.current = next
     setConversation(next)
     saveConversation(domain, next)
   }
 
-  async function send(event: React.FormEvent) {
-    event.preventDefault()
-    const text = draft.trim()
+  async function onNew(message: AppendMessage) {
+    const text = textOf(message)
     if (!text || sending || !companion) return
     const now = new Date().toISOString()
     update({ ...conversationRef.current, turns: [...conversationRef.current.turns, { role: 'user', text, at: now }] })
-    setDraft('')
     setSending(true)
     try {
       const reply = await companion.send(text)
       update({ ...conversationRef.current, sessionId: reply.sessionId ?? conversationRef.current.sessionId, turns: [...conversationRef.current.turns, { role: 'assistant', text: reply.text || 'done', at: new Date().toISOString() }] })
     } catch (error) {
-      const message = error instanceof CompanionError ? error.message : 'something went wrong'
+      const text = error instanceof CompanionError ? error.message : 'something went wrong'
       if (error instanceof CompanionError && error.kind === 'unreachable' && domain === 'work') setBridge('offline')
-      update({ ...conversationRef.current, turns: [...conversationRef.current.turns, { role: 'assistant', text: message, at: new Date().toISOString(), error: true }] })
+      update({ ...conversationRef.current, turns: [...conversationRef.current.turns, { role: 'assistant', text, at: new Date().toISOString(), error: true }] })
     } finally {
       setSending(false)
     }
@@ -101,28 +130,34 @@ export function CompanionView({ domain, settings, actions, summary, onSettings }
   }
 
   const unavailable = domain === 'personal' ? !hasKey : bridge === 'offline'
+  const runtime = useExternalStoreRuntime({
+    messages: conversation.turns,
+    convertMessage: toMessage,
+    isRunning: sending,
+    isDisabled: unavailable || bridge === 'checking',
+    onNew,
+  })
 
-  return <section className="companion-view" aria-labelledby="companion-title">
-    <div className="section-heading companion-heading">
-      <h1 id="companion-title">companion</h1>
-      {conversation.turns.length > 0 && <button className="text-action" type="button" onClick={reset}>new conversation</button>}
-    </div>
-    {unavailable ? <div className="list-empty">
-      {domain === 'personal'
-        ? <button className="text-action" type="button" onClick={onSettings}>add an anthropic key in settings</button>
-        : <p>only on the work pc</p>}
-    </div> : <>
-      <div className="companion-turns" aria-live="polite">
-        {conversation.turns.map((turn, index) => <article className={`companion-turn ${turn.role}${turn.error ? ' is-error' : ''}`} key={`${turn.at}-${index}`}>
-          <p>{turn.text}</p>
-        </article>)}
-        {sending && <article className="companion-turn assistant is-pending"><p>…</p></article>}
-        <div ref={endRef} />
-      </div>
-      <form className="quick-item companion-composer" onSubmit={(event) => void send(event)}>
-        <input aria-label="message" value={draft} onChange={(event) => setDraft(event.target.value)} placeholder={bridge === 'checking' ? 'checking work pc' : 'message'} disabled={sending || bridge === 'checking'} />
-        <button type="submit" disabled={!draft.trim() || sending || bridge === 'checking'}>send</button>
-      </form>
-    </>}
+  return <section className={`chat${docked ? ' is-docked' : ''}`} aria-label="chat">
+    <header className="view-head">
+      <h1>chat</h1>
+      {conversation.turns.length > 0 && <button className="link" type="button" onClick={reset}>new conversation</button>}
+    </header>
+    {unavailable
+      ? <Empty>{domain === 'personal'
+        ? <>no api key · <button className="link" type="button" onClick={onSettings}>add one in settings</button></>
+        : 'only on the work pc'}</Empty>
+      : <AssistantRuntimeProvider runtime={runtime}>
+        <ThreadPrimitive.Root className="thread">
+          <ThreadPrimitive.Viewport className="thread-viewport">
+            <ThreadPrimitive.Messages components={{ UserMessage, AssistantMessage }} />
+            <ThreadPrimitive.If running><div className="turn assistant is-pending" aria-live="polite">…</div></ThreadPrimitive.If>
+          </ThreadPrimitive.Viewport>
+          <ComposerPrimitive.Root className="composer">
+            <ComposerPrimitive.Input className="composer-input" aria-label="message" placeholder={bridge === 'checking' ? 'checking work pc' : 'message'} rows={1} maxRows={6} />
+            <ComposerPrimitive.Send className="composer-send" aria-label="send"><Icon name="send" size={18} /></ComposerPrimitive.Send>
+          </ComposerPrimitive.Root>
+        </ThreadPrimitive.Root>
+      </AssistantRuntimeProvider>}
   </section>
 }

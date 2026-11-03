@@ -18,6 +18,7 @@ export interface VaultStore {
   readNote(path: string): Promise<{ content: string; sha: string }>
   writeNote(path: string, content: string): Promise<{ sha: string }>
   appendNote(path: string, text: string): Promise<{ sha: string }>
+  deleteNote(path: string): Promise<void>
 }
 
 type TreeResponse = { tree: { path: string; type: string; sha: string }[]; truncated?: boolean }
@@ -88,6 +89,16 @@ export class GitHubVault implements VaultStore {
     }
     const separator = existing && !existing.endsWith('\n') ? '\n' : ''
     return await this.writeNote(path, `${existing}${separator}${text}${text.endsWith('\n') ? '' : '\n'}`)
+  }
+
+  async deleteNote(path: string): Promise<void> {
+    const sha = await this.currentSha(path, true)
+    if (!sha) throw new Error(`no note at ${path}`)
+    await this.request(this.contentsPath(path), {
+      method: 'DELETE',
+      body: JSON.stringify({ message: `my brain: delete ${path}`, sha, branch: this.config.branch }),
+    })
+    this.invalidate()
   }
 
   private async currentSha(path: string, fresh = false): Promise<string | undefined> {

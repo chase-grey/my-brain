@@ -3,6 +3,7 @@ import { BridgeUnreachableError, type BridgeCompanionClient } from './bridgeComp
 import { companionTools, executeTool, type CompanionActions } from './companionTools'
 import type { CompanionTurn } from './companionStore'
 import { GitHubError, type VaultStore } from './githubVault'
+import { readMemoryIndex } from './memory'
 
 export type AssistantReply = { text: string; toolCalls: { name: string; ok: boolean }[]; sessionId?: string }
 
@@ -37,15 +38,20 @@ export function createAnthropicCompanion(deps: {
   client: AnthropicClient
   model: string
   history: () => CompanionTurn[]
-  systemPrompt: () => string
+  systemPrompt: (memoryIndex?: string) => string
   actions: () => CompanionActions
   vault?: VaultStore
+  memoryFolder?: string
+  hasCalendar?: () => boolean
 }): Companion {
+  const memoryFolder = deps.memoryFolder ?? 'memory'
   return {
     async send(text) {
       const messages = [...historyMessages(deps.history()), { role: 'user', content: text } satisfies AnthropicMessage]
-      const tools = companionTools({ hasVault: Boolean(deps.vault) })
-      const system = deps.systemPrompt()
+      const tools = companionTools({ hasVault: Boolean(deps.vault), hasCalendar: deps.hasCalendar?.() ?? false })
+      // A failed index read must not block the turn; the prompt says it could not be read and the tools still work.
+      const memoryIndex = deps.vault ? await readMemoryIndex(deps.vault, memoryFolder).catch(() => undefined) : undefined
+      const system = deps.systemPrompt(memoryIndex)
       const replyParts: string[] = []
       const toolCalls: AssistantReply['toolCalls'] = []
       try {
@@ -61,7 +67,7 @@ export function createAnthropicCompanion(deps: {
           messages.push({ role: 'assistant', content: response.content })
           const results: ContentBlock[] = []
           for (const use of uses) {
-            const outcome = await executeTool(use.name, use.input, { actions: deps.actions(), vault: deps.vault })
+            const outcome = await executeTool(use.name, use.input, { actions: deps.actions(), vault: deps.vault, memoryFolder })
             toolCalls.push({ name: use.name, ok: outcome.ok })
             results.push({ type: 'tool_result', tool_use_id: use.id, content: outcome.ok ? outcome.content : outcome.error, is_error: outcome.ok ? undefined : true })
           }

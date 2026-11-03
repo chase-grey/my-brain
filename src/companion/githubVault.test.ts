@@ -52,6 +52,19 @@ describe('github vault', () => {
     expect(decodeBase64(put.content)).toBe('- [ ] call plumber\n')
   })
 
+  it('deletes a note with its current sha', async () => {
+    const fetcher = vi.fn().mockResolvedValueOnce(json(tree)).mockResolvedValueOnce(json({ content: null }))
+    const vault = new GitHubVault(config, fetcher)
+    await vault.deleteNote('70 Goals/Run.md')
+    const [url, init] = fetcher.mock.calls[1] as [string, RequestInit]
+    expect(url).toBe('https://api.github.com/repos/chase-grey/homebase/contents/70%20Goals/Run.md')
+    expect(init.method).toBe('DELETE')
+    expect(JSON.parse(init.body as string)).toEqual({ message: 'my brain: delete 70 Goals/Run.md', sha: 'aaa', branch: 'main' })
+    fetcher.mockResolvedValueOnce(json(tree))
+    await expect(vault.deleteNote('missing.md')).rejects.toThrow('no note at missing.md')
+    expect(fetcher).toHaveBeenCalledTimes(3)
+  })
+
   it('reports github failures with status', async () => {
     const vault = new GitHubVault(config, async () => new Response('bad credentials', { status: 401 }))
     await expect(vault.listNotes()).rejects.toBeInstanceOf(GitHubError)

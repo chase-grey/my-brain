@@ -17,7 +17,7 @@ export function isAvailable(task: Task, today: string): boolean {
 
 export function isTodayCommitment(task: Task, today: string, domain: Domain = 'personal'): boolean {
   if (task.domain !== domain) return false
-  if (task.kind === 'delegated') return false
+  if (task.kind === 'delegated' || task.storeType) return false
   if (!isAvailable(task, today)) return false
   if (task.recurrence) return recursToday(task, today)
   if (!task.dueDate) return false

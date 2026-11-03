@@ -38,11 +38,10 @@ describe('work and personal ownership', () => {
 
   it('keeps each space?s settings independent', () => {
     const values = storage()
-    saveSettings({ ...defaultSettings, floors: ['email'], themeColor: '#123456' }, 'work')
+    saveSettings({ ...defaultSettings, floors: ['email'] }, 'work')
     saveSettings({ ...defaultSettings, floors: ['chores'] }, 'personal')
     expect(loadSettings('work').floors).toEqual(['email'])
     expect(loadSettings('personal').floors).toEqual(['chores'])
-    expect(loadSettings('personal').themeColor).toBe(defaultSettings.themeColor)
     expect(values.get('my-brain.personal.settings.v1')).not.toContain('workdayCapacityMin')
     expect(values.get('my-brain.work.settings.v1')).not.toContain('personalWeeklyCeilingMin')
   })

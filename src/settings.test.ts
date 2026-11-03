@@ -22,7 +22,7 @@ describe('settings', () => {
 
   it('falls back to defaults for corrupt companion values', () => {
     const storage = fakeStorage()
-    storage.setItem('my-brain.personal.settings.v1', JSON.stringify({ themeColor: '#a855f7', anthropicApiKey: 7, anthropicModel: '', vaultBranch: null }))
+    storage.setItem('my-brain.personal.settings.v1', JSON.stringify({ anthropicApiKey: 7, anthropicModel: '', vaultBranch: null }))
     vi.stubGlobal('localStorage', storage)
     expect(loadSettings('personal')).toMatchObject({ anthropicApiKey: '', anthropicModel: 'claude-sonnet-5-5', vaultBranch: 'main' })
   })
