@@ -70,6 +70,12 @@ the work chat shows `only on the work pc`.
 
 Bridge options: `-VaultPath`, `-ChatAllowedTools`, `-ChatTimeoutSec`.
 
+**transcripts.** Record a conversation with Mark Zakharov's on-device Transcribe app. For work,
+`send transcript` puts the package on work OneDrive and the bridge files it into
+`07 Meetings/Transcripts/` in Hivemind (also `-TranscriptInboxPath`, `-TranscriptIntervalSec`, or
+run `bridge/transcript-inbox.ps1 -Once` alone). For personal, share the markdown to the installed
+app and it lands in `40 Transcripts/` in HomeBase. Details in [docs/transcripts.md](docs/transcripts.md).
+
 **memory.** Each vault keeps what the companion remembers as one fact per file plus a
 `MEMORY.md` index: `memory/` in HomeBase, `99 System/Memory/` in Hivemind. The index goes
 into every system prompt; the personal companion saves and forgets through tools, the work

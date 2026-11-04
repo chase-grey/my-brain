@@ -29,6 +29,7 @@ const taskStorageKey = (domain: Domain) => `my-brain.${domain}.tasks.v1`
 const dockedQuery = '(min-width: 87.5rem)'
 const primaryViews: { view: View; icon: IconName }[] = [{ view: 'today', icon: 'today' }, { view: 'progress', icon: 'progress' }, { view: 'chat', icon: 'chat' }]
 const ChatView = lazy(() => import('./companion/ChatView').then((module) => ({ default: module.ChatView })))
+const ShareLanding = lazy(() => import('./transcripts/ShareLanding'))
 const views: View[] = ['today', 'progress', 'chat', 'stores', 'goals', 'settings', 'task']
 
 function parseHash(): { view: View; taskId?: string } {
@@ -115,6 +116,8 @@ export function Workspace({ activeDomain, onDomain }: { activeDomain: Domain; on
   const [settings, setSettings] = useState(() => loadSettings(activeDomain))
   const [product, setProduct] = useState<ProductState>(() => loadProductState(activeDomain))
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null)
+  // A transcript shared from the phone lands on #share before the hash effect normalizes it; capture it once.
+  const [sharing, setSharing] = useState(() => typeof location !== 'undefined' && location.hash === '#share')
   const [editingTaskId, setEditingTaskId] = useState<string | undefined>(() => parseHash().taskId)
   const [personalData, setPersonalData] = useState<PersonalGraphData>()
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>(
@@ -552,6 +555,7 @@ export function Workspace({ activeDomain, onDomain }: { activeDomain: Domain; on
       </header>
 
       <div className={`content view-${shownView}`}>
+        {sharing && <Suspense fallback={null}><ShareLanding onClose={() => setSharing(false)} /></Suspense>}
         {shownView === 'today' && <TodayView domain={activeDomain} currentDay={currentDay} place={currentPlace} placeOverride={placeOverride} onPlaceOverride={setPlaceOverride}
           commitments={commitments} weeklyCommitments={weeklyCommitments} habits={product.habits} habitEntries={product.habitEntries}
           onHabitPart={(habitId, partId) => setProduct((current) => ({ ...current, habitEntries: toggleHabitPart(current.habitEntries, habitId, partId, currentDay) }))}

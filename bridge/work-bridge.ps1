@@ -3,24 +3,50 @@ param(
   [string[]]$AllowedOrigins = @('http://localhost:5173', 'https://chase-grey.github.io'),
   [string]$VaultPath = "$env:USERPROFILE\Documents\Obsidian\Hivemind",
   [string[]]$ChatAllowedTools = @('Read', 'Glob', 'Grep', 'Edit', 'Write', 'Skill', 'mcp__office-assistant__*'),
-  [int]$ChatTimeoutSec = 240
+  [int]$ChatTimeoutSec = 240,
+  [string]$TranscriptInboxPath = "$env:USERPROFILE\OneDrive - Epic\TranscribeInbox",
+  [int]$TranscriptIntervalSec = 120
 )
 
 # Routes:
 #   GET  /status, GET /tasks, POST /tasks, PATCH /tasks/{id}   classic Outlook COM (Outlook must be running)
 #   GET  /chat/status, POST /chat                               Claude Code headless (`claude -p`) with the vault as cwd
+#   POST /transcripts/import                                    file Transcribe packages from OneDrive into the vault now
 # The listener handles one request at a time, so a chat turn (often 10-60 s) delays task requests until it returns.
+# Between requests it files new transcript packages every $TranscriptIntervalSec (docs/transcripts.md).
 
 $ErrorActionPreference = 'Stop'
 $utf8 = [Text.UTF8Encoding]::new($false)
 try { [Console]::InputEncoding = $utf8; [Console]::OutputEncoding = $utf8 } catch { }
 $claudeCommand = (Get-Command claude -ErrorAction SilentlyContinue).Source
 
+. "$PSScriptRoot\transcript-inbox.ps1" -InboxPath $TranscriptInboxPath -VaultPath $VaultPath
+$script:transcriptsFiled = 0
+$script:transcriptsLastRun = $null
+$script:transcriptsNextRun = Get-Date
+
+function Invoke-TranscriptImport {
+  $script:transcriptsNextRun = (Get-Date).AddSeconds($TranscriptIntervalSec)
+  try {
+    $outcome = Import-TranscribePackages -InboxPath $TranscriptInboxPath -VaultPath $VaultPath
+    $script:transcriptsLastRun = (Get-Date).ToString('o')
+    $script:transcriptsFiled += $outcome.filed.Count
+    foreach ($path in $outcome.filed) { Write-Host "transcript filed: $path" }
+    foreach ($problem in $outcome.errors) { Write-Warning "transcript: $problem" }
+    return $outcome
+  } catch {
+    Write-Warning "transcript import failed: $($_.Exception.Message)"
+    return [pscustomobject]@{ inbox = $TranscriptInboxPath; filed = @(); skipped = 0; errors = @($_.Exception.Message) }
+  }
+}
+
 $listener = [System.Net.HttpListener]::new()
 $listener.Prefixes.Add("http://127.0.0.1:$Port/")
 $listener.Start()
 Write-Host "my brain work bridge listening on 127.0.0.1:$Port"
 Write-Host "chat: $(if ($claudeCommand) { $claudeCommand } else { 'claude not found on PATH' }) in $VaultPath"
+Write-Host "transcripts: $TranscriptInboxPath -> $VaultPath every $TranscriptIntervalSec s"
+Invoke-TranscriptImport | Out-Null
 
 function Write-JsonResponse($Context, [int]$Status, $Value) {
   $json = if ($null -eq $Value) { '' } else { $Value | ConvertTo-Json -Depth 8 -Compress }
@@ -122,7 +148,12 @@ function Invoke-ClaudeChat([string]$Text, [string]$SessionId, [string]$SystemPro
 
 try {
   while ($listener.IsListening) {
-    $context = $listener.GetContext()
+    # Wait for a request in one-second slices so transcript packages get filed while the bridge is idle.
+    $pending = $listener.GetContextAsync()
+    while (-not $pending.Wait(1000)) {
+      if ((Get-Date) -ge $script:transcriptsNextRun) { Invoke-TranscriptImport | Out-Null }
+    }
+    $context = $pending.Result
     try {
       $origin = $context.Request.Headers['Origin']
       if ($origin -and $origin -notin $AllowedOrigins) { Write-JsonResponse $context 403 @{ error = 'origin not allowed' }; continue }
@@ -140,7 +171,13 @@ try {
           claudePath = $claudeCommand
           vault = (Test-Path -LiteralPath $VaultPath)
           vaultPath = $VaultPath
+          transcripts = @{ inbox = $TranscriptInboxPath; filed = $script:transcriptsFiled; lastRun = $script:transcriptsLastRun }
         }
+        continue
+      }
+
+      if ($method -eq 'POST' -and $path -eq '/transcripts/import') {
+        Write-JsonResponse $context 200 (Invoke-TranscriptImport)
         continue
       }
 

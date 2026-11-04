@@ -10,6 +10,16 @@
   "theme_color": "#101114",
   "orientation": "any",
   "categories": ["productivity", "lifestyle"],
+  "share_target": {
+    "action": "./share-target",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "files": [{ "name": "transcript", "accept": ["text/markdown", "text/plain", ".md", ".txt"] }]
+    }
+  },
   "icons": [
     {
       "src": "icons/app-icon.svg",
