@@ -8,3 +8,4 @@ dist
 
 # per-user claude code settings
 .claude/settings.local.json
+.worktrees/
