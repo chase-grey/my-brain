@@ -14,11 +14,15 @@ Personal owns its Microsoft account, Graph task sync, OneDrive metadata, store l
 
 Personal reads its calendar for the week and shows today's events. It never computes an available total from the calendar. A block goal with a date can be held in the calendar as a busy afternoon; the app decides the day and the length, the hour is decided in Outlook, and the day read back from the event wins. Deleting the event releases the hold.
 
+A conversation recorded on the phone with Mark Zakharov's on-device Transcribe app and shared to the app is filed as a raw speaker-labeled transcript in `40 Transcripts/`. See [transcripts.md](transcripts.md).
+
 Personal email is handled by a separate app, my-mail, on the same Microsoft registration. My Brain reads only the inbox's unread and flagged counts, shows them on today, and links out. It never opens, moves, flags, or sends mail. Messages become tasks only through Microsoft To Do, where they arrive as new to sort.
 
 ## work
 
 Work owns its local tasks, Outlook bridge adapter, workday capacity, maintenance floors, project planning, and receipts. Personal authentication is never initialized by the work workspace. The Outlook adapter is available; live integration into the app remains to be completed.
+
+Work transcripts never pass through the phone app's share path. Transcribe sends the package to work OneDrive and the bridge files the raw transcript into Hivemind under `07 Meetings/Transcripts/`. See [transcripts.md](transcripts.md).
 
 ## persistence and providers
 

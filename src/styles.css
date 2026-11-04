@@ -225,3 +225,6 @@ button.row-main { min-height: 3rem; }
   :root { font-size: 17px; }
   .main { max-width: 46rem; }
 }
+
+.share-landing { margin: 0 0 0.75rem; }
+.share-landing p { margin: 0.35rem 0; }

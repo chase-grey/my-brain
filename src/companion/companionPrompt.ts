@@ -54,7 +54,7 @@ export function buildSystemPrompt({ domain, summary, vaultAvailable, memoryIndex
     section('Active goals:', summary.goals.map((goal) => `- ${goal.title} (id ${goal.id}, ${goal.horizon}${goal.targetDate ? `, target ${goal.targetDate}` : ''})`)),
     section('Active projects:', summary.projects.map((project) => `- ${project.title} (id ${project.id}, mode ${project.mode})`)),
     vaultAvailable
-      ? `The ${vault} Obsidian vault is reachable through the note tools. Folders: 00 Weekly Plans/ (YYYY-WNN.md), 20 Projects/, 50 Someday-Maybe/, 70 Goals/. Task syntax inside notes: "- [ ] text 📅 YYYY-MM-DD". Link notes with [[wikilinks]]. Keep YAML frontmatter when rewriting a note. Prefer append_note for logs and weekly plans. Read a note before replacing it.`
+      ? `The ${vault} Obsidian vault is reachable through the note tools. Folders: 00 Weekly Plans/ (YYYY-WNN.md), 20 Projects/, 50 Someday-Maybe/, 70 Goals/${domain === 'personal' ? ', 40 Transcripts/ (recorded conversations, YYYY-MM-DD title.md, speaker-labeled lines; read on request, never written by you)' : ''}. Task syntax inside notes: "- [ ] text 📅 YYYY-MM-DD". Link notes with [[wikilinks]]. Keep YAML frontmatter when rewriting a note. Prefer append_note for logs and weekly plans. Read a note before replacing it.`
       : `The ${vault} vault is not reachable from here, so say so if asked about notes.`,
     memorySection(domain, vaultAvailable, memoryIndex),
     domain === 'work'
