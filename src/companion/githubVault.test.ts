@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { GitHubError, GitHubVault, decodeBase64, encodeBase64, vaultConfigured } from './githubVault'
+import { GitHubError, GitHubVault, decodeBase64, encodeBase64, normalizeBranch, normalizeRepo, vaultConfigured } from './githubVault'
 
 const config = { repo: 'chase-grey/homebase', token: 'ghp_x', branch: 'main' }
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status })
@@ -70,5 +70,20 @@ describe('github vault', () => {
     await expect(vault.listNotes()).rejects.toBeInstanceOf(GitHubError)
     expect(vaultConfigured({ repo: 'a/b', token: 't', branch: 'main' })).toBe(true)
     expect(vaultConfigured({ repo: 'nope', token: 't', branch: 'main' })).toBe(false)
+  })
+
+  it('names the repo and branch when github answers 404, and the note path when one was asked for', async () => {
+    const vault = new GitHubVault(config, async () => new Response('{"message":"Not Found"}', { status: 404 }))
+    await expect(vault.listNotes()).rejects.toThrow('github has no chase-grey/homebase on branch main that this token can see; check the github repo, branch, and token in settings')
+    await expect(vault.readNote('70 Goals/Run.md')).rejects.toThrow('no note at 70 Goals/Run.md in chase-grey/homebase on branch main')
+  })
+
+  it('normalizes pasted repo urls and branch refs', () => {
+    expect(normalizeRepo('https://github.com/chase-grey/homebase')).toBe('chase-grey/homebase')
+    expect(normalizeRepo(' github.com/chase-grey/homebase.git/ ')).toBe('chase-grey/homebase')
+    expect(normalizeRepo('https://github.com/chase-grey/homebase/tree/main')).toBe('chase-grey/homebase')
+    expect(normalizeRepo('chase-grey/homebase')).toBe('chase-grey/homebase')
+    expect(normalizeBranch('')).toBe('main')
+    expect(normalizeBranch(' refs/heads/notes ')).toBe('notes')
   })
 })

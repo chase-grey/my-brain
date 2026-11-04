@@ -1,3 +1,5 @@
+import { useState } from 'react'
+import { GitHubVault, normalizeBranch, normalizeRepo, vaultConfigured } from '../companion/githubVault'
 import type { Domain } from '../domain/types'
 import { companionModelOptions, type AppSettings } from '../settings'
 import { Card, Field } from '../ui'
@@ -41,6 +43,7 @@ export function SettingsView({ domain, accountName, connectionStatus, settings, 
           <Field label="branch"><input autoComplete="off" value={settings.vaultBranch} onChange={set('vaultBranch')} /></Field>
         </div>
         <Field label="github token"><input type="password" autoComplete="off" value={settings.githubToken} onChange={set('githubToken')} /></Field>
+        <VaultCheck settings={settings} />
       </div> : <p className="note">claude code on this pc, through the work bridge</p>}
     </Card>
 
@@ -55,4 +58,29 @@ export function SettingsView({ domain, accountName, connectionStatus, settings, 
 
     {canInstall && <Card title="app"><div className="actions"><button className="primary" type="button" onClick={onInstall}>install on this device</button></div></Card>}
   </>
+}
+
+// Lists the vault with the same client the chat uses, so a wrong repo, branch, or token shows up here instead of mid-conversation.
+function VaultCheck({ settings }: { settings: AppSettings }) {
+  const [busy, setBusy] = useState(false)
+  const [result, setResult] = useState<{ text: string; error: boolean }>()
+  const config = { repo: normalizeRepo(settings.githubRepo), token: settings.githubToken.replace(/\s+/g, ''), branch: normalizeBranch(settings.vaultBranch) }
+
+  async function check() {
+    setBusy(true)
+    try {
+      if (!vaultConfigured(config)) throw new Error('needs a github repo as owner/name and a token')
+      const notes = await new GitHubVault(config).listNotes()
+      setResult({ text: `${config.repo} on ${config.branch} · ${notes.length} notes`, error: false })
+    } catch (error) {
+      setResult({ text: error instanceof Error ? error.message : 'check failed', error: true })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return <div className="actions row-actions">
+    <button className="secondary" disabled={busy} type="button" onClick={() => void check()}>{busy ? 'checking' : 'check vault'}</button>
+    {result && <p className={`note${result.error ? ' is-error' : ''}`} role="status">{result.text}</p>}
+  </div>
 }
