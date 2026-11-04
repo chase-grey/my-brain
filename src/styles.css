@@ -99,6 +99,8 @@ button.row-main { min-height: 3rem; }
 .fit { padding: 0.5rem 0 0.4rem; color: var(--muted); font-size: 0.85rem; font-variant-numeric: tabular-nums; }
 .ledger { padding: 0.25rem 0; color: var(--muted); font-size: 0.85rem; text-align: center; font-variant-numeric: tabular-nums; }
 .link { color: var(--accent); font-weight: 500; }
+.pill { min-height: 2rem; padding: 0 0.7rem; border: 1px solid var(--border); border-radius: 999px; color: var(--muted); font-size: 0.85rem; }
+.pill[aria-pressed="true"] { border-color: var(--accent); color: var(--text); background: color-mix(in srgb, var(--accent) 12%, var(--surface)); }
 .quiet-select { max-width: 50%; min-height: 2.5rem; padding: 0 0.25rem; border: 0; border-radius: 8px; background: transparent; color: var(--muted); font-size: 0.9rem; text-align: right; }
 .quiet-select:hover { color: var(--text); }
 
@@ -181,10 +183,11 @@ button.row-main { min-height: 3rem; }
 .turn.is-pending { color: var(--muted); }
 .turn p { margin: 0; }
 .turn p + p { margin-top: 0.5rem; }
-.composer { position: sticky; bottom: 0; display: grid; grid-template-columns: 1fr auto; gap: 0.5rem; align-items: end; padding: 0.5rem 0 0.25rem; background: var(--bg); }
+.composer { display: grid; grid-template-columns: 1fr auto; gap: 0.5rem; align-items: end; padding: 0.5rem 0 0.25rem; background: var(--bg); }
 .composer-input { resize: none; max-height: 10rem; }
 .composer-send { display: grid; place-items: center; width: 2.75rem; height: 2.75rem; border-radius: 50%; background: var(--accent); color: var(--on-accent); }
-.view-chat { min-height: calc(100dvh - 5.5rem - var(--tabbar)); }
+/* the chat view is the one screen that does not scroll as a page: the thread scrolls inside it and the composer stays put at the bottom */
+.view-chat { flex: 0 0 auto; height: calc(100dvh - 5.2rem - var(--tabbar)); }
 
 /* tablet and up: rail, no tabbar */
 @media (min-width: 48rem) {
@@ -201,7 +204,7 @@ button.row-main { min-height: 3rem; }
   .content { gap: 1rem; }
   .sheet { max-width: 30rem; margin: auto; border-bottom: 1px solid var(--border); border-radius: 16px; }
   .sheet-body { padding: 1.25rem; }
-  .view-chat { min-height: calc(100dvh - 6rem); }
+  .view-chat { height: calc(100dvh - 6.75rem); }
 }
 
 /* wide: dock the chat */

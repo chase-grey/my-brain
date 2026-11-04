@@ -2,15 +2,32 @@ export type VaultConfig = { repo: string; token: string; branch: string }
 export type VaultNote = { path: string; sha: string }
 
 export class GitHubError extends Error {
-  constructor(readonly status: number, readonly responseBody: string) {
-    super(describeGitHubStatus(status))
+  constructor(readonly status: number, readonly responseBody: string, message = describeGitHubStatus(status)) {
+    super(message)
   }
 }
 
-export function describeGitHubStatus(status: number): string {
+// A fine-grained token answers 404, not 403, for a repo outside its scope, so a 404 can mean any of the three settings.
+export function describeGitHubStatus(status: number, where?: { repo: string; branch: string; path?: string }): string {
   if (status === 401 || status === 403) return 'github rejected the token'
+  if (status === 404 && where?.path) return `no note at ${where.path} in ${where.repo} on branch ${where.branch}`
+  if (status === 404 && where) return `github has no ${where.repo} on branch ${where.branch} that this token can see; check the github repo, branch, and token in settings`
   if (status === 404) return 'vault repo or branch not found; check the github repo and branch in settings'
   return `github returned ${status}`
+}
+
+// People paste the repo as a URL and the branch with a refs/heads/ prefix; GitHub wants owner/name and the branch name alone.
+export function normalizeRepo(value: string): string {
+  return value
+    .replace(/\s+/g, '')
+    .replace(/^(https?:\/\/)?(www\.)?github\.com\//i, '')
+    .replace(/^\/+|\/+$/g, '')
+    .replace(/\.git$/i, '')
+    .split('/').slice(0, 2).join('/')
+}
+
+export function normalizeBranch(value: string): string {
+  return value.replace(/\s+/g, '').replace(/^refs\/heads\//, '') || 'main'
 }
 
 export interface VaultStore {
@@ -65,7 +82,7 @@ export class GitHubVault implements VaultStore {
   }
 
   async readNote(path: string): Promise<{ content: string; sha: string }> {
-    const file = await this.request<ContentsResponse>(`${this.contentsPath(path)}?ref=${encodeURIComponent(this.config.branch)}`)
+    const file = await this.request<ContentsResponse>(`${this.contentsPath(path)}?ref=${encodeURIComponent(this.config.branch)}`, {}, path)
     return { content: decodeBase64(file.content), sha: file.sha }
   }
 
@@ -122,7 +139,7 @@ export class GitHubVault implements VaultStore {
     return `/contents/${clean}`
   }
 
-  private async request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  private async request<T>(path: string, init: RequestInit = {}, notePath?: string): Promise<T> {
     const response = await this.fetcher(`${this.baseUrl}/repos/${this.config.repo}${path}`, {
       ...init,
       headers: {
@@ -132,7 +149,7 @@ export class GitHubVault implements VaultStore {
         ...(init.body ? { 'Content-Type': 'application/json' } : {}),
       },
     })
-    if (!response.ok) throw new GitHubError(response.status, await response.text())
+    if (!response.ok) throw new GitHubError(response.status, await response.text(), describeGitHubStatus(response.status, { repo: this.config.repo, branch: this.config.branch, path: notePath }))
     return await response.json() as T
   }
 }

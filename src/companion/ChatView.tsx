@@ -12,7 +12,7 @@ import { buildSystemPrompt } from './companionPrompt'
 import { memoryFolders } from './memory'
 import { clearConversation, loadConversation, saveConversation, type CompanionConversation, type CompanionTurn } from './companionStore'
 import type { CompanionActions, PlanSummary } from './companionTools'
-import { GitHubVault, vaultConfigured } from './githubVault'
+import { GitHubVault, normalizeBranch, normalizeRepo, vaultConfigured } from './githubVault'
 
 type BridgeState = 'checking' | 'ready' | 'offline'
 
@@ -20,6 +20,11 @@ type BridgeState = 'checking' | 'ready' | 'offline'
 function compact(value: string): string {
   return value.replace(/\s+/g, '')
 }
+
+// Off by default: each message starts a fresh conversation, so an answer is never coloured by what was asked before.
+// The chat unmounts on every view change, so the choice lives here for the session rather than in the component.
+const keepContextBySpace: Partial<Record<Domain, boolean>> = {}
+const emptyConversation = (): CompanionConversation => ({ version: 1, turns: [] })
 
 function toMessage(turn: CompanionTurn, index: number): ThreadMessageLike {
   return {
@@ -56,10 +61,17 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
   onSettings?: () => void
   docked?: boolean
 }) {
-  const [conversation, setConversation] = useState<CompanionConversation>(() => loadConversation(domain))
+  const [keepContext, setKeepContext] = useState(() => keepContextBySpace[domain] ?? false)
+  // Only a kept thread comes back: with the toggle off, what is on screen has to match what the model was given, which is nothing yet.
+  const [conversation, setConversation] = useState<CompanionConversation>(() => {
+    if (keepContextBySpace[domain]) return loadConversation(domain)
+    clearConversation(domain)
+    return emptyConversation()
+  })
   const [sending, setSending] = useState(false)
   const [bridge, setBridge] = useState<BridgeState>(domain === 'work' ? 'checking' : 'ready')
   const conversationRef = useRef(conversation)
+  const historyRef = useRef<CompanionTurn[]>([])
   const actionsRef = useRef(actions)
   const hasCalendarRef = useRef(hasCalendar)
   hasCalendarRef.current = hasCalendar
@@ -69,7 +81,7 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
   summaryRef.current = summary
 
   const apiKey = compact(settings.anthropicApiKey)
-  const vaultConfig = { repo: compact(settings.githubRepo), token: compact(settings.githubToken), branch: compact(settings.vaultBranch) || 'main' }
+  const vaultConfig = { repo: normalizeRepo(settings.githubRepo), token: compact(settings.githubToken), branch: normalizeBranch(settings.vaultBranch) }
   const hasVault = domain === 'personal' && vaultConfigured(vaultConfig)
   const hasKey = domain === 'work' || apiKey.length > 0
 
@@ -82,7 +94,7 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
     return createAnthropicCompanion({
       client: new AnthropicClient(apiKey),
       model: settings.anthropicModel,
-      history: () => conversationRef.current.turns,
+      history: () => historyRef.current,
       systemPrompt,
       actions: () => actionsRef.current,
       vault: hasVault ? new GitHubVault(vaultConfig) : undefined,
@@ -103,14 +115,25 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
   function update(next: CompanionConversation) {
     conversationRef.current = next
     setConversation(next)
-    saveConversation(domain, next)
+    if (keepContext) saveConversation(domain, next)
+    else clearConversation(domain)
+  }
+
+  function toggleKeepContext() {
+    const next = !keepContext
+    keepContextBySpace[domain] = next
+    setKeepContext(next)
+    if (next) saveConversation(domain, conversationRef.current)
+    else clearConversation(domain)
   }
 
   async function onNew(message: AppendMessage) {
     const text = textOf(message)
     if (!text || sending || !companion) return
-    const now = new Date().toISOString()
-    update({ ...conversationRef.current, turns: [...conversationRef.current.turns, { role: 'user', text, at: now }] })
+    // Without keep context the thread starts over on every send, so what is on screen is exactly what the model was given.
+    const prior = keepContext ? conversationRef.current : emptyConversation()
+    historyRef.current = prior.turns
+    update({ ...prior, turns: [...prior.turns, { role: 'user', text, at: new Date().toISOString() }] })
     setSending(true)
     try {
       const reply = await companion.send(text)
@@ -126,7 +149,7 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
 
   function reset() {
     clearConversation(domain)
-    update({ version: 1, turns: [] })
+    update(emptyConversation())
   }
 
   const unavailable = domain === 'personal' ? !hasKey : bridge === 'offline'
@@ -141,7 +164,8 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
   return <section className={`chat${docked ? ' is-docked' : ''}`} aria-label="chat">
     <header className="view-head">
       <h1>chat</h1>
-      {conversation.turns.length > 0 && <button className="link" type="button" onClick={reset}>new conversation</button>}
+      {!unavailable && <button className="pill" type="button" aria-pressed={keepContext} onClick={toggleKeepContext}>keep context</button>}
+      {conversation.turns.length > 0 && <button className="link" type="button" onClick={reset}>clear</button>}
     </header>
     {unavailable
       ? <Empty>{domain === 'personal'
