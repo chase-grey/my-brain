@@ -10,3 +10,15 @@
 - Prefer familiar, plain labels over clever, polished, motivational, or conversational copy.
 - When new copy is necessary and the wording is not obvious, ask the product owner what they would say or offer a few short lowercase options for them to choose from. Use their answer as the voice reference for similar copy.
 - Do not block straightforward implementation on a copy interview when an established label or existing product-owner phrasing already provides a clear answer.
+
+## restarting the bridge
+
+`npm run bridge` runs `bridge/work-bridge.ps1`, a PowerShell HttpListener on port 47321. To restart it after an edit, stop only that process, by PID:
+
+```powershell
+$pid47321 = (Get-NetTCPConnection -LocalPort 47321 -State Listen -ErrorAction SilentlyContinue).OwningProcess | Select-Object -First 1
+if ($pid47321) { Stop-Process -Id $pid47321 -Force }
+Start-Process powershell -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File','bridge/work-bridge.ps1' -PassThru | Select-Object -ExpandProperty Id
+```
+
+Never kill powershell.exe by image name (`taskkill /IM`, `Stop-Process -Name`): every Session Runner terminal on this machine is a powershell.exe hosting a Claude session, and one such line killed all of them, twice, on 2026-11-05. A global hook now denies kills by image name; kill by PID.
