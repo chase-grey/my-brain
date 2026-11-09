@@ -70,7 +70,7 @@ function textOf(message: AppendMessage): string {
   return message.content.map((part) => part.type === 'text' ? part.text : '').join('').trim()
 }
 
-function UserMessage() {
+export function UserMessage() {
   return <MessagePrimitive.Root className="turn user"><MessagePrimitive.Content /></MessagePrimitive.Root>
 }
 
