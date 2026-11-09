@@ -1,15 +1,23 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { CalendarBlock } from '../data/calendarGraphProvider'
 import { timeRange } from '../domain/calendar'
 import { goalProgress } from '../domain/goals'
-import { buildLifeRing } from '../domain/lifeRing'
+import { buildLifeRing, RING_DOMAINS, type RingArc } from '../domain/lifeRing'
 import { buildWeekReceipt } from '../domain/receipt'
-import type { Domain, Goal, RestCheckIn } from '../domain/types'
+import type { Domain, Goal, LifeDomain, RestCheckIn } from '../domain/types'
 import { hours, newId, shortDate, today } from '../format'
 import type { ProductState } from '../productState'
+import { Icon } from '../navIcons'
 import { Card, Empty, Field, Menu, Sheet } from '../ui'
+import { LifeWheel, wheelHue } from './LifeWheel'
 
 type LogKind = 'connection' | 'money' | 'rest'
+
+function sliceFromHash(): LifeDomain | undefined {
+  if (typeof location === 'undefined') return undefined
+  const [name, slice] = location.hash.replace(/^#/, '').split('/')
+  return name === 'progress' && RING_DOMAINS.includes(slice as LifeDomain) ? slice as LifeDomain : undefined
+}
 
 function weekElapsed(): number {
   const now = new Date()
@@ -54,15 +62,40 @@ export function ProgressView({ domain, product, currentDay, heldEvents, onProduc
   onGoals: () => void
 }) {
   const [log, setLog] = useState<LogKind>()
+  const [slice, setSlice] = useState<LifeDomain | undefined>(sliceFromHash)
+  const pushed = useRef(false)
+  useEffect(() => {
+    const onPop = () => { pushed.current = false; setSlice(sliceFromHash()) }
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+  }, [])
+
+  function openSlice(next: LifeDomain): void {
+    setSlice(next)
+    if (pushed.current) history.replaceState(null, '', `#progress/${next}`)
+    else { history.pushState(null, '', `#progress/${next}`); pushed.current = true }
+  }
+
+  function closeSlice(): void {
+    if (pushed.current) { history.back(); return }
+    setSlice(undefined)
+    history.replaceState(null, '', '#progress')
+  }
+
   const goals = product.goals.filter((goal) => goal.domain === domain && goal.status === 'active')
   const commitment = [...product.commitments].reverse().find((item) => item.domain === domain)
   const receipt = commitment ? buildWeekReceipt(commitment, product.activities.filter((item) => item.domain === domain), product.dayOverrides) : undefined
   const waiting = product.delegations.filter((item) => item.domain === domain && item.status !== 'delivered')
   const ring = domain === 'personal' ? buildLifeRing(product.ringEvidence, product.ringCommitments, currentDay) : []
+  const open = domain === 'personal' ? ring.find((arc) => arc.domain === slice) : undefined
 
   return <>
-    <header className="view-head">
-      <h1>progress</h1>
+    <header className={`view-head${domain === 'personal' ? ' wheel-head' : ''}${open ? ' is-open' : ''}`} style={open ? { '--hue': wheelHue[open.domain] } as React.CSSProperties : undefined}>
+      {open
+        ? <button className="icon-button" type="button" aria-label="back to the wheel" onClick={closeSlice}><Icon name="back" /></button>
+        : <h1>progress</h1>}
+      {domain === 'personal' && <LifeWheel arcs={ring} selected={open?.domain} compact={!!open} onSelect={openSlice} />}
+      {open && <h1 className="slice-title">{open.domain}</h1>}
       {domain === 'personal' && <Menu items={[
         { label: 'saw someone', onSelect: () => setLog('connection') },
         { label: 'this month’s money', onSelect: () => setLog('money') },
@@ -70,28 +103,46 @@ export function ProgressView({ domain, product, currentDay, heldEvents, onProduc
       ]} />}
     </header>
 
-    <Card title="this week" aside={receipt && <span className="count">{receipt.paid ? 'paid' : `${hours(receipt.remainingMin)} left`}</span>}>
+    {open && <SliceDetail key={open.domain} arc={open} onGoals={onGoals} />}
+
+    {!open && <Card title="this week" aside={receipt && <span className="count">{receipt.paid ? 'paid' : `${hours(receipt.remainingMin)} left`}</span>}>
       {receipt
         ? <><Bar fraction={receipt.plannedMin ? receipt.clearedMin / receipt.plannedMin : 0} marker={weekElapsed()} /><p className="fit">{hours(receipt.clearedMin)} of {hours(receipt.plannedMin)} cleared</p></>
         : <Empty>no weekly target · <button className="link" type="button" onClick={onGoals}>set one</button></Empty>}
-    </Card>
+    </Card>}
 
-    <Card title="goals">
+    {!open && <Card title="goals">
       {goals.length
         ? <ul className="goals">{goals.map((goal) => <GoalRow key={goal.id} goal={goal} product={product} currentDay={currentDay} held={heldEvents[goal.id]} onOpen={onGoals} />)}</ul>
         : <Empty>no goals yet · <button className="link" type="button" onClick={onGoals}>add one</button></Empty>}
-    </Card>
-
-    {domain === 'personal' && <Card title="life ring">
-      <ul className="ring">{ring.map((arc) => <li key={arc.domain}><span>{arc.domain}</span><Bar fraction={arc.fill ?? 0} /><small>{arc.fill === undefined ? arc.state : `${Math.round(arc.fill * 100)}%`}</small></li>)}</ul>
     </Card>}
 
-    {waiting.length > 0 && <Card title="waiting" aside={<span className="count">{waiting.length}</span>}>
+    {!open && waiting.length > 0 && <Card title="waiting" aside={<span className="count">{waiting.length}</span>}>
       <ul className="rows">{waiting.map((item) => <li className="row" key={item.id}><div className="row-main"><span className="row-title">{item.title}</span>{item.assignee && <small>{item.assignee}</small>}</div><button className="link" type="button" onClick={() => onProduct((current) => ({ ...current, delegations: current.delegations.map((entry) => entry.id === item.id ? { ...entry, status: 'delivered' } : entry) }))}>delivered</button></li>)}</ul>
     </Card>}
 
     {log && <LogSheet kind={log} onClose={() => setLog(undefined)} onProduct={onProduct} />}
   </>
+}
+
+function stateLabel(state: RingArc['state']): string {
+  return state === 'early-signal' ? 'early signal' : state
+}
+
+function SliceDetail({ arc, onGoals }: { arc: RingArc; onGoals: () => void }) {
+  const drift = arc.drift === undefined ? undefined : Math.round(arc.drift * 100)
+  return <Card className="slice-detail" title="last 28 days">
+    {arc.fill === undefined
+      ? <Empty>{arc.state === 'dormant' ? <>no 28-day target · <button className="link" type="button" onClick={onGoals}>set one</button></> : 'nothing logged yet'}</Empty>
+      : <>
+        <p className="slice-stat"><strong>{Math.round(arc.fill * 100)}%</strong> of target</p>
+        <div className="slice-bar" style={{ '--hue': wheelHue[arc.domain] } as React.CSSProperties}><Bar fraction={arc.fill} loud={arc.focus} /></div>
+        <ul className="slice-facts">
+          <li><span>signal</span><small>{stateLabel(arc.state)}</small></li>
+          {drift !== undefined && <li><span>vs usual</span><small className={arc.focus ? 'is-loud' : ''}>{drift > 0 ? '+' : ''}{drift}%{arc.focus ? ' · drifting' : ''}</small></li>}
+        </ul>
+      </>}
+  </Card>
 }
 
 function LogSheet({ kind, onClose, onProduct }: { kind: LogKind; onClose: () => void; onProduct: React.Dispatch<React.SetStateAction<ProductState>> }) {

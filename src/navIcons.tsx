@@ -11,6 +11,9 @@ const paths = {
   back: 'M15 5l-7 7 7 7',
   check: 'M5 12.5l4.5 4.5L19 7',
   send: 'M12 19V5M5 12l7-7 7 7',
+  mic: 'M12 3a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3zM6 11a6 6 0 0 0 12 0M12 17v4M9 21h6',
+  history: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2',
+  close: 'M6 6l12 12M18 6L6 18',
 } as const
 
 export type IconName = keyof typeof paths

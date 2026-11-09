@@ -48,10 +48,8 @@ export function upsertIndexLine(index: string, name: string, description: string
   const line = indexLine(name, description)
   const at = lines.findIndex((existing) => isEntryFor(existing, name))
   if (at >= 0) lines[at] = line
-  else {
-    while (lines.length && !lines[lines.length - 1].trim()) lines.pop()
-    lines.push(line)
-  }
+  while (lines.length && !lines[lines.length - 1].trim()) lines.pop()
+  if (at < 0) lines.push(line)
   return `${lines.join('\n')}\n`
 }
 

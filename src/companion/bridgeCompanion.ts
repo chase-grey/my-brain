@@ -1,4 +1,4 @@
-export type BridgeChatRequest = { text: string; sessionId?: string; systemPrompt?: string }
+export type BridgeChatRequest = { text: string; sessionId?: string; systemPrompt?: string; model?: string; effort?: string }
 export type BridgeChatResponse = { text: string; sessionId: string; isError: boolean }
 export type BridgeChatStatus = { claude: boolean; claudePath?: string; vault: boolean; vaultPath: string }
 
