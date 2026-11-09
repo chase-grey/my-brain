@@ -19,7 +19,7 @@ export type RingArc = {
   focus: boolean
 }
 
-const RING_DOMAINS: LifeDomain[] = ['body', 'purpose', 'connection', 'build', 'mind', 'creativity', 'money', 'rest']
+export const RING_DOMAINS: LifeDomain[] = ['body', 'purpose', 'connection', 'build', 'mind', 'creativity', 'money', 'rest']
 
 function median(values: number[]): number | undefined {
   if (!values.length) return undefined

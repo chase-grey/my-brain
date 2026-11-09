@@ -1,4 +1,4 @@
-const cacheName = 'my-brain-shell-v1'
+const cacheName = 'my-brain-shell-v2'
 // Shared transcripts wait here between the share-target POST and the app draining them (docs/transcripts.md).
 const shareCacheName = 'my-brain-share'
 

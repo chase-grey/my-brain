@@ -8,7 +8,7 @@ export type AnthropicTool = {
   description: string
   input_schema: { type: 'object'; properties: Record<string, unknown>; required?: string[] }
 }
-export type MessagesRequest = { model: string; system?: string; messages: AnthropicMessage[]; tools?: AnthropicTool[]; max_tokens?: number }
+export type MessagesRequest = { model: string; system?: string; messages: AnthropicMessage[]; tools?: AnthropicTool[]; max_tokens?: number; output_config?: { effort: string } }
 export type MessagesResponse = { id: string; content: ContentBlock[]; stop_reason: 'end_turn' | 'tool_use' | 'max_tokens' | string }
 
 export class AnthropicError extends Error {

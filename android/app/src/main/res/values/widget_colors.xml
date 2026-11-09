@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- matches the app's dark surface; see --bg / --surface in src/styles.css -->
+    <color name="widget_surface">#F517181C</color>
+    <color name="widget_border">#FF2A2B32</color>
+    <color name="widget_text">#ECECEA</color>
+    <color name="widget_muted">#9A9A98</color>
+    <color name="widget_accent">#8F7CFF</color>
+    <color name="widget_on_accent">#0F0F14</color>
+</resources>

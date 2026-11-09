@@ -20,6 +20,16 @@ describe('settings', () => {
     expect(loadSettings('work')).toMatchObject({ anthropicApiKey: '', vaultBranch: 'main' })
   })
 
+  it('keeps the model and effort per space, for work too', () => {
+    const storage = fakeStorage()
+    vi.stubGlobal('localStorage', storage)
+    saveSettings({ ...defaultSettings, anthropicModel: 'claude-opus-5-5', chatEffort: 'low' }, 'work')
+    expect(loadSettings('work')).toMatchObject({ anthropicModel: 'claude-opus-5-5', chatEffort: 'low' })
+    expect(loadSettings('personal')).toMatchObject({ anthropicModel: 'claude-sonnet-5-5', chatEffort: 'high' })
+    storage.setItem('my-brain.personal.settings.v1', JSON.stringify({ chatEffort: 'extreme' }))
+    expect(loadSettings('personal').chatEffort).toBe('high')
+  })
+
   it('falls back to defaults for corrupt companion values', () => {
     const storage = fakeStorage()
     storage.setItem('my-brain.personal.settings.v1', JSON.stringify({ anthropicApiKey: 7, anthropicModel: '', vaultBranch: null }))

@@ -59,8 +59,8 @@ export function buildSystemPrompt({ domain, summary, vaultAvailable, memoryIndex
     memorySection(domain, vaultAvailable, memoryIndex),
     domain === 'work'
       ? 'You run as Claude Code on the work PC with the vault and office tools. The task list above is a read-only snapshot from the app.'
-      : 'Use the task and goal tools to make changes in the app. Ids above are the ones the tools expect.',
-    'Answer for a phone screen: short, plain, bullets when listing, no tables, headers only for long answers. Ask before overwriting a whole note. Never say a task, goal, or note change is done unless the tool returned ok. If a tool fails, say what failed.',
+      : 'Use the task and goal tools to make changes in the app. Ids above are the ones the tools expect. Small changes run at once and show the user a receipt they can undo. Deleting a task, forgetting a memory, replacing or moving a note, and closing a goal wait on a card the user approves in the app: the tool result arrives once they decide, so go ahead and call the tool when the user asked for the change, and do not ask for permission in words first.',
+    'Answer for a phone screen: short, plain, bullets when listing, no tables, headers only for long answers. Never say a task, goal, or note change is done unless the tool returned ok. If a tool fails, say what failed.',
   ]
   return parts.join('\n\n')
 }

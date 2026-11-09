@@ -34,6 +34,12 @@ export function SettingsView({ domain, accountName, connectionStatus, settings, 
       <Field label="mail app"><input autoComplete="off" inputMode="url" value={settings.mailAppUrl} onChange={set('mailAppUrl')} placeholder="https://" /></Field>
     </Card>}
 
+    {domain === 'work' && <Card title="outlook tasks">
+      <p className="note">{connectionStatus === 'connected' ? accountName : 'work bridge not reachable'}</p>
+      <div className="actions"><button className="primary" disabled={syncing} type="button" onClick={onSync}>{syncing ? 'syncing' : 'sync now'}</button></div>
+      {syncError && <p className="note is-error" role="alert">{syncError}</p>}
+    </Card>}
+
     <Card title="chat">
       {domain === 'personal' ? <div className="stack">
         <Field label="anthropic api key"><input type="password" autoComplete="off" value={settings.anthropicApiKey} onChange={set('anthropicApiKey')} /></Field>

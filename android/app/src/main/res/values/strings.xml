@@ -1,0 +1,12 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">My Brain</string>
+    <string name="title_activity_main">My Brain</string>
+    <string name="package_name">com.chasegrey.mybrain</string>
+    <string name="custom_url_scheme">com.chasegrey.mybrain</string>
+    <string name="widget_label">today</string>
+    <string name="widget_description">today's tasks and a button to talk</string>
+    <string name="widget_talk">talk</string>
+    <string name="widget_empty">nothing planned</string>
+    <string name="shortcut_talk_long">talk to my brain</string>
+</resources>

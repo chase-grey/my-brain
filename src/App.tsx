@@ -5,6 +5,9 @@ import type { InboxCounts } from './data/mailGraphProvider'
 import { addDays, blockWindow, eventsOn, reconcileHeldGoal } from './domain/calendar'
 import { configuredPersonalClientId, createPersonalGraphData, type PersonalGraphData } from './data/personalGraphData'
 import { mergePersonalTasks, personalTaskMetaFile, taskMetadata } from './data/personalTaskSync'
+import type { TaskProvider } from './data/taskProvider'
+import { WorkBridgeProvider, outlookTaskList } from './data/workBridgeProvider'
+import { mergeWorkTasks } from './data/workTaskSync'
 import { demoProviderTasks, demoTaskMetadata } from './demoData'
 import { buildNowPlan, isDoneToday, thisWeekCommitments, todayCommitments } from './domain/personalNow'
 import { projectTasks } from './domain/taskProjection'
@@ -17,20 +20,29 @@ import { buildPlanSummary, companionGoal, companionTask, summarizeGoal, summariz
 import { Icon, type IconName } from './navIcons'
 import { newId, today } from './format'
 import { Menu } from './ui'
+import { useKeyboardInset } from './useKeyboardInset'
+import { pushWidget, widgetSnapshot } from './native/widget'
 import { TodayView } from './views/TodayView'
 import { ProgressView } from './views/ProgressView'
 import { GoalsView, type GoalEdit } from './views/GoalsView'
 import { StoresView } from './views/StoresView'
 import { SettingsView, type ConnectionStatus } from './views/SettingsView'
 import { TaskPage } from './views/TaskPage'
+import { UsageView } from './views/UsageView'
+import { WorkDashboardView } from './views/WorkDashboardView'
 
-type View = 'today' | 'progress' | 'chat' | 'stores' | 'goals' | 'settings' | 'task'
+type View = 'today' | 'progress' | 'dashboard' | 'chat' | 'stores' | 'goals' | 'usage' | 'settings' | 'task'
 const taskStorageKey = (domain: Domain) => `my-brain.${domain}.tasks.v1`
 const dockedQuery = '(min-width: 87.5rem)'
-const primaryViews: { view: View; icon: IconName }[] = [{ view: 'today', icon: 'today' }, { view: 'progress', icon: 'progress' }, { view: 'chat', icon: 'chat' }]
+// Work reviews a dashboard where personal reviews progress; the other tab moves under more.
+const primaryViewsFor = (domain: Domain): { view: View; icon: IconName }[] => [
+  { view: 'today', icon: 'today' },
+  domain === 'work' ? { view: 'dashboard', icon: 'progress' } : { view: 'progress', icon: 'progress' },
+  { view: 'chat', icon: 'chat' },
+]
 const ChatView = lazy(() => import('./companion/ChatView').then((module) => ({ default: module.ChatView })))
 const ShareLanding = lazy(() => import('./transcripts/ShareLanding'))
-const views: View[] = ['today', 'progress', 'chat', 'stores', 'goals', 'settings', 'task']
+const views: View[] = ['today', 'progress', 'dashboard', 'chat', 'stores', 'goals', 'usage', 'settings', 'task']
 
 function parseHash(): { view: View; taskId?: string } {
   if (typeof location === 'undefined') return { view: 'today' }
@@ -38,6 +50,8 @@ function parseHash(): { view: View; taskId?: string } {
   if (name === 'task') return { view: 'task', taskId: id || undefined }
   return { view: views.includes(name as View) ? name as View : 'today' }
 }
+
+const talkHash = '#chat/talk'
 
 function hashFor(view: View, taskId?: string): string {
   return view === 'task' && taskId ? `#task/${taskId}` : `#${view}`
@@ -58,6 +72,13 @@ function errorMessage(error: unknown): string {
   if (error instanceof InteractionRequiredAuthError) return 'reconnect microsoft to allow calendar and mail'
   return error instanceof Error ? error.message.toLowerCase() : 'sync failed'
 }
+
+function workErrorMessage(error: unknown): string {
+  if (error instanceof TypeError) return 'start the work bridge with npm run bridge'
+  return errorMessage(error)
+}
+
+const workResyncAfterMs = 5 * 60 * 1000
 
 function initialTasks(domain: Domain): Task[] {
   const projection = projectTasks(demoProviderTasks, demoTaskMetadata)
@@ -102,6 +123,7 @@ function loadTasks(domain: Domain): Task[] {
 
 export default function App() {
   const [domain, setDomain] = useState<Domain>('personal')
+  useKeyboardInset()
   return <Workspace key={domain} activeDomain={domain} onDomain={setDomain} />
 }
 
@@ -118,11 +140,15 @@ export function Workspace({ activeDomain, onDomain }: { activeDomain: Domain; on
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null)
   // A transcript shared from the phone lands on #share before the hash effect normalizes it; capture it once.
   const [sharing, setSharing] = useState(() => typeof location !== 'undefined' && location.hash === '#share')
+  // #chat/talk opens the chat already listening: the app shortcut and the android widget use it.
+  const [talk, setTalk] = useState(() => typeof location !== 'undefined' && location.hash === talkHash)
   const [editingTaskId, setEditingTaskId] = useState<string | undefined>(() => parseHash().taskId)
   const [personalData, setPersonalData] = useState<PersonalGraphData>()
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>(
-    configuredPersonalClientId() ? 'disconnected' : 'unconfigured',
+    activeDomain === 'work' || configuredPersonalClientId() ? 'disconnected' : 'unconfigured',
   )
+  const workBridge = useMemo(() => new WorkBridgeProvider(), [])
+  const workSyncedAt = useRef(0)
   const [accountName, setAccountName] = useState<string>()
   const [syncing, setSyncing] = useState(false)
   const [syncError, setSyncError] = useState<string>()
@@ -156,6 +182,11 @@ export function Workspace({ activeDomain, onDomain }: { activeDomain: Domain; on
     tasksRef.current = tasks
   }, [tasks])
 
+  // The android widget mirrors the today card.
+  useEffect(() => {
+    void pushWidget(widgetSnapshot(activeDomain, commitments, currentDay, currentPlace))
+  }, [activeDomain, commitments, currentDay, currentPlace])
+
   useEffect(() => {
     const clientId = configuredPersonalClientId()
     if (activeDomain !== 'personal' || !clientId || authStarted.current) return
@@ -168,6 +199,17 @@ export function Workspace({ activeDomain, onDomain }: { activeDomain: Domain; on
       setConnectionStatus('connected')
       void syncPersonal(data)
     }).catch((error: unknown) => setSyncError(errorMessage(error)))
+  }, [])
+
+  // Work tasks live in Outlook (where Microsoft To Do keeps them); the bridge reads them on open and whenever the tab comes back after a while.
+  useEffect(() => {
+    if (activeDomain !== 'work') return
+    void syncWork()
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && Date.now() - workSyncedAt.current > workResyncAfterMs) void syncWork()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
   }, [])
 
   useEffect(() => {
@@ -215,6 +257,7 @@ export function Workspace({ activeDomain, onDomain }: { activeDomain: Domain; on
 
   useEffect(() => {
     const onPop = () => {
+      if (location.hash === talkHash) setTalk(true)
       const parsed = parseHash()
       setEditingTaskId(parsed.taskId)
       setView(parsed.view)
@@ -273,6 +316,34 @@ export function Workspace({ activeDomain, onDomain }: { activeDomain: Domain; on
       setSyncing(false)
     }
     await syncGlance(data)
+  }
+
+  async function syncWork(): Promise<void> {
+    if (activeDomain !== 'work') return
+    setSyncing(true)
+    setSyncError(undefined)
+    try {
+      const remote = await workBridge.listTasks()
+      commitTasks(mergeWorkTasks(remote, tasksRef.current))
+      workSyncedAt.current = Date.now()
+      setConnectionStatus('connected')
+      setAccountName('outlook tasks through the work bridge')
+    } catch (error) {
+      setConnectionStatus('disconnected')
+      setSyncError(workErrorMessage(error))
+    } finally {
+      setSyncing(false)
+    }
+  }
+
+  /** The active space's remote task list when it is reachable: To Do for personal, Outlook through the bridge for work. */
+  function remoteTasks(): TaskProvider | undefined {
+    if (connectionStatus !== 'connected') return undefined
+    return activeDomain === 'personal' ? personalData?.tasks : workBridge
+  }
+
+  function reportSync(error: unknown): void {
+    setSyncError(activeDomain === 'work' ? workErrorMessage(error) : errorMessage(error))
   }
 
   /** Calendar and inbox are read-only glances: their failure never blocks the task sync. */
@@ -379,16 +450,17 @@ export function Workspace({ activeDomain, onDomain }: { activeDomain: Domain; on
     if (task.domain !== activeDomain) return
     const localNext = [...tasksRef.current, task]
     commitTasks(localNext)
-    if (personalData && connectionStatus === 'connected' && task.domain === 'personal' && !task.recurrence) {
+    const remote = remoteTasks()
+    if (remote && !task.recurrence) {
       void (async () => {
         try {
-          const listId = await personalData.tasks.defaultListId()
-          const created = await personalData.tasks.createTask(listId, task)
+          const listId = activeDomain === 'personal' && personalData ? await personalData.tasks.defaultListId() : outlookTaskList
+          const created = await remote.createTask(listId, task)
           const next = tasksRef.current.map((item) => item.id === task.id ? { ...item, ...created, taskId: created.id } : item)
           commitTasks(next)
           await persistPersonalMetadata(next)
         } catch (error) {
-          setSyncError(errorMessage(error))
+          reportSync(error)
         }
       })()
     } else {
@@ -404,11 +476,56 @@ export function Workspace({ activeDomain, onDomain }: { activeDomain: Domain; on
     return { id, title: task.title, alreadyDone: false }
   }
 
+  function reopenTask(id: string) {
+    const task = tasksRef.current.find((item) => item.id === id)
+    if (!task || !isDoneToday(task, currentDay)) return
+    toggleComplete(id)
+    // The completion also left a mark on the week; undoing takes that back too.
+    if (!task.recurrence) {
+      setProduct((current) => {
+        const at = current.activities.map((item) => item.kind === 'task-completed' && item.taskId === id).lastIndexOf(true)
+        return at < 0 ? current : { ...current, activities: current.activities.filter((_, index) => index !== at) }
+      })
+    }
+  }
+
+  function removeTask(id: string): Task | undefined {
+    const previous = tasksRef.current.find((task) => task.id === id)
+    if (!previous) return undefined
+    commitTasks(tasksRef.current.filter((task) => task.id !== id))
+    // Neither adapter deletes; completing the task remotely keeps it from syncing back.
+    const remote = remoteTasks()
+    if (remote && previous.providerListId && !previous.completed) {
+      void remote.updateTask(previous, { completed: true }).catch((error: unknown) => reportSync(error))
+    }
+    return previous
+  }
+
+  function restoreTask(task: Task) {
+    if (task.domain !== activeDomain || tasksRef.current.some((item) => item.id === task.id)) return
+    commitTasks([...tasksRef.current, task])
+    const remote = remoteTasks()
+    if (remote && task.providerListId && !task.completed) {
+      void remote.updateTask({ ...task, completed: true }, { completed: false }).catch((error: unknown) => reportSync(error))
+    }
+  }
+
   function addGoal(input: Parameters<CompanionActions['addGoal']>[0]) {
     const goal = companionGoal(activeDomain, input)
     setProduct((current) => ({ ...current, goals: [...current.goals, goal] }))
     productRef.current = { ...productRef.current, goals: [...productRef.current.goals, goal] }
     return summarizeGoal(goal)
+  }
+
+  function removeGoal(id: string) {
+    const existing = productRef.current.goals.find((goal) => goal.id === id && goal.domain === activeDomain)
+    if (!existing) return
+    const apply = (goals: Goal[]) => goals.filter((goal) => goal.id !== id)
+    setProduct((current) => ({ ...current, goals: apply(current.goals) }))
+    productRef.current = { ...productRef.current, goals: apply(productRef.current.goals) }
+    if (existing.calendarEventId && personalData && connectionStatus === 'connected') {
+      void personalData.calendar.deleteEvent(existing.calendarEventId).catch((error: unknown) => setSyncError(errorMessage(error)))
+    }
   }
 
   function updateGoal(id: string, changes: GoalChanges | GoalEdit) {
@@ -436,18 +553,25 @@ export function Workspace({ activeDomain, onDomain }: { activeDomain: Domain; on
 
   const companionActions: CompanionActions = {
     listTasks: (options) => tasksRef.current.filter((task) => task.domain === activeDomain && !task.storeType && (options?.includeCompleted || !isDoneToday(task, currentDay))).map(summarizeTask),
+    findTask: (id) => { const task = tasksRef.current.find((item) => item.id === id && item.domain === activeDomain); return task ? summarizeTask(task) : undefined },
     createTask: (input) => {
       const task = companionTask(activeDomain, input, currentDay)
       insertTask(task)
       return summarizeTask(task)
     },
     completeTask,
+    reopenTask,
+    removeTask,
+    restoreTask,
     listGoals: () => productRef.current.goals.filter((goal) => goal.domain === activeDomain && goal.status === 'active').map(summarizeGoal),
+    findGoal: (id) => { const goal = productRef.current.goals.find((item) => item.id === id && item.domain === activeDomain); return goal ? summarizeGoal(goal) : undefined },
     addGoal,
     updateGoal,
+    removeGoal,
     listProjects: () => productRef.current.projects.filter((project) => project.domain === activeDomain && project.status === 'active').map(summarizeProject),
     listCalendar: () => activeDomain === 'personal' ? calendarEvents : [],
     holdGoal: async (id) => { await holdGoal(id); return summarizeGoal(productRef.current.goals.find((goal) => goal.id === id)!) },
+    releaseGoal,
     todaySummary: () => buildPlanSummary({ today: currentDay, domain: activeDomain, tasks: tasksRef.current, commitments, weeklyCommitments, plan, goals: productRef.current.goals, projects: productRef.current.projects, calendar: activeDomain === 'personal' ? eventsOn(calendarEvents, currentDay) : [] }),
   }
 
@@ -457,13 +581,7 @@ export function Workspace({ activeDomain, onDomain }: { activeDomain: Domain; on
   }
 
   function deleteTask(id: string) {
-    const previous = tasksRef.current.find((task) => task.id === id)
-    if (!previous) return
-    commitTasks(tasksRef.current.filter((task) => task.id !== id))
-    // Microsoft To Do has no delete through the adapter; completing it there keeps it from syncing back.
-    if (personalData && connectionStatus === 'connected' && previous.domain === 'personal' && previous.providerListId && !previous.completed) {
-      void personalData.tasks.updateTask(previous, { completed: true }).catch((error: unknown) => setSyncError(errorMessage(error)))
-    }
+    if (!removeTask(id)) return
     setEditingTaskId(undefined)
     setView('today')
   }
@@ -488,11 +606,11 @@ export function Workspace({ activeDomain, onDomain }: { activeDomain: Domain; on
     const next = tasksRef.current.map((task) => task.id === updated.id ? updated : task)
     commitTasks(next)
     void persistPersonalMetadata(next)
-    if (personalData && connectionStatus === 'connected' && previous?.domain === 'personal' && previous.providerListId) {
-      void personalData.tasks.updateTask(previous, {
-        title: updated.title,
-        dueDate: updated.dueDate,
-      }).catch((error: unknown) => setSyncError(errorMessage(error)))
+    const remote = remoteTasks()
+    if (remote && previous?.providerListId) {
+      const changes = { title: updated.title, dueDate: updated.dueDate }
+      void remote.updateTask(previous, activeDomain === 'work' ? { ...changes, notes: updated.notes ?? '' } : changes)
+        .catch((error: unknown) => reportSync(error))
     }
     setEditingTaskId(undefined)
     setView('today')
@@ -514,12 +632,13 @@ export function Workspace({ activeDomain, onDomain }: { activeDomain: Domain; on
         estimateDeltaMin: previous.estimateMin,
       }] }))
     }
+    const remote = remoteTasks()
     if (previous.recurrence) {
       void persistPersonalMetadata(next)
-    } else if (personalData && connectionStatus === 'connected' && previous.domain === 'personal' && previous.providerListId) {
-      void personalData.tasks.updateTask(previous, { completed: !previous.completed }).catch((error: unknown) => {
+    } else if (remote && previous.providerListId) {
+      void remote.updateTask(previous, { completed: !previous.completed }).catch((error: unknown) => {
         commitTasks(tasksRef.current.map((task) => task.id === id ? previous : task))
-        setSyncError(errorMessage(error))
+        reportSync(error)
       })
     }
   }
@@ -528,13 +647,15 @@ export function Workspace({ activeDomain, onDomain }: { activeDomain: Domain; on
   const untriaged = tasks.filter((task) => task.domain === activeDomain && task.metadataComplete === false && !task.completed && !task.storeType)
   const floorToday = product.dayOverrides.some((item) => item.domain === activeDomain && item.date === currentDay && item.kind === 'floor')
   const strategicTodayMin = product.activities.filter((item) => item.domain === activeDomain && item.kind === 'strategic' && item.occurredAt.slice(0, 10) === currentDay).reduce((sum, item) => sum + (item.minutes ?? 0), 0)
+  const primaryViews = primaryViewsFor(activeDomain)
   const moreItems = [
-    ...(activeDomain === 'personal' ? [{ label: 'stores', onSelect: () => setView('stores') }] : []),
+    ...(activeDomain === 'personal' ? [{ label: 'stores', onSelect: () => setView('stores') }] : [{ label: 'progress', onSelect: () => setView('progress') }]),
     { label: 'goals', onSelect: () => setView('goals') },
+    { label: 'usage', onSelect: () => setView('usage') },
     { label: 'settings', onSelect: () => setView('settings') },
     ...(installPrompt ? [{ label: 'install app', onSelect: () => void installApp() }] : []),
   ]
-  const chat = <Suspense fallback={<header className="view-head"><h1>chat</h1></header>}><ChatView key={activeDomain} domain={activeDomain} settings={settings} actions={companionActions} summary={companionActions.todaySummary()} hasCalendar={activeDomain === 'personal' && connectionStatus === 'connected'} onSettings={() => setView('settings')} docked={docked} /></Suspense>
+  const chat = <Suspense fallback={<header className="view-head"><h1>chat</h1></header>}><ChatView key={activeDomain} domain={activeDomain} settings={settings} actions={companionActions} summary={companionActions.todaySummary()} hasCalendar={activeDomain === 'personal' && connectionStatus === 'connected'} onSettings={() => setView('settings')} onChangeSettings={(change) => setSettings((current) => ({ ...current, ...change }))} docked={docked} talk={talk} onTalkStarted={() => setTalk(false)} /></Suspense>
 
   function navButton(item: { view: View; icon: IconName }) {
     return <button key={item.view} className={shownView === item.view ? 'active' : ''} onClick={() => setView(item.view)} type="button" aria-current={shownView === item.view ? 'page' : undefined}><Icon name={item.icon} /><span>{item.view}</span></button>
@@ -565,11 +686,13 @@ export function Workspace({ activeDomain, onDomain }: { activeDomain: Domain; on
           onStrategic={(minutes) => setProduct((current) => ({ ...current, activities: [...current.activities, { id: newId('activity'), domain: activeDomain, kind: 'strategic', occurredAt: new Date().toISOString(), minutes }] }))}
           untriaged={untriaged} openCount={openTasks.length} openMin={openEstimate} onToggle={toggleComplete} onOpen={editTask}
           calendar={activeDomain === 'personal' ? eventsOn(calendarEvents, currentDay) : []} inbox={activeDomain === 'personal' ? inboxCounts : undefined} mailAppUrl={activeDomain === 'personal' ? settings.mailAppUrl : ''} />}
+        {shownView === 'dashboard' && <WorkDashboardView currentDay={currentDay} />}
         {shownView === 'progress' && <ProgressView domain={activeDomain} product={product} currentDay={currentDay} heldEvents={heldEvents} onProduct={setProduct} onGoals={() => setView('goals')} />}
         {shownView === 'chat' && chat}
         {shownView === 'goals' && <GoalsView domain={activeDomain} product={product} tasks={tasks} currentDay={currentDay} heldEvents={heldEvents} canHold={activeDomain === 'personal' && connectionStatus === 'connected'} holdError={syncError} onProduct={setProduct} onEditGoal={(id, changes) => { updateGoal(id, changes) }} onHold={(id) => holdAction(() => holdGoal(id))} onRelease={(id) => holdAction(() => releaseGoal(id))} />}
         {shownView === 'stores' && <StoresView activeStore={activeStore} tasks={tasks} onStore={setActiveStore} onToggle={toggleComplete} onAdd={addTask} />}
-        {shownView === 'settings' && <SettingsView domain={activeDomain} accountName={accountName} connectionStatus={connectionStatus} settings={settings} syncing={syncing} syncError={syncError} canInstall={Boolean(installPrompt)} onInstall={() => void installApp()} onConnect={connectPersonal} onDisconnect={disconnectPersonal} onSync={() => syncPersonal()} onSettings={setSettings} />}
+        {shownView === 'usage' && <UsageView domain={activeDomain} />}
+        {shownView === 'settings' && <SettingsView domain={activeDomain} accountName={accountName} connectionStatus={connectionStatus} settings={settings} syncing={syncing} syncError={syncError} canInstall={Boolean(installPrompt)} onInstall={() => void installApp()} onConnect={connectPersonal} onDisconnect={disconnectPersonal} onSync={() => { void (activeDomain === 'work' ? syncWork() : syncPersonal()) }} onSettings={setSettings} />}
         {shownView === 'task' && <TaskPage key={editingTaskId ?? 'new'} domain={activeDomain} existingTask={tasks.find((task) => task.id === editingTaskId)} projects={product.projects.filter((project) => project.domain === activeDomain && project.status === 'active')} onAdd={addTask} onUpdate={updateTask} onDelete={deleteTask} onNotMine={delegateTask} onCancel={() => { setEditingTaskId(undefined); setView('today') }} />}
       </div>
 

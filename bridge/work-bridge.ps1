@@ -2,18 +2,21 @@ param(
   [int]$Port = 47321,
   [string[]]$AllowedOrigins = @('http://localhost:5173', 'https://chase-grey.github.io'),
   [string]$VaultPath = "$env:USERPROFILE\Documents\Obsidian\Hivemind",
-  [string[]]$ChatAllowedTools = @('Read', 'Glob', 'Grep', 'Edit', 'Write', 'Skill', 'mcp__office-assistant__*'),
+  [string[]]$ChatAllowedTools = @('Read', 'Glob', 'Grep', 'Edit', 'Write', 'Skill', 'mcp__office-assistant__*', 'Bash(node *)', 'Bash(curl http://127.0.0.1:47321/*)'),
   [int]$ChatTimeoutSec = 240,
   [string]$TranscriptInboxPath = "$env:USERPROFILE\OneDrive - Epic\TranscribeInbox",
   [int]$TranscriptIntervalSec = 120
 )
 
 # Routes:
-#   GET  /status, GET /tasks, POST /tasks, PATCH /tasks/{id}   classic Outlook COM (Outlook must be running)
+#   GET  /status, GET /tasks, POST /tasks, PATCH /tasks/{id}   classic Outlook COM (started in the background if needed)
 #   GET  /chat/status, POST /chat                               Claude Code headless (`claude -p`) with the vault as cwd
 #   POST /transcripts/import                                    file Transcribe packages from OneDrive into the vault now
+#   GET  /work/snapshot, POST /work/refresh                     vibes (EpicDW) work snapshot, cached in 99 System/work-snapshot.json
+#   GET/PUT /work/config, POST /work/ignores, DELETE /work/ignores/{kind}/{id}   dashboard filters, ignores, outage window
 # The listener handles one request at a time, so a chat turn (often 10-60 s) delays task requests until it returns.
-# Between requests it files new transcript packages every $TranscriptIntervalSec (docs/transcripts.md).
+# Between requests it files new transcript packages every $TranscriptIntervalSec (docs/transcripts.md) and
+# rebuilds the work snapshot once it is older than an hour (docs/work-dashboard.md).
 
 $ErrorActionPreference = 'Stop'
 $utf8 = [Text.UTF8Encoding]::new($false)
@@ -21,6 +24,7 @@ try { [Console]::InputEncoding = $utf8; [Console]::OutputEncoding = $utf8 } catc
 $claudeCommand = (Get-Command claude -ErrorAction SilentlyContinue).Source
 
 . "$PSScriptRoot\transcript-inbox.ps1" -InboxPath $TranscriptInboxPath -VaultPath $VaultPath
+. "$PSScriptRoot\work-dashboard.ps1" -VaultPath $VaultPath
 $script:transcriptsFiled = 0
 $script:transcriptsLastRun = $null
 $script:transcriptsNextRun = Get-Date
@@ -46,6 +50,7 @@ $listener.Start()
 Write-Host "my brain work bridge listening on 127.0.0.1:$Port"
 Write-Host "chat: $(if ($claudeCommand) { $claudeCommand } else { 'claude not found on PATH' }) in $VaultPath"
 Write-Host "transcripts: $TranscriptInboxPath -> $VaultPath every $TranscriptIntervalSec s"
+Write-Host "work snapshot: $SqlServer/$SqlDatabase vibes -> 99 System/work-snapshot.json"
 Invoke-TranscriptImport | Out-Null
 
 function Write-JsonResponse($Context, [int]$Status, $Value) {
@@ -69,16 +74,30 @@ function Get-OutlookApplication {
   try {
     return [Runtime.InteropServices.Marshal]::GetActiveObject('Outlook.Application')
   } catch {
-    throw 'classic outlook must already be running'
+    # Not running: COM starts classic Outlook in the background (the new Outlook has no COM surface).
+    try { return New-Object -ComObject Outlook.Application } catch { throw 'classic outlook is not installed or could not start' }
   }
+}
+
+# Open tasks plus anything completed in the last two weeks; the thousands of older completions stay in Outlook.
+function Get-WorkTaskItems($Namespace) {
+  $folder = $Namespace.GetDefaultFolder(13)
+  # Outlook's filter parser takes a short date only; a time of day makes the clause match nothing.
+  $since = (Get-Date).AddDays(-14).ToString('d')
+  $open = @($folder.Items.Restrict('[Complete] = False'))
+  $recent = @($folder.Items.Restrict("[Complete] = True AND [DateCompleted] >= '$since'"))
+  @($open + $recent) | Where-Object { $_.Class -eq 48 }
 }
 
 function Convert-Task($Item) {
   [ordered]@{
     entryId = $Item.EntryID
     subject = $Item.Subject
-    dueDate = if ($Item.DueDate -and $Item.DueDate.Year -gt 1900) { $Item.DueDate.ToString('yyyy-MM-dd') } else { $null }
+    dueDate = if ($Item.DueDate -and $Item.DueDate.Year -gt 1900 -and $Item.DueDate.Year -lt 4500) { $Item.DueDate.ToString('yyyy-MM-dd') } else { $null }
     complete = [bool]$Item.Complete
+    completedOn = if ($Item.Complete -and $Item.DateCompleted -and $Item.DateCompleted.Year -gt 1900 -and $Item.DateCompleted.Year -lt 4500) { $Item.DateCompleted.ToString('yyyy-MM-dd') } else { $null }
+    importance = [int]$Item.Importance
+    notes = if ($Item.Body) { ([string]$Item.Body).Trim() } else { '' }
   }
 }
 
@@ -97,7 +116,7 @@ function ConvertTo-WindowsArgument([string]$Value) {
   return $builder.Append('"').ToString()
 }
 
-function Invoke-ClaudeChat([string]$Text, [string]$SessionId, [string]$SystemPrompt) {
+function Invoke-ClaudeChat([string]$Text, [string]$SessionId, [string]$SystemPrompt, [string]$Model, [string]$Effort) {
   if (-not $claudeCommand) { throw 'claude is not on PATH' }
   if (-not (Test-Path -LiteralPath $VaultPath)) { throw "vault folder not found: $VaultPath" }
   $isNew = [string]::IsNullOrWhiteSpace($SessionId)
@@ -106,6 +125,9 @@ function Invoke-ClaudeChat([string]$Text, [string]$SessionId, [string]$SystemPro
   $arguments = @('-p', '--output-format', 'json', '--permission-mode', 'dontAsk', '--allowedTools') + $ChatAllowedTools
   $arguments += if ($isNew) { @('--session-id', $SessionId) } else { @('--resume', $SessionId) }
   if ($isNew -and -not [string]::IsNullOrWhiteSpace($SystemPrompt)) { $arguments += @('--append-system-prompt', $SystemPrompt) }
+  # The app picks these per message; they apply to resumed sessions too. Only plain names get through to the command line.
+  if ($Model -match '^[A-Za-z0-9._-]+$') { $arguments += @('--model', $Model) }
+  if ($Effort -match '^(low|medium|high|xhigh|max)$') { $arguments += @('--effort', $Effort) }
 
   $startInfo = [Diagnostics.ProcessStartInfo]::new()
   $startInfo.FileName = $claudeCommand
@@ -152,13 +174,17 @@ try {
     $pending = $listener.GetContextAsync()
     while (-not $pending.Wait(1000)) {
       if ((Get-Date) -ge $script:transcriptsNextRun) { Invoke-TranscriptImport | Out-Null }
+      if (Test-WorkSnapshotStale) {
+        $script:workBuilding = $true
+        try { Build-WorkSnapshot | Out-Null } catch { Write-Warning "work snapshot failed: $($_.Exception.Message)"; $script:workSnapshotBuiltAt = Get-Date } finally { $script:workBuilding = $false }
+      }
     }
     $context = $pending.Result
     try {
       $origin = $context.Request.Headers['Origin']
       if ($origin -and $origin -notin $AllowedOrigins) { Write-JsonResponse $context 403 @{ error = 'origin not allowed' }; continue }
       if ($origin) { $context.Response.Headers['Access-Control-Allow-Origin'] = $origin }
-      $context.Response.Headers['Access-Control-Allow-Methods'] = 'GET, POST, PATCH, OPTIONS'
+      $context.Response.Headers['Access-Control-Allow-Methods'] = 'GET, POST, PATCH, PUT, DELETE, OPTIONS'
       $context.Response.Headers['Access-Control-Allow-Headers'] = 'Content-Type'
       if ($context.Request.HttpMethod -eq 'OPTIONS') { Write-JsonResponse $context 204 $null; continue }
 
@@ -181,10 +207,51 @@ try {
         continue
       }
 
+      if ($path -eq '/work/snapshot' -or $path -eq '/work/refresh') {
+        if ($method -eq 'GET' -and $path -eq '/work/snapshot') { $json = Get-WorkSnapshotJson $false $true }
+        elseif ($method -eq 'POST' -and $path -eq '/work/refresh') { $json = Build-WorkSnapshot }
+        else { Write-JsonResponse $context 405 @{ error = 'method not allowed' }; continue }
+        $bytes = $utf8.GetBytes($json)
+        $context.Response.StatusCode = 200
+        $context.Response.ContentType = 'application/json; charset=utf-8'
+        $context.Response.ContentLength64 = $bytes.Length
+        $context.Response.OutputStream.Write($bytes, 0, $bytes.Length)
+        $context.Response.Close()
+        continue
+      }
+
+      if ($path -eq '/work/config') {
+        if ($method -eq 'GET') { Write-JsonResponse $context 200 (Get-WorkConfig); continue }
+        if ($method -eq 'PUT') {
+          $body = Read-JsonBody $context
+          if (-not $body) { Write-JsonResponse $context 400 @{ error = 'config body is required' }; continue }
+          $current = Get-WorkConfig
+          foreach ($property in $body.PSObject.Properties) {
+            if ($property.Name -eq 'filters' -and $null -ne $property.Value) { foreach ($filter in $property.Value.PSObject.Properties) { $current.filters[$filter.Name] = $filter.Value } }
+            elseif ($property.Name -ne 'version') { $current[$property.Name] = $property.Value }
+          }
+          Write-JsonResponse $context 200 (Save-WorkConfig $current)
+          continue
+        }
+        Write-JsonResponse $context 405 @{ error = 'method not allowed' }; continue
+      }
+
+      if ($method -eq 'POST' -and $path -eq '/work/ignores') {
+        $body = Read-JsonBody $context
+        if (-not $body -or -not $body.kind -or -not $body.id) { Write-JsonResponse $context 400 @{ error = 'kind and id are required' }; continue }
+        Write-JsonResponse $context 200 (Add-WorkIgnore ([string]$body.kind) ([string]$body.id) ([string]$body.note) ([string]$body.until))
+        continue
+      }
+
+      if ($method -eq 'DELETE' -and $path -match '^/work/ignores/([a-z]+)/([A-Za-z]?\d+)$') {
+        Write-JsonResponse $context 200 (Remove-WorkIgnore $Matches[1] $Matches[2])
+        continue
+      }
+
       if ($method -eq 'POST' -and $path -eq '/chat') {
         $body = Read-JsonBody $context
         if (-not $body -or [string]::IsNullOrWhiteSpace($body.text)) { Write-JsonResponse $context 400 @{ error = 'text is required' }; continue }
-        Write-JsonResponse $context 200 (Invoke-ClaudeChat ([string]$body.text) ([string]$body.sessionId) ([string]$body.systemPrompt))
+        Write-JsonResponse $context 200 (Invoke-ClaudeChat ([string]$body.text) ([string]$body.sessionId) ([string]$body.systemPrompt) ([string]$body.model) ([string]$body.effort))
         continue
       }
 
@@ -193,7 +260,7 @@ try {
 
       if ($method -eq 'GET' -and $path -eq '/status') {
         Write-JsonResponse $context 200 @{
-          tasks = $namespace.GetDefaultFolder(13).Items.Count
+          tasks = @($namespace.GetDefaultFolder(13).Items.Restrict('[Complete] = False')).Count
           calendarItems = $namespace.GetDefaultFolder(9).Items.Count
           inbox = $namespace.GetDefaultFolder(6).Items.Count
           important = @($namespace.GetDefaultFolder(6).Items | Where-Object { $_.Importance -eq 2 -or $_.IsMarkedAsTask }).Count
@@ -202,7 +269,7 @@ try {
       }
 
       if ($method -eq 'GET' -and $path -eq '/tasks') {
-        $items = @($namespace.GetDefaultFolder(13).Items | ForEach-Object { Convert-Task $_ })
+        $items = @(Get-WorkTaskItems $namespace | ForEach-Object { Convert-Task $_ })
         Write-JsonResponse $context 200 $items
         continue
       }
@@ -212,6 +279,7 @@ try {
         $item = $outlook.CreateItem(3)
         $item.Subject = $body.title
         if ($body.dueDate) { $item.DueDate = [datetime]::ParseExact($body.dueDate, 'yyyy-MM-dd', $null) }
+        if ($body.notes) { $item.Body = [string]$body.notes }
         $item.Save()
         Write-JsonResponse $context 201 (Convert-Task $item)
         continue
@@ -222,7 +290,11 @@ try {
         $item = $namespace.GetItemFromID($entryId)
         if ($null -ne $body.title) { $item.Subject = $body.title }
         if ($null -ne $body.completed) { $item.Complete = [bool]$body.completed }
-        if ($body.dueDate) { $item.DueDate = [datetime]::ParseExact($body.dueDate, 'yyyy-MM-dd', $null) }
+        if ($body.PSObject.Properties['dueDate']) {
+          # Outlook stores "no due date" as 1/1/4501.
+          $item.DueDate = if ($body.dueDate) { [datetime]::ParseExact($body.dueDate, 'yyyy-MM-dd', $null) } else { [datetime]'4501-01-01' }
+        }
+        if ($null -ne $body.notes) { $item.Body = [string]$body.notes }
         $item.Save()
         Write-JsonResponse $context 200 (Convert-Task $item)
         continue

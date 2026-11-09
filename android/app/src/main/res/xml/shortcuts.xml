@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- long-press the app icon: the same "talk" entry the web manifest offers -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="talk"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/widget_talk"
+        android:shortcutLongLabel="@string/shortcut_talk_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="mybrain://chat/talk"
+            android:targetPackage="com.chasegrey.mybrain"
+            android:targetClass="com.chasegrey.mybrain.MainActivity" />
+    </shortcut>
+</shortcuts>

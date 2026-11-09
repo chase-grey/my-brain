@@ -15,7 +15,7 @@ export const energyOptions: { value: Energy; label: string }[] = [
   { value: 'errand', label: 'out' },
 ]
 
-function commitmentHint(task: Task, currentDay: string, place: Place): string | undefined {
+export function commitmentHint(task: Task, currentDay: string, place: Place): string | undefined {
   if (isDoneToday(task, currentDay)) return undefined
   if (task.place?.length && !task.place.includes(place)) return task.place.includes('home') ? 'when you’re home' : 'when you’re at work'
   if (task.dueDate && task.dueDate < currentDay) return 'overdue'

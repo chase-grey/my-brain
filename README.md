@@ -70,11 +70,28 @@ the work chat shows `only on the work pc`.
 
 Bridge options: `-VaultPath`, `-ChatAllowedTools`, `-ChatTimeoutSec`.
 
+Under the thread, two pickers choose the model (sonnet, opus, haiku) and the effort level (low to
+max) for the next message; personal sends them to the api, work passes them to `claude -p` as
+`--model` and `--effort`. The choice is remembered per space. The clock button lists past
+conversations for the space, newest first, with a delete button on each and `delete all` at the
+bottom; tapping one reopens it with keep context on so the next message continues it. The plus
+button starts a new conversation. Every conversation is kept in this browser's local storage, up to
+50 per space and 40 messages each.
+
 **transcripts.** Record a conversation with Mark Zakharov's on-device Transcribe app. For work,
 `send transcript` puts the package on work OneDrive and the bridge files it into
 `07 Meetings/Transcripts/` in Hivemind (also `-TranscriptInboxPath`, `-TranscriptIntervalSec`, or
 run `bridge/transcript-inbox.ps1 -Once` alone). For personal, share the markdown to the installed
 app and it lands in `40 Transcripts/` in HomeBase. Details in [docs/transcripts.md](docs/transcripts.md).
+
+**work dashboard.** The work space's second tab. The bridge reads the EpicDW `vibes` schema as
+you (Epic network, no setup beyond `npm run bridge`), keeps a snapshot in `99 System/` of
+Hivemind, and the app lays it out as cards: needs me, waiting on others, my work, one card per
+direct report, product quality and projects. Rows open in Track; the row menu ignores an item for
+good or for a while, and the panel head shows what the filters hid and why. Filters, ignores, and
+products live in `99 System/work-dashboard.json`, so another person's Claude Code can shape their
+own. `plan an outage` in the menu, or `/outage-plan` in the work chat, lists what needs a backup
+while you are out. Details in [docs/work-dashboard.md](docs/work-dashboard.md).
 
 **memory.** Each vault keeps what the companion remembers as one fact per file plus a
 `MEMORY.md` index: `memory/` in HomeBase, `99 System/Memory/` in Hivemind. The index goes
@@ -82,6 +99,8 @@ into every system prompt; the personal companion saves and forgets through tools
 companion edits the files directly. Edit or delete memories in Obsidian whenever you like.
 
 Ideas that were researched but not built yet are in [docs/companion-ideas.md](docs/companion-ideas.md).
+
+Moving existing tasks and Notion notes into the app is planned in [docs/migration-plan.md](docs/migration-plan.md).
 
 ## Related
 
