@@ -1,13 +1,13 @@
 import { expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { AssistantRuntimeProvider, ThreadPrimitive, useExternalStoreRuntime } from '@assistant-ui/react'
-import { AssistantMessage, HistoryList, toMessage } from './ChatView'
+import { AssistantMessage, HistoryList, UserMessage, toMessage } from './ChatView'
 import type { CompanionTurn } from './companionStore'
 
 function Thread({ turns }: { turns: CompanionTurn[] }) {
   const runtime = useExternalStoreRuntime({ messages: turns, convertMessage: toMessage, isRunning: false, onNew: async () => {}, onRespondToToolApproval: () => {} })
   return <AssistantRuntimeProvider runtime={runtime}>
-    <ThreadPrimitive.Root><ThreadPrimitive.Viewport><ThreadPrimitive.Messages components={{ AssistantMessage }} /></ThreadPrimitive.Viewport></ThreadPrimitive.Root>
+    <ThreadPrimitive.Root><ThreadPrimitive.Viewport><ThreadPrimitive.Messages components={{ UserMessage, AssistantMessage }} /></ThreadPrimitive.Viewport></ThreadPrimitive.Root>
   </AssistantRuntimeProvider>
 }
 
