@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { APP_BUILD_TIME, APP_COMMIT, checkForUpdate } from '../appUpdate'
 import { GitHubVault, normalizeBranch, normalizeRepo, vaultConfigured } from '../companion/githubVault'
 import type { Domain } from '../domain/types'
 import { companionModelOptions, type AppSettings } from '../settings'
@@ -20,6 +21,8 @@ export function SettingsView({ domain, accountName, connectionStatus, settings, 
   onSync: () => void
   onSettings: React.Dispatch<React.SetStateAction<AppSettings>>
 }) {
+  // Waiting for the new worker to take over takes a moment; an unchanged button invites a second tap.
+  const [updating, setUpdating] = useState(false)
   const set = <K extends keyof AppSettings>(key: K) => (event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     onSettings((current) => ({ ...current, [key]: typeof current[key] === 'number' ? Number(event.target.value) : event.target.value }))
 
@@ -62,7 +65,13 @@ export function SettingsView({ domain, accountName, connectionStatus, settings, 
       </div>
     </Card>
 
-    {canInstall && <Card title="app"><div className="actions"><button className="primary" type="button" onClick={onInstall}>install on this device</button></div></Card>}
+    <Card title="app">
+      <p className="note">build {APP_COMMIT} · {new Date(APP_BUILD_TIME).toLocaleString()}</p>
+      <div className="actions row-actions">
+        <button className="secondary" disabled={updating} type="button" onClick={() => { setUpdating(true); void checkForUpdate() }}>{updating ? 'checking' : 'check for updates & reload'}</button>
+        {canInstall && <button className="primary" type="button" onClick={onInstall}>install on this device</button>}
+      </div>
+    </Card>
   </>
 }
 
