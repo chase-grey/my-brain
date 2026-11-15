@@ -15,7 +15,7 @@ import { buildSystemPrompt } from './companionPrompt'
 import { memoryFolders } from './memory'
 import { clearHistory, conversationTitle, conversationUpdatedAt, deleteConversation, loadHistory, newConversation, saveConversation, type CompanionConversation, type CompanionTurn } from './companionStore'
 import type { CompanionActions, PlanSummary } from './companionTools'
-import { GitHubVault, normalizeBranch, normalizeRepo, vaultConfigured } from './githubVault'
+import { GitHubVault, normalizeBranch, normalizeRepo, vaultConfigured, type VaultStore } from './githubVault'
 
 type BridgeState = 'checking' | 'ready' | 'offline'
 
@@ -94,9 +94,12 @@ function withStatusForAll(turns: CompanionTurn[], from: ActionStatus[], to: Acti
     : turn)
 }
 
-export function ChatView({ domain, settings, actions, summary, hasCalendar = false, onSettings, onChangeSettings, docked = false, talk = false, onTalkStarted }: {
+export function ChatView({ domain, settings, actions, summary, hasCalendar = false, onSettings, onChangeSettings, docked = false, talk = false, onTalkStarted, notesVault, userName }: {
   domain: Domain
   settings: AppSettings
+  /** Notes in the account's OneDrive, used when no github vault is set up. */
+  notesVault?: VaultStore
+  userName?: string
   actions: CompanionActions
   hasCalendar?: boolean
   summary: PlanSummary
@@ -132,11 +135,13 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
 
   const apiKey = compact(settings.anthropicApiKey)
   const vaultConfig = { repo: normalizeRepo(settings.githubRepo), token: compact(settings.githubToken), branch: normalizeBranch(settings.vaultBranch) }
-  const hasVault = domain === 'personal' && vaultConfigured(vaultConfig)
+  const hasGitHubVault = domain === 'personal' && vaultConfigured(vaultConfig)
+  const fallbackVault = domain === 'personal' && !hasGitHubVault ? notesVault : undefined
+  const hasVault = hasGitHubVault || Boolean(fallbackVault)
   const hasKey = domain === 'work' || apiKey.length > 0
 
   const companion = useMemo<Companion | undefined>(() => {
-    const systemPrompt = (memoryIndex?: string) => buildSystemPrompt({ domain, summary: summaryRef.current, vaultAvailable: domain === 'work' ? true : hasVault, memoryIndex })
+    const systemPrompt = (memoryIndex?: string) => buildSystemPrompt({ domain, summary: summaryRef.current, vaultAvailable: domain === 'work' ? true : hasVault, memoryIndex, notes: fallbackVault ? 'onedrive' : 'homebase', userName })
     if (domain === 'work') {
       return createBridgeCompanion({ client: new BridgeCompanionClient(), sessionId: () => conversationRef.current.sessionId, systemPrompt, model: modelShortName(settings.anthropicModel), effort: settings.chatEffort })
     }
@@ -148,11 +153,11 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
       history: () => historyRef.current,
       systemPrompt,
       actions: () => actionsRef.current,
-      vault: hasVault ? new GitHubVault(vaultConfig) : undefined,
+      vault: hasGitHubVault ? new GitHubVault(vaultConfig) : fallbackVault,
       memoryFolder: memoryFolders[domain],
       hasCalendar: () => hasCalendarRef.current,
     })
-  }, [domain, hasKey, hasVault, settings.anthropicApiKey, settings.anthropicModel, settings.chatEffort, vaultConfig.repo, vaultConfig.token, vaultConfig.branch])
+  }, [domain, hasKey, hasGitHubVault, fallbackVault, userName, settings.anthropicApiKey, settings.anthropicModel, settings.chatEffort, vaultConfig.repo, vaultConfig.token, vaultConfig.branch])
 
   useEffect(() => {
     if (domain !== 'work') return

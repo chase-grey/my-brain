@@ -57,11 +57,12 @@ export function scopeProductState(state: ProductState, domain: Domain): ProductS
   return scoped
 }
 
-export function loadProductState(domain: Domain): ProductState {
+/** `seedHabits` adds the owner's own habits (vitamins, whitening); everyone else starts with none. */
+export function loadProductState(domain: Domain, seedHabits = true): ProductState {
   try {
     const stored = JSON.parse(localStorage.getItem(storageKey(domain)) ?? localStorage.getItem('my-brain.product.v1') ?? '{}') as Partial<ProductState>
     const habits = [...(stored.habits ?? [])].filter((habit) => habit.domain === domain)
-    for (const habit of defaultPersonalHabits.filter((item) => item.domain === domain)) {
+    for (const habit of seedHabits ? defaultPersonalHabits.filter((item) => item.domain === domain) : []) {
       const index = habits.findIndex((item) => item.id === habit.id)
       if (index < 0) habits.push(habit)
       else habits[index] = {
@@ -73,7 +74,7 @@ export function loadProductState(domain: Domain): ProductState {
     }
     return scopeProductState({ ...emptyProductState, ...stored, habits, habitEntries: stored.habitEntries ?? [] }, domain)
   } catch {
-    return scopeProductState(emptyProductState, domain)
+    return scopeProductState(seedHabits ? emptyProductState : { ...emptyProductState, habits: [] }, domain)
   }
 }
 

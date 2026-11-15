@@ -4,6 +4,38 @@ A system for being intentional about every part of my life — not just the task
 Two questions: *what should I do right now, and why does it matter?* (the day) and
 *which part of my life am I neglecting?* (the season).
 
+**Live app, and where you install it from:**
+**https://chase-grey.github.io/my-brain/**
+
+- **Android:** open it in **Chrome** → menu → **Install app**.
+- **iOS:** open it in **Safari** → Share → **Add to Home Screen**, then open it from the
+  home screen. iOS keeps the installed app's storage apart from Safari's.
+
+## who can use it
+
+The app began as one person's and now takes other people too, the same way the workout
+tracker does, but with no server of ours in the middle: each person's data lives in their own
+Microsoft account.
+
+- **A new device opens on a welcome screen** (`src/views/WelcomeView.tsx`): a name, an
+  optional Anthropic key for the chat, and `connect microsoft`. Connecting is the sign-up.
+  Any personal Microsoft account works, including a free outlook.com one.
+- **Settings follow the account.** Personal settings, keys included, are saved to
+  `settings.json` in the account's OneDrive app folder (`src/settingsSync.ts`), so another
+  of your devices only needs `connect microsoft`. The app folder is private to the account.
+  Work settings stay on the device.
+- **Notes without GitHub.** With no GitHub vault set, the chat's notes, memory, and trips use
+  `notes/` in the same app folder (`src/data/oneDriveVault.ts`). Adding a GitHub repo in
+  settings switches to it.
+- **Settings → share** shows a QR, copy, and share for two links: *my other devices* (the
+  app with this account's keys in the `#setup=` fragment; whoever holds it holds the keys)
+  and *someone new* (the plain app address).
+- **The owner's things stay the owner's** (`src/account.ts`). A device that held my-brain
+  data before accounts existed is the owner's, and the flag rides in `settings.json`. Only
+  the owner gets the vitamins and whitening habits, the mail app link, the HomeBase folder
+  layout in the chat prompt, and the work space by default. Anyone else can turn the work
+  space on in settings; it needs the bridge running on their own pc.
+
 **Status:** implementation started. The first test-first vertical slice joins provider tasks
 with sidecar metadata, applies the Noise Engine, and builds the personal `I have…` plan.
 Personal Graph sync is wired through settings; Outlook remains behind its adapter boundary.

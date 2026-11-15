@@ -8,6 +8,9 @@ export type PromptContext = {
   vaultAvailable: boolean
   /** Raw contents of the vault's memory index, when the app could read it. */
   memoryIndex?: string
+  /** Where personal notes live: the owner's HomeBase obsidian vault, or plain notes in the account's OneDrive. */
+  notes?: 'homebase' | 'onedrive'
+  userName?: string
 }
 
 export const vaultNames: Record<Domain, string> = { personal: 'HomeBase', work: 'Hivemind' }
@@ -42,10 +45,19 @@ function memorySection(domain: Domain, vaultAvailable: boolean, memoryIndex: str
   return [`What you remember about the user (${index}):\n${listing}`, [...rules, 'Use save_memory and forget_memory; read a memory file with read_note.'].join(' ')].join('\n\n')
 }
 
-export function buildSystemPrompt({ domain, summary, vaultAvailable, memoryIndex }: PromptContext): string {
+export function buildSystemPrompt({ domain, summary, vaultAvailable, memoryIndex, notes = 'homebase', userName }: PromptContext): string {
   const vault = vaultNames[domain]
+  const plainNotes = domain === 'personal' && notes === 'onedrive'
+  const vaultLine = plainNotes
+    ? vaultAvailable
+      ? `The user's notes are reachable through the note tools: markdown files in folders, starting empty. Make folders as they are needed. Task syntax inside notes: "- [ ] text 📅 YYYY-MM-DD". Link notes with [[wikilinks]]. Prefer append_note for logs. Read a note before replacing it.`
+      : `The user's notes are not reachable from here, so say so if asked about notes.`
+    : vaultAvailable
+      ? `The ${vault} Obsidian vault is reachable through the note tools. Folders: 00 Weekly Plans/ (YYYY-WNN.md), 20 Projects/, 50 Someday-Maybe/, 70 Goals/${domain === 'personal' ? ', 40 Transcripts/ (recorded conversations, YYYY-MM-DD title.md, speaker-labeled lines; read on request, never written by you)' : ''}. Task syntax inside notes: "- [ ] text 📅 YYYY-MM-DD". Link notes with [[wikilinks]]. Keep YAML frontmatter when rewriting a note. Prefer append_note for logs and weekly plans. Read a note before replacing it.`
+      : `The ${vault} vault is not reachable from here, so say so if asked about notes.`
   const parts = [
     `You are the companion inside My Brain, a personal planning app. Space: ${domain}. Today: ${summary.today} (local date).`,
+    ...(userName?.trim() ? [`The user's name is ${userName.trim()}.`] : []),
     `${summary.openCount} open tasks. ${summary.availableMin} minutes available right now.`,
     section('Due today:', summary.dueToday.map(taskLine)),
     section('Overdue:', summary.overdue.map(taskLine)),
@@ -53,9 +65,7 @@ export function buildSystemPrompt({ domain, summary, vaultAvailable, memoryIndex
     section('Suggested next:', summary.suggested.map(taskLine)),
     section('Active goals:', summary.goals.map((goal) => `- ${goal.title} (id ${goal.id}, ${goal.horizon}${goal.targetDate ? `, target ${goal.targetDate}` : ''})`)),
     section('Active projects:', summary.projects.map((project) => `- ${project.title} (id ${project.id}, mode ${project.mode})`)),
-    vaultAvailable
-      ? `The ${vault} Obsidian vault is reachable through the note tools. Folders: 00 Weekly Plans/ (YYYY-WNN.md), 20 Projects/, 50 Someday-Maybe/, 70 Goals/${domain === 'personal' ? ', 40 Transcripts/ (recorded conversations, YYYY-MM-DD title.md, speaker-labeled lines; read on request, never written by you)' : ''}. Task syntax inside notes: "- [ ] text 📅 YYYY-MM-DD". Link notes with [[wikilinks]]. Keep YAML frontmatter when rewriting a note. Prefer append_note for logs and weekly plans. Read a note before replacing it.`
-      : `The ${vault} vault is not reachable from here, so say so if asked about notes.`,
+    vaultLine,
     memorySection(domain, vaultAvailable, memoryIndex),
     domain === 'work'
       ? 'You run as Claude Code on the work PC with the vault and office tools. The task list above is a read-only snapshot from the app.'

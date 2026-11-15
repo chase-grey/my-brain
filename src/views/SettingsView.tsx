@@ -2,12 +2,14 @@ import { useState } from 'react'
 import { APP_BUILD_TIME, APP_COMMIT, checkForUpdate } from '../appUpdate'
 import { GitHubVault, normalizeBranch, normalizeRepo, vaultConfigured } from '../companion/githubVault'
 import type { Domain } from '../domain/types'
+import type { DeviceAccount } from '../account'
 import { companionModelOptions, type AppSettings } from '../settings'
-import { Card, Field } from '../ui'
+import { Card, Field, Segmented } from '../ui'
+import { ShareCard } from './ShareCard'
 
 export type ConnectionStatus = 'unconfigured' | 'disconnected' | 'connected'
 
-export function SettingsView({ domain, accountName, connectionStatus, settings, syncing, syncError, canInstall, onInstall, onConnect, onDisconnect, onSync, onSettings }: {
+export function SettingsView({ domain, accountName, connectionStatus, settings, syncing, syncError, canInstall, onInstall, onConnect, onDisconnect, onSync, onSettings, account, onAccount }: {
   domain: Domain
   accountName?: string
   connectionStatus: ConnectionStatus
@@ -20,6 +22,8 @@ export function SettingsView({ domain, accountName, connectionStatus, settings, 
   onDisconnect: () => Promise<void>
   onSync: () => void
   onSettings: React.Dispatch<React.SetStateAction<AppSettings>>
+  account: DeviceAccount
+  onAccount: (account: DeviceAccount) => void
 }) {
   // Waiting for the new worker to take over takes a moment; an unchanged button invites a second tap.
   const [updating, setUpdating] = useState(false)
@@ -34,7 +38,7 @@ export function SettingsView({ domain, accountName, connectionStatus, settings, 
         ? <><p className="note">{accountName}</p><div className="actions row-actions"><button className="primary" disabled={syncing} type="button" onClick={onSync}>{syncing ? 'syncing' : 'sync now'}</button><button className="plain" disabled={syncing} type="button" onClick={() => void onDisconnect()}>disconnect</button></div></>
         : <div className="actions"><button className="primary" disabled={syncing || connectionStatus === 'unconfigured'} type="button" onClick={() => void onConnect()}>{syncing ? 'connecting' : connectionStatus === 'unconfigured' ? 'no microsoft app id' : 'connect microsoft'}</button></div>}
       {syncError && <p className="note is-error" role="alert">{syncError}</p>}
-      <Field label="mail app"><input autoComplete="off" inputMode="url" value={settings.mailAppUrl} onChange={set('mailAppUrl')} placeholder="https://" /></Field>
+      {(account.owner || settings.mailAppUrl) && <Field label="mail app"><input autoComplete="off" inputMode="url" value={settings.mailAppUrl} onChange={set('mailAppUrl')} placeholder="https://" /></Field>}
     </Card>}
 
     {domain === 'work' && <Card title="outlook tasks">
@@ -64,6 +68,12 @@ export function SettingsView({ domain, accountName, connectionStatus, settings, 
         <Field label="floors"><input value={settings.floors.join(', ')} onChange={(event) => onSettings((current) => ({ ...current, floors: event.target.value.split(',').map((item) => item.trim()).filter(Boolean).slice(0, 4) }))} placeholder={domain === 'work' ? 'email, expenses' : 'dishes, laundry'} /></Field>
       </div>
     </Card>
+
+    {domain === 'personal' && <ShareCard account={account} settings={settings} />}
+
+    {!account.owner && <Card title="work space">
+      <Segmented label="work space" value={account.workSpace ? 'on' : 'off'} onChange={(value) => onAccount({ ...account, workSpace: value === 'on' })} options={[{ value: 'off', label: 'off' }, { value: 'on', label: 'on' }]} />
+    </Card>}
 
     <Card title="app">
       <p className="note">build {APP_COMMIT} · {new Date(APP_BUILD_TIME).toLocaleString()}</p>
