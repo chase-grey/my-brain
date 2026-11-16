@@ -1,5 +1,5 @@
 import type { ProviderTask } from '../domain/types'
-import type { Ignore, WorkConfig, WorkSnapshot } from '../work/types'
+import type { Delegation, Ignore, Job, JobLevel, QueuePicks, WorkConfig, WorkSnapshot } from '../work/types'
 import type { NewProviderTask, ProviderTaskChanges, TaskProvider } from './taskProvider'
 
 type BridgeTask = {
@@ -66,6 +66,33 @@ export class WorkBridgeProvider implements TaskProvider {
 
   async unignore(kind: Ignore['kind'], id: string | number): Promise<WorkConfig> {
     return await this.request<WorkConfig>(`/work/ignores/${kind}/${encodeURIComponent(String(id))}`, { method: 'DELETE' })
+  }
+
+  // Delegated QANs: a job is one QAN handed to a Claude Code session in Session Runner (docs/work-delegation.md).
+  async jobs(): Promise<{ jobs: Job[]; delegation: Delegation }> {
+    return await this.request<{ jobs: Job[]; delegation: Delegation }>('/work/jobs')
+  }
+
+  /** Records the job and starts its session in Session Runner. */
+  async takeQan(qanId: string, title: string, level: JobLevel): Promise<Job> {
+    return await this.request<Job>('/work/jobs', { method: 'POST', body: JSON.stringify({ qanId, title, level, launch: true }) })
+  }
+
+  async updateJob(qanId: string, changes: Partial<Pick<Job, 'level' | 'state'>>): Promise<Job> {
+    return await this.request<Job>(`/work/jobs/${encodeURIComponent(qanId)}`, { method: 'PATCH', body: JSON.stringify(changes) })
+  }
+
+  async openJob(qanId: string): Promise<{ job: Job; opened: string }> {
+    return await this.request<{ job: Job; opened: string }>(`/work/jobs/${encodeURIComponent(qanId)}/open`, { method: 'POST' })
+  }
+
+  async queuePicks(): Promise<QueuePicks> {
+    return await this.request<QueuePicks>('/work/queue/picks')
+  }
+
+  /** Has Claude rank the queue against my history; takes up to a few minutes. */
+  async askQueuePicks(): Promise<QueuePicks> {
+    return await this.request<QueuePicks>('/work/queue/picks', { method: 'POST' })
   }
 
   async listTasks(): Promise<WorkProviderTask[]> {
