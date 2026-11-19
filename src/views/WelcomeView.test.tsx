@@ -1,10 +1,14 @@
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { firstName, WelcomeView } from './WelcomeView'
 import { SetupLanding, setupLanding } from './SetupLanding'
 
 describe('welcome', () => {
+  afterEach(() => { vi.unstubAllEnvs() })
+
   it('opens on the questions when there is no microsoft app to connect', () => {
+    // A dev machine's .env.local sets the client id; this is the screen without one.
+    vi.stubEnv('VITE_MICROSOFT_CLIENT_ID', '')
     const html = renderToStaticMarkup(<WelcomeView onDone={() => {}} />)
     expect(html).toContain('about you')
     expect(html).toContain('name')
