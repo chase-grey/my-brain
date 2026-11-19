@@ -2,6 +2,17 @@ import type { Domain } from './domain/types'
 
 export const defaultCompanionModel = 'claude-sonnet-5-5'
 export const companionModelOptions = ['claude-sonnet-5-5', 'claude-opus-5-5', 'claude-haiku-5-5'] as const
+/** The app picks the model and effort per message. Personal only: the work chat is Claude Code, which takes a named model. */
+export const autoModel = 'auto'
+
+export function chatModelOptions(domain: Domain): readonly string[] {
+  return domain === 'personal' ? [autoModel, ...companionModelOptions] : companionModelOptions
+}
+
+/** The stored model as this space can use it. */
+export function chatModel(domain: Domain, model: string): string {
+  return domain === 'work' && model === autoModel ? defaultCompanionModel : model
+}
 export const effortOptions = ['low', 'medium', 'high', 'xhigh', 'max'] as const
 export type Effort = typeof effortOptions[number]
 export const defaultEffort: Effort = 'high'
@@ -16,6 +27,8 @@ export type AppSettings = {
   personalWeeklyCeilingMin: number
   floors: string[]
   anthropicApiKey: string
+  /** TypeSafe Jev. When set, it reads each message first and picks the model and tools for it. */
+  jevApiKey: string
   anthropicModel: string
   chatEffort: Effort
   githubRepo: string
@@ -29,7 +42,8 @@ export const defaultSettings: AppSettings = {
   personalWeeklyCeilingMin: 360,
   floors: [],
   anthropicApiKey: '',
-  anthropicModel: defaultCompanionModel,
+  jevApiKey: '',
+  anthropicModel: autoModel,
   chatEffort: defaultEffort,
   githubRepo: '',
   githubToken: '',
@@ -38,7 +52,7 @@ export const defaultSettings: AppSettings = {
 }
 
 const settingsStorageKey = (domain: Domain) => `my-brain.${domain}.settings.v1`
-const companionFields = ['anthropicApiKey', 'githubRepo', 'githubToken', 'vaultBranch', 'mailAppUrl'] as const
+const companionFields = ['anthropicApiKey', 'jevApiKey', 'githubRepo', 'githubToken', 'vaultBranch', 'mailAppUrl'] as const
 // Model and effort are per space: the work chat picks them for Claude Code, the personal one for the api.
 const chatFields = ['anthropicModel', 'chatEffort'] as const
 
@@ -63,14 +77,14 @@ export function loadSettings(domain: Domain): AppSettings {
       personalWeeklyCeilingMin: minutes(stored.personalWeeklyCeilingMin, defaultSettings.personalWeeklyCeilingMin),
       floors: Array.isArray(stored.floors) ? stored.floors.filter((item): item is string => typeof item === 'string').slice(0, 4) : [],
       ...companion,
-      anthropicModel: text(stored.anthropicModel, '') || defaultCompanionModel,
+      anthropicModel: chatModel(domain, text(stored.anthropicModel, '') || autoModel),
       chatEffort: effort(stored.chatEffort),
       vaultBranch: companion.vaultBranch || 'main',
     }
   } catch {
     // Storage can be unavailable or contain old data; defaults remain usable.
   }
-  return defaultSettings
+  return { ...defaultSettings, anthropicModel: chatModel(domain, defaultSettings.anthropicModel) }
 }
 
 export function saveSettings(settings: AppSettings, domain: Domain): void {

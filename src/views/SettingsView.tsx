@@ -4,7 +4,7 @@ import { GitHubVault, normalizeBranch, normalizeRepo, vaultConfigured } from '..
 import type { Domain } from '../domain/types'
 import { exportFileName, exportVault, saveExport } from '../notes/exportNotes'
 import type { DeviceAccount } from '../account'
-import { companionModelOptions, type AppSettings } from '../settings'
+import type { AppSettings } from '../settings'
 import { Card, Field, Segmented } from '../ui'
 import { ShareCard } from './ShareCard'
 
@@ -51,7 +51,7 @@ export function SettingsView({ domain, accountName, connectionStatus, settings, 
     <Card title="chat">
       {domain === 'personal' ? <div className="stack">
         <Field label="anthropic api key"><input type="password" autoComplete="off" value={settings.anthropicApiKey} onChange={set('anthropicApiKey')} /></Field>
-        <Field label="model"><select value={settings.anthropicModel} onChange={set('anthropicModel')}>{companionModelOptions.map((model) => <option key={model} value={model}>{model}</option>)}</select></Field>
+        <Field label="jev api key"><input type="password" autoComplete="off" value={settings.jevApiKey} onChange={set('jevApiKey')} /></Field>
         <div className="grid-2">
           <Field label="github repo"><input autoComplete="off" value={settings.githubRepo} onChange={set('githubRepo')} placeholder="owner/name" /></Field>
           <Field label="branch"><input autoComplete="off" value={settings.vaultBranch} onChange={set('vaultBranch')} /></Field>

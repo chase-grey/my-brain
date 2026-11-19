@@ -108,7 +108,16 @@ Bridge options: `-VaultPath`, `-ChatAllowedTools`, `-ChatTimeoutSec`, `-SessionR
 
 Under the thread, two pickers choose the model (sonnet, opus, haiku) and the effort level (low to
 max) for the next message; personal sends them to the api, work passes them to `claude -p` as
-`--model` and `--effort`. The choice is remembered per space. The clock button lists past
+`--model` and `--effort`. The choice is remembered per space.
+
+Personal also has `auto`, the default. Each message starts on one of three rungs, haiku at low
+effort, sonnet at medium, or opus at high, and the model can call `hand_off` to move up a rung.
+With a TypeSafe Jev key in settings, Jev reads the message first (a classifier, a fraction of a
+cent per thousand messages) and picks the starting rung and which tool groups to send: notes and
+memory, trips, calendar. It starts on haiku or opus only at 60% or better, and leaves a tool group
+out only under a 20% chance it is needed; a hand-off brings every tool back. Without a key, or
+when Jev cannot be reached, auto starts on sonnet with every tool. The picker shows which model
+answered last. Work chat is never sent to Jev. The clock button lists past
 conversations for the space, newest first, with a delete button on each and `delete all` at the
 bottom; tapping one reopens it with keep context on so the next message continues it. The plus
 button starts a new conversation. Every conversation is kept in this browser's local storage, up to

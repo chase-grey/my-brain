@@ -80,7 +80,7 @@ export function newPersonSettings(base: AppSettings = defaultSettings): AppSetti
 // fragment, which never leaves the device that opens it, so it is not in Pages' request logs.
 // Whoever holds the link holds the keys.
 
-export const setupLinkFields = ['anthropicApiKey', 'anthropicModel', 'chatEffort', 'githubRepo', 'githubToken', 'vaultBranch', 'mailAppUrl'] as const
+export const setupLinkFields = ['anthropicApiKey', 'jevApiKey', 'anthropicModel', 'chatEffort', 'githubRepo', 'githubToken', 'vaultBranch', 'mailAppUrl'] as const
 export type SetupLinkSettings = Partial<Pick<AppSettings, typeof setupLinkFields[number]>>
 export type DeviceSetup = { owner: boolean; name: string; workSpace: boolean; settings: SetupLinkSettings }
 

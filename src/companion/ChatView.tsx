@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { AssistantRuntimeProvider, ComposerPrimitive, MessagePrimitive, ThreadPrimitive, useExternalStoreRuntime, type AppendMessage, type ThreadMessageLike } from '@assistant-ui/react'
 import { MarkdownTextPrimitive } from '@assistant-ui/react-markdown'
 import type { Domain } from '../domain/types'
-import { companionModelOptions, effortOptions, modelShortName, type AppSettings } from '../settings'
+import { autoModel, chatModel, chatModelOptions, effortOptions, modelShortName, type AppSettings } from '../settings'
 import { Icon } from '../navIcons'
 import { Empty } from '../ui'
 import { useVoice } from '../voice/useVoice'
@@ -16,6 +16,8 @@ import { memoryFolders } from './memory'
 import { clearHistory, conversationTitle, conversationUpdatedAt, deleteConversation, loadHistory, newConversation, saveConversation, type CompanionConversation, type CompanionTurn } from './companionStore'
 import type { CompanionActions, PlanSummary } from './companionTools'
 import { GitHubVault, normalizeBranch, normalizeRepo, vaultConfigured, type VaultStore } from './githubVault'
+import { JevClient } from './jev'
+import { routeWithJev } from './route'
 
 type BridgeState = 'checking' | 'ready' | 'offline'
 
@@ -121,6 +123,8 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
   const [history, setHistory] = useState<CompanionConversation[]>()
   const [sending, setSending] = useState(false)
   const [openedId, setOpenedId] = useState<string>()
+  // Under auto, the model that answered last, shown beside the choice.
+  const [answeredBy, setAnsweredBy] = useState<string>()
   const [bridge, setBridge] = useState<BridgeState>(domain === 'work' ? 'checking' : 'ready')
   const conversationRef = useRef(conversation)
   const keepContextRef = useRef(keepContext)
@@ -138,6 +142,8 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
   summaryRef.current = summary
 
   const apiKey = compact(settings.anthropicApiKey)
+  const jevKey = compact(settings.jevApiKey)
+  const model = chatModel(domain, settings.anthropicModel)
   const vaultConfig = { repo: normalizeRepo(settings.githubRepo), token: compact(settings.githubToken), branch: normalizeBranch(settings.vaultBranch) }
   const hasGitHubVault = domain === 'personal' && vaultConfigured(vaultConfig)
   const fallbackVault = domain === 'personal' && !hasGitHubVault ? notesVault : undefined
@@ -147,13 +153,14 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
   const companion = useMemo<Companion | undefined>(() => {
     const systemPrompt = (memoryIndex?: string) => buildSystemPrompt({ domain, summary: summaryRef.current, vaultAvailable: domain === 'work' ? true : hasVault, memoryIndex, notes: fallbackVault ? 'onedrive' : 'homebase', userName })
     if (domain === 'work') {
-      return createBridgeCompanion({ client: new BridgeCompanionClient(), sessionId: () => conversationRef.current.sessionId, systemPrompt, model: modelShortName(settings.anthropicModel), effort: settings.chatEffort })
+      return createBridgeCompanion({ client: new BridgeCompanionClient(), sessionId: () => conversationRef.current.sessionId, systemPrompt, model: modelShortName(model), effort: settings.chatEffort })
     }
     if (!hasKey) return undefined
     return createAnthropicCompanion({
       client: new AnthropicClient(apiKey),
-      model: settings.anthropicModel,
+      model,
       effort: settings.chatEffort,
+      route: jevKey ? (ask) => routeWithJev(new JevClient(jevKey), ask) : undefined,
       history: () => historyRef.current,
       systemPrompt,
       actions: () => actionsRef.current,
@@ -161,7 +168,7 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
       memoryFolder: memoryFolders[domain],
       hasCalendar: () => hasCalendarRef.current,
     })
-  }, [domain, hasKey, hasGitHubVault, fallbackVault, userName, settings.anthropicApiKey, settings.anthropicModel, settings.chatEffort, vaultConfig.repo, vaultConfig.token, vaultConfig.branch])
+  }, [domain, hasKey, hasGitHubVault, fallbackVault, userName, settings.anthropicApiKey, settings.jevApiKey, settings.anthropicModel, settings.chatEffort, vaultConfig.repo, vaultConfig.token, vaultConfig.branch])
 
   useEffect(() => {
     if (domain !== 'work') return
@@ -222,6 +229,7 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
       for (const id of reply.pending.ids) pendingRef.current.set(id, reply.pending)
       if (!keepContextRef.current) setKeep(true)
     }
+    if (reply.model) setAnsweredBy(reply.model)
     const text = reply.text || (reply.actions.length ? '' : 'done')
     update({
       ...conversationRef.current,
@@ -383,12 +391,12 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
               </ThreadPrimitive.Viewport>}
             {voice.state !== 'idle' && <p className="voice-caption" aria-live="polite">{voice.state === 'speaking' ? 'speaking' : voice.transcript ? `listening · ${voice.transcript}` : 'listening'}</p>}
             <div className="chat-tools">
-              <select className="picker" aria-label="model" value={settings.anthropicModel} onChange={(event) => onChangeSettings?.({ anthropicModel: event.target.value })}>
-                {companionModelOptions.map((model) => <option key={model} value={model}>{modelShortName(model)}</option>)}
+              <select className="picker" aria-label="model" value={model} onChange={(event) => onChangeSettings?.({ anthropicModel: event.target.value })}>
+                {chatModelOptions(domain).map((option) => <option key={option} value={option}>{option === autoModel && answeredBy ? `auto · ${modelShortName(answeredBy)}` : modelShortName(option)}</option>)}
               </select>
-              <select className="picker" aria-label="effort" value={settings.chatEffort} onChange={(event) => onChangeSettings?.({ chatEffort: event.target.value as AppSettings['chatEffort'] })}>
+              {model !== autoModel && <select className="picker" aria-label="effort"value={settings.chatEffort} onChange={(event) => onChangeSettings?.({ chatEffort: event.target.value as AppSettings['chatEffort'] })}>
                 {effortOptions.map((level) => <option key={level} value={level}>{level}</option>)}
-              </select>
+              </select>}
               <span className="chat-tools-gap" />
               <button className="icon-button" type="button" aria-label="history" aria-pressed={Boolean(history)} onClick={() => setHistory(history ? undefined : loadHistory(domain))}><Icon name="history" size={18} /></button>
               <button className="icon-button" type="button" aria-label="new chat" disabled={!conversation.turns.length} onClick={startNew}><Icon name="plus" size={18} /></button>

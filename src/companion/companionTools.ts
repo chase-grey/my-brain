@@ -87,9 +87,22 @@ const calendarTools: AnthropicTool[] = [
   { name: 'hold_in_calendar', description: 'Write a block goal\'s scheduled day into the personal calendar as a busy afternoon so the day stays free. Set scheduled_on with update_goal first.', input_schema: { type: 'object', properties: { id: { type: 'string', description: 'goal id' } }, required: ['id'] } },
 ]
 
-export function companionTools(options: { hasVault: boolean; hasCalendar?: boolean }): AnthropicTool[] {
-  const tools = options.hasCalendar ? [...taskTools, ...calendarTools] : taskTools
-  return options.hasVault ? [...noteTools, ...memoryTools, ...tripTools, ...tools] : tools
+/** The tools a message can do without. Tasks and goals always go along. */
+export type ToolGroup = 'notes' | 'trips' | 'calendar'
+
+/** The groups this space has at all, which is what a router may leave out. */
+export function toolGroups(options: { hasVault: boolean; hasCalendar?: boolean }): ToolGroup[] {
+  return [...(options.hasVault ? ['notes', 'trips'] as const : []), ...(options.hasCalendar ? ['calendar'] as const : [])]
+}
+
+export function companionTools(options: { hasVault: boolean; hasCalendar?: boolean; skip?: ToolGroup[] }): AnthropicTool[] {
+  const has = (group: ToolGroup) => toolGroups(options).includes(group) && !options.skip?.includes(group)
+  return [
+    ...(has('notes') ? [...noteTools, ...memoryTools] : []),
+    ...(has('trips') ? tripTools : []),
+    ...taskTools,
+    ...(has('calendar') ? calendarTools : []),
+  ]
 }
 
 type Args = Record<string, unknown>

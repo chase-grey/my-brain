@@ -1,10 +1,12 @@
 import { actionLine, describeAction, type CompanionAction } from './actions'
 import { AnthropicError, textOf, toolUses, type AnthropicClient, type AnthropicMessage, type ContentBlock, type ToolUseBlock } from './anthropicClient'
 import { BridgeUnreachableError, type BridgeCompanionClient } from './bridgeCompanion'
-import { companionTools, executeTool, type CompanionActions, type ToolContext, type Undo } from './companionTools'
+import { autoModel } from '../settings'
+import { companionTools, executeTool, toolGroups, type CompanionActions, type ToolContext, type Undo } from './companionTools'
 import type { CompanionTurn } from './companionStore'
 import { GitHubError, type VaultStore } from './githubVault'
 import { readMemoryIndex } from './memory'
+import { defaultRoute, handOffTool, rungs, topRung, type Route, type RouteAsk } from './route'
 
 export type { Undo } from './companionTools'
 
@@ -21,6 +23,8 @@ export type AssistantReply = {
   toolCalls: { name: string; ok: boolean }[]
   pending?: PendingApprovals
   sessionId?: string
+  /** The model that finished the reply. */
+  model?: string
 }
 
 export interface Companion {
@@ -62,9 +66,12 @@ function toolResult(use: ToolUseBlock, outcome: Awaited<ReturnType<typeof execut
 
 export function createAnthropicCompanion(deps: {
   client: AnthropicClient
+  /** A model name, or `auto`: each message starts on the rung the route names and the model can hand off upward. */
   model: string
-  /** low | medium | high | xhigh | max; the api's own default when left out. */
+  /** low | medium | high | xhigh | max; the api's own default when left out. Auto sets its own. */
   effort?: string
+  /** Auto only. Where a message starts and which tools it can do without; the middle model with every tool when left out or when it fails. */
+  route?: (ask: RouteAsk) => Promise<Route>
   history: () => CompanionTurn[]
   systemPrompt: (memoryIndex?: string) => string
   actions: () => CompanionActions
@@ -76,21 +83,39 @@ export function createAnthropicCompanion(deps: {
   const toolContext = (): ToolContext => ({ actions: deps.actions(), vault: deps.vault, memoryFolder })
 
   type Gate = { use: ToolUseBlock; action: CompanionAction }
-  type Run = { messages: AnthropicMessage[]; system: string; tools: ReturnType<typeof companionTools>; callsLeft: number }
+  type Tools = ReturnType<typeof companionTools>
+  /** `rung` is set only under auto; `allTools` is what a hand-off restores when the route left some out. */
+  type Run = { messages: AnthropicMessage[]; system: string; tools: Tools; allTools: Tools; callsLeft: number; model: string; effort?: string; rung?: number }
+
+  const canHandOff = (run: Run) => run.rung !== undefined && (run.rung < topRung || run.tools.length < run.allTools.length)
+
+  function handOff(run: Run): boolean {
+    if (!canHandOff(run)) return false
+    run.rung = Math.min(run.rung! + 1, topRung)
+    run.model = rungs[run.rung].model
+    run.effort = rungs[run.rung].effort
+    run.tools = run.allTools
+    // The call that only handed off does not count against the turn.
+    run.callsLeft += 1
+    return true
+  }
 
   async function runLoop(run: Run): Promise<AssistantReply> {
     const replyParts: string[] = []
     const actions: CompanionAction[] = []
     const undos: Record<string, Undo> = {}
     const toolCalls: AssistantReply['toolCalls'] = []
-    const reply = (pending?: PendingApprovals): AssistantReply => ({ text: replyParts.join('\n\n'), actions, undos, toolCalls, ...(pending ? { pending } : {}) })
+    const reply = (pending?: PendingApprovals): AssistantReply => ({ text: replyParts.join('\n\n'), actions, undos, toolCalls, model: run.model, ...(pending ? { pending } : {}) })
     try {
       while (run.callsLeft > 0) {
         run.callsLeft -= 1
-        const response = await deps.client.createMessage({ model: deps.model, system: run.system, messages: run.messages, tools: run.tools, ...(deps.effort ? { output_config: { effort: deps.effort } } : {}) })
-        const spoken = textOf(response.content)
-        if (spoken) replyParts.push(spoken)
+        const tools = canHandOff(run) ? [...run.tools, handOffTool] : run.tools
+        const response = await deps.client.createMessage({ model: run.model, system: run.system, messages: run.messages, tools, ...(run.effort ? { output_config: { effort: run.effort } } : {}) })
         const uses = toolUses(response.content)
+        const handingOff = run.rung !== undefined && uses.some((use) => use.name === handOffTool.name)
+        // What a model says while passing the request on is not the answer.
+        const spoken = handingOff ? '' : textOf(response.content)
+        if (spoken) replyParts.push(spoken)
         if (response.stop_reason !== 'tool_use' || !uses.length) {
           if (response.stop_reason === 'max_tokens') replyParts.push('…')
           return reply()
@@ -99,6 +124,11 @@ export function createAnthropicCompanion(deps: {
         const results: ContentBlock[] = []
         const gates: Gate[] = []
         for (const use of uses) {
+          if (handingOff && use.name === handOffTool.name) {
+            const moved = handOff(run)
+            results.push({ type: 'tool_result', tool_use_id: use.id, content: moved ? 'handed off. you are now the stronger model, with every tool. carry on with the request.' : 'there is no stronger model to hand off to. finish the request yourself.' })
+            continue
+          }
           const description = await describeAction(use.name, use.input, toolContext())
           if (description?.weight === 'heavy') {
             const action: CompanionAction = { ...description, weight: 'heavy', id: use.id, tool: use.name, status: 'pending' }
@@ -152,10 +182,20 @@ export function createAnthropicCompanion(deps: {
   return {
     async send(text) {
       const messages = [...historyMessages(deps.history()), { role: 'user', content: text } satisfies AnthropicMessage]
-      const tools = companionTools({ hasVault: Boolean(deps.vault), hasCalendar: deps.hasCalendar?.() ?? false })
-      // A failed index read must not block the turn; the prompt says it could not be read and the tools still work.
-      const memoryIndex = deps.vault ? await readMemoryIndex(deps.vault, memoryFolder).catch(() => undefined) : undefined
-      return runLoop({ messages, system: deps.systemPrompt(memoryIndex), tools, callsLeft: maxModelCalls })
+      const available = { hasVault: Boolean(deps.vault), hasCalendar: deps.hasCalendar?.() ?? false }
+      const allTools = companionTools(available)
+      const auto = deps.model === autoModel
+      const previousReply = [...deps.history()].reverse().find((turn) => turn.role === 'assistant' && !turn.error)?.text.slice(0, 400)
+      // Neither read may block the turn: a failed route starts in the middle with every tool, and a failed index read
+      // leaves the prompt saying so while the tools still work.
+      const [route, memoryIndex] = await Promise.all([
+        auto && deps.route ? deps.route({ text, previousReply, groups: toolGroups(available) }).catch(() => defaultRoute) : defaultRoute,
+        deps.vault ? readMemoryIndex(deps.vault, memoryFolder).catch(() => undefined) : undefined,
+      ])
+      const start = auto
+        ? { ...rungs[route.rung], rung: route.rung, tools: companionTools({ ...available, skip: route.skip }) }
+        : { model: deps.model, effort: deps.effort, tools: allTools }
+      return runLoop({ messages, system: deps.systemPrompt(memoryIndex), allTools, callsLeft: maxModelCalls, ...start })
     },
   }
 }
