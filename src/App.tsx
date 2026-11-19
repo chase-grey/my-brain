@@ -362,10 +362,20 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
     if (activeDomain === 'personal') markAccountChanged()
   }
 
-  async function syncPersonal(data = personalData): Promise<void> {
+  /** `reconnect` is for a sync the user asked for: an expired sign-in opens microsoft again instead of failing. */
+  async function syncPersonal(data = personalData, reconnect = false): Promise<void> {
     if (activeDomain !== 'personal' || !data) return
     setSyncing(true)
     setSyncError(undefined)
+    if (reconnect) {
+      try {
+        await data.auth.accessToken(true)
+      } catch (error) {
+        setSyncError(errorMessage(error))
+        setSyncing(false)
+        return
+      }
+    }
     try {
       await syncAccount(data)
     } catch (error) {
@@ -771,7 +781,7 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
         {shownView === 'stores' && <StoresView activeStore={activeStore} tasks={tasks} onStore={setActiveStore} onToggle={toggleComplete} onAdd={addTask} />}
         {shownView === 'trips' && <TripsView vault={tripVault} currentDay={currentDay} onSettings={() => setView('settings')} />}
         {shownView === 'usage' && <UsageView domain={activeDomain} />}
-        {shownView === 'settings' && <SettingsView domain={activeDomain} accountName={accountName} connectionStatus={connectionStatus} settings={settings} syncing={syncing} syncError={syncError} canInstall={install.canPrompt} onInstall={() => void install.install()} onConnect={connectPersonal} onDisconnect={disconnectPersonal} onSync={() => { void (activeDomain === 'work' ? syncWork() : syncPersonal()) }} onSettings={changeSettings} account={account} onAccount={markAccountChanged} />}
+        {shownView === 'settings' && <SettingsView domain={activeDomain} accountName={accountName} connectionStatus={connectionStatus} settings={settings} syncing={syncing} syncError={syncError} canInstall={install.canPrompt} onInstall={() => void install.install()} onConnect={connectPersonal} onDisconnect={disconnectPersonal} onSync={() => { void (activeDomain === 'work' ? syncWork() : syncPersonal(personalData, true)) }} onSettings={changeSettings} account={account} onAccount={markAccountChanged} />}
         {shownView === 'task' && <TaskPage key={editingTaskId ?? 'new'} domain={activeDomain} existingTask={tasks.find((task) => task.id === editingTaskId)} projects={product.projects.filter((project) => project.domain === activeDomain && project.status === 'active')} onAdd={addTask} onUpdate={updateTask} onDelete={deleteTask} onNotMine={delegateTask} onCancel={() => { setEditingTaskId(undefined); setView('today') }} />}
       </div>
 
