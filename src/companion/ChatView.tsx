@@ -94,7 +94,7 @@ function withStatusForAll(turns: CompanionTurn[], from: ActionStatus[], to: Acti
     : turn)
 }
 
-export function ChatView({ domain, settings, actions, summary, hasCalendar = false, onSettings, onChangeSettings, docked = false, talk = false, onTalkStarted, notesVault, userName }: {
+export function ChatView({ domain, settings, actions, summary, hasCalendar = false, onSettings, onChangeSettings, docked = false, talk = false, onTalkStarted, notesVault, userName, prefill, onPrefilled }: {
   domain: Domain
   settings: AppSettings
   /** Notes in the account's OneDrive, used when no github vault is set up. */
@@ -110,6 +110,9 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
   /** Open already listening, hands-free: the "talk" shortcut and the widget land here. */
   talk?: boolean
   onTalkStarted?: () => void
+  /** Typed into the composer once, unsent: a new account's first request. */
+  prefill?: string
+  onPrefilled?: () => void
 }) {
   const [keepContext, setKeepContext] = useState(() => keepContextBySpace[domain] ?? false)
   // Only a kept thread comes back on its own: with the toggle off, what is on screen has to match what the model was given,
@@ -338,6 +341,12 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
     onNew,
     onRespondToToolApproval,
   })
+
+  useEffect(() => {
+    if (!prefill || unavailable) return
+    runtime.thread.composer.setText(prefill)
+    onPrefilled?.()
+  }, [prefill, unavailable])
 
   return <section className={`chat${docked ? ' is-docked' : ''}`} aria-label="chat">
     <header className="view-head">

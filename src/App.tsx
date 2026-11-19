@@ -33,6 +33,8 @@ import { TaskPage } from './views/TaskPage'
 import { UsageView } from './views/UsageView'
 import { WorkDashboardView } from './views/WorkDashboardView'
 import { WelcomeView } from './views/WelcomeView'
+import { SetupLanding, landsOnInstall } from './views/SetupLanding'
+import { useInstallPrompt } from './installPrompt'
 
 type View = 'today' | 'progress' | 'dashboard' | 'chat' | 'stores' | 'goals' | 'usage' | 'settings' | 'task'
 const taskStorageKey = (domain: Domain) => `my-brain.${domain}.tasks.v1`
@@ -60,11 +62,6 @@ function hashFor(view: View, taskId?: string): string {
   return view === 'task' && taskId ? `#task/${taskId}` : `#${view}`
 }
 
-interface BeforeInstallPromptEvent extends Event {
-  prompt: () => Promise<void>
-  userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>
-}
-
 function inferredPlace(now = new Date()): Place {
   const weekday = now.getDay()
   const hour = now.getHours()
@@ -83,7 +80,9 @@ function workErrorMessage(error: unknown): string {
 
 const workResyncAfterMs = 5 * 60 * 1000
 
-function initialTasks(domain: Domain): Task[] {
+/** The owner's starting tasks. Anyone else starts with none: these are Chase's errands, not theirs. */
+function initialTasks(domain: Domain, owner: boolean): Task[] {
+  if (!owner) return []
   const projection = projectTasks(demoProviderTasks, demoTaskMetadata)
   const tasks: Task[] = [
     ...projection.triaged.map((task) => ({ ...task, metadataComplete: true })),
@@ -107,7 +106,7 @@ function initialTasks(domain: Domain): Task[] {
   return tasks.filter((task) => task.domain === domain)
 }
 
-function loadTasks(domain: Domain): Task[] {
+function loadTasks(domain: Domain, owner: boolean): Task[] {
   try {
     const stored = localStorage.getItem(taskStorageKey(domain)) ?? localStorage.getItem('my-brain.tasks.v1')
     if (stored) {
@@ -115,22 +114,25 @@ function loadTasks(domain: Domain): Task[] {
         ...task,
         storeType: (task.storeType as string) === 'general' ? 'other' as const : task.storeType,
       }))
-      const missingRoutines = initialTasks(domain).filter((task) => task.recurrence && !loaded.some((item) => item.id === task.id))
+      const missingRoutines = initialTasks(domain, owner).filter((task) => task.recurrence && !loaded.some((item) => item.id === task.id))
       return [...loaded, ...missingRoutines]
     }
   } catch {
     // Storage can be unavailable in privacy modes; the app still works in memory.
   }
-  return initialTasks(domain)
+  return initialTasks(domain, owner)
 }
 
 /**
  * The account this device opens as. A setup link from another of your devices (#setup=...) sets it
  * up on the spot and is taken out of the address, so the keys it carried don't sit in history.
  */
+let openedFromSetupLink = false
+
 function initialAccount(): DeviceAccount {
   const setup = typeof location === 'undefined' ? undefined : setupFromHash(location.hash)
   if (!setup) return loadAccount()
+  openedFromSetupLink = true
   const applied = applyDeviceSetup(setup, loadSettings('personal'))
   saveSettings(applied.settings, 'personal')
   saveAccount(applied.account)
@@ -142,21 +144,28 @@ export default function App() {
   const [account, setAccount] = useState(initialAccount)
   const [domain, setDomain] = useState<Domain>('personal')
   useKeyboardInset()
+  const [landing, setLanding] = useState(() => openedFromSetupLink && landsOnInstall())
+  const [kickoff, setKickoff] = useState<string>()
   const updateAccount = (next: DeviceAccount) => { saveAccount(next); setAccount(next) }
   if (!account.setupComplete) {
-    return <WelcomeView onDone={(next, settings) => { saveSettings(settings, 'personal'); updateAccount(next) }} />
+    return <WelcomeView onDone={(next, settings, finish) => {
+      saveSettings(settings, 'personal')
+      // With a key to answer it, setup ends in a conversation rather than an empty today.
+      if (finish?.kickoff) { setKickoff(finish.kickoff); history.replaceState(null, '', `${location.pathname}${location.search}#chat`) }
+      updateAccount(next)
+    }} />
   }
+  if (landing) return <SetupLanding name={account.name} onDone={() => setLanding(false)} />
   const shownDomain = showsWork(account) ? domain : 'personal'
-  return <Workspace key={shownDomain} activeDomain={shownDomain} onDomain={setDomain} account={account} onAccount={updateAccount} />
+  return <Workspace key={shownDomain} activeDomain={shownDomain} onDomain={setDomain} account={account} onAccount={updateAccount} kickoff={kickoff} onKickoffUsed={() => setKickoff(undefined)} />
 }
 
-const installDismissedKey = 'my-brain.install-dismissed'
 const accountPushDelayMs = 1500
 
-export function Workspace({ activeDomain, onDomain, account, onAccount }: { activeDomain: Domain; onDomain: (domain: Domain) => void; account: DeviceAccount; onAccount: (account: DeviceAccount) => void }) {
+export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff, onKickoffUsed }: { activeDomain: Domain; onDomain: (domain: Domain) => void; account: DeviceAccount; onAccount: (account: DeviceAccount) => void; kickoff?: string; onKickoffUsed?: () => void }) {
   const [view, setView] = useState<View>(() => parseHash().view)
   const [docked, setDocked] = useState(() => typeof matchMedia === 'function' && matchMedia(dockedQuery).matches)
-  const [tasks, setTasks] = useState<Task[]>(() => loadTasks(activeDomain))
+  const [tasks, setTasks] = useState<Task[]>(() => loadTasks(activeDomain, account.owner))
   const [availableMin, setAvailableMin] = useState<number>(60)
   const [energy, setEnergy] = useState<Energy>('shallow')
   const [placeOverride, setPlaceOverride] = useState<Place | undefined>()
@@ -168,8 +177,7 @@ export function Workspace({ activeDomain, onDomain, account, onAccount }: { acti
   const accountRef = useRef(account)
   accountRef.current = account
   const accountPush = useRef<ReturnType<typeof setTimeout>>(undefined)
-  const [installDismissed, setInstallDismissed] = useState(() => { try { return localStorage.getItem(installDismissedKey) === '1' } catch { return false } })
-  const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null)
+  const install = useInstallPrompt()
   // A transcript shared from the phone lands on #share before the hash effect normalizes it; capture it once.
   const [sharing, setSharing] = useState(() => typeof location !== 'undefined' && location.hash === '#share')
   // #chat/talk opens the chat already listening: the app shortcut and the android widget use it.
@@ -255,27 +263,6 @@ export function Workspace({ activeDomain, onDomain, account, onAccount }: { acti
   useEffect(() => saveSettings(settings, activeDomain), [settings])
 
   useEffect(() => saveProductState(product, activeDomain), [product])
-
-  useEffect(() => {
-    const captureInstallPrompt = (event: Event) => {
-      event.preventDefault()
-      setInstallPrompt(event as BeforeInstallPromptEvent)
-    }
-    const clearInstallPrompt = () => setInstallPrompt(null)
-    window.addEventListener('beforeinstallprompt', captureInstallPrompt)
-    window.addEventListener('appinstalled', clearInstallPrompt)
-    return () => {
-      window.removeEventListener('beforeinstallprompt', captureInstallPrompt)
-      window.removeEventListener('appinstalled', clearInstallPrompt)
-    }
-  }, [])
-
-  async function installApp() {
-    if (!installPrompt) return
-    await installPrompt.prompt()
-    const choice = await installPrompt.userChoice
-    if (choice.outcome === 'accepted') setInstallPrompt(null)
-  }
 
   function startAddingTask() {
     setEditingTaskId(undefined)
@@ -731,9 +718,9 @@ export function Workspace({ activeDomain, onDomain, account, onAccount }: { acti
     { label: 'goals', onSelect: () => setView('goals') },
     { label: 'usage', onSelect: () => setView('usage') },
     { label: 'settings', onSelect: () => setView('settings') },
-    ...(installPrompt ? [{ label: 'install app', onSelect: () => void installApp() }] : []),
+    ...(install.canPrompt ? [{ label: 'install app', onSelect: () => void install.install() }] : []),
   ]
-  const chat = <Suspense fallback={<header className="view-head"><h1>chat</h1></header>}><ChatView key={activeDomain} domain={activeDomain} settings={settings} actions={companionActions} summary={companionActions.todaySummary()} hasCalendar={activeDomain === 'personal' && connectionStatus === 'connected'} onSettings={() => setView('settings')} onChangeSettings={(change) => changeSettings((current) => ({ ...current, ...change }))} notesVault={connectionStatus === 'connected' ? personalData?.notes : undefined} userName={account.name} docked={docked} talk={talk} onTalkStarted={() => setTalk(false)} /></Suspense>
+  const chat = <Suspense fallback={<header className="view-head"><h1>chat</h1></header>}><ChatView key={activeDomain} domain={activeDomain} settings={settings} actions={companionActions} summary={companionActions.todaySummary()} hasCalendar={activeDomain === 'personal' && connectionStatus === 'connected'} onSettings={() => setView('settings')} onChangeSettings={(change) => changeSettings((current) => ({ ...current, ...change }))} notesVault={connectionStatus === 'connected' ? personalData?.notes : undefined} userName={account.name} prefill={kickoff} onPrefilled={onKickoffUsed} docked={docked} talk={talk} onTalkStarted={() => setTalk(false)} /></Suspense>
 
   function navButton(item: { view: View; icon: IconName }) {
     return <button key={item.view} className={shownView === item.view ? 'active' : ''} onClick={() => setView(item.view)} type="button" aria-current={shownView === item.view ? 'page' : undefined}><Icon name={item.icon} /><span>{item.view}</span></button>
@@ -754,10 +741,11 @@ export function Workspace({ activeDomain, onDomain, account, onAccount }: { acti
       </header>
 
       <div className={`content view-${shownView}`}>
-        {installPrompt && !installDismissed && shownView === 'today' && <div className="install-banner">
-          <span>install my brain</span>
-          <button className="primary" type="button" onClick={() => void installApp()}>install</button>
-          <button className="icon-button" type="button" aria-label="dismiss" onClick={() => { setInstallDismissed(true); try { localStorage.setItem(installDismissedKey, '1') } catch { /* stays dismissed for this visit */ } }}>×</button>
+        {install.offer && shownView === 'today' && <div className="install-banner">
+          {install.offer === 'prompt'
+            ? <><span>install my brain</span><button className="primary" type="button" onClick={() => void install.install()}>install</button></>
+            : <span>share → add to home screen</span>}
+          <button className="icon-button" type="button" aria-label="dismiss" onClick={install.dismiss}>×</button>
         </div>}
         {sharing && <Suspense fallback={null}><ShareLanding onClose={() => setSharing(false)} /></Suspense>}
         {shownView === 'today' && <TodayView domain={activeDomain} currentDay={currentDay} place={currentPlace} placeOverride={placeOverride} onPlaceOverride={setPlaceOverride}
@@ -775,7 +763,7 @@ export function Workspace({ activeDomain, onDomain, account, onAccount }: { acti
         {shownView === 'goals' && <GoalsView domain={activeDomain} product={product} tasks={tasks} currentDay={currentDay} heldEvents={heldEvents} canHold={activeDomain === 'personal' && connectionStatus === 'connected'} holdError={syncError} onProduct={setProduct} onEditGoal={(id, changes) => { updateGoal(id, changes) }} onHold={(id) => holdAction(() => holdGoal(id))} onRelease={(id) => holdAction(() => releaseGoal(id))} />}
         {shownView === 'stores' && <StoresView activeStore={activeStore} tasks={tasks} onStore={setActiveStore} onToggle={toggleComplete} onAdd={addTask} />}
         {shownView === 'usage' && <UsageView domain={activeDomain} />}
-        {shownView === 'settings' && <SettingsView domain={activeDomain} accountName={accountName} connectionStatus={connectionStatus} settings={settings} syncing={syncing} syncError={syncError} canInstall={Boolean(installPrompt)} onInstall={() => void installApp()} onConnect={connectPersonal} onDisconnect={disconnectPersonal} onSync={() => { void (activeDomain === 'work' ? syncWork() : syncPersonal()) }} onSettings={changeSettings} account={account} onAccount={markAccountChanged} />}
+        {shownView === 'settings' && <SettingsView domain={activeDomain} accountName={accountName} connectionStatus={connectionStatus} settings={settings} syncing={syncing} syncError={syncError} canInstall={install.canPrompt} onInstall={() => void install.install()} onConnect={connectPersonal} onDisconnect={disconnectPersonal} onSync={() => { void (activeDomain === 'work' ? syncWork() : syncPersonal()) }} onSettings={changeSettings} account={account} onAccount={markAccountChanged} />}
         {shownView === 'task' && <TaskPage key={editingTaskId ?? 'new'} domain={activeDomain} existingTask={tasks.find((task) => task.id === editingTaskId)} projects={product.projects.filter((project) => project.domain === activeDomain && project.status === 'active')} onAdd={addTask} onUpdate={updateTask} onDelete={deleteTask} onNotMine={delegateTask} onCancel={() => { setEditingTaskId(undefined); setView('today') }} />}
       </div>
 

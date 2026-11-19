@@ -5,26 +5,10 @@ import { loadSettings, type AppSettings } from '../settings'
 import { accountFile, accountFileFrom, mergeAccountFile, type AccountFile } from '../settingsSync'
 import { Field } from '../ui'
 
-// What was typed survives the android shell's redirect sign-in, which leaves the page and comes back.
-const draftKey = 'my-brain-welcome-draft'
+/** How setup ended: a new account opens on chat with a request typed, when it has a key to answer it. */
+export type WelcomeFinish = { kickoff?: string }
 
-function readDraft(): { name: string; key: string } {
-  try {
-    const parsed = JSON.parse(sessionStorage.getItem(draftKey) ?? '{}') as { name?: unknown; key?: unknown }
-    return { name: typeof parsed.name === 'string' ? parsed.name : '', key: typeof parsed.key === 'string' ? parsed.key : '' }
-  } catch {
-    return { name: '', key: '' }
-  }
-}
-
-function writeDraft(draft: { name: string; key: string } | undefined): void {
-  try {
-    if (draft) sessionStorage.setItem(draftKey, JSON.stringify(draft))
-    else sessionStorage.removeItem(draftKey)
-  } catch {
-    // Without session storage a redirect sign-in just asks for the name again.
-  }
-}
+export const kickoffText = 'plan my week'
 
 /**
  * Whether this is an iPhone or iPad showing the app in a Safari tab rather than from the home
@@ -38,82 +22,104 @@ export function inIosBrowserTab(): boolean {
   return ios && !standalone
 }
 
+/** The first word of the name on the microsoft account, to start the name field with. */
+export function firstName(accountName: string | undefined): string {
+  return accountName?.trim().split(/\s+/)[0] ?? ''
+}
+
+type Step = 'start' | 'name' | 'chat'
+const questions: Step[] = ['name', 'chat']
+
 /**
- * The first screen on a device that has never been set up. Connecting microsoft is making the
- * account: an account that already has settings.json is one of your own devices and takes them,
- * and one that has none is a new person starting fresh. Skipping keeps everything on this device.
+ * The first screens on a device that has never been set up.
+ *
+ * Connect microsoft comes first, because it answers the question the workout tracker has to ask:
+ * an account whose app folder already holds settings.json is one of your own devices, and goes
+ * straight in with nothing typed; one that holds none is a new person, who is asked a name and a
+ * key and saves them there. Skipping keeps everything on this device and asks the same two things.
  */
-export function WelcomeView({ onDone }: { onDone: (account: DeviceAccount, settings: AppSettings) => void }) {
-  const [draft] = useState(readDraft)
-  const [name, setName] = useState(draft.name)
-  const [key, setKey] = useState(draft.key)
+export function WelcomeView({ onDone }: { onDone: (account: DeviceAccount, settings: AppSettings, finish?: WelcomeFinish) => void }) {
+  const clientId = configuredPersonalClientId()
+  const [step, setStep] = useState<Step>(clientId ? 'start' : 'name')
+  const [name, setName] = useState('')
+  const [key, setKey] = useState('')
   const [installFirst, setInstallFirst] = useState(inIosBrowserTab)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string>()
-  const clientId = configuredPersonalClientId()
-  const finishing = useRef(false)
+  const data = useRef<PersonalGraphData | undefined>(undefined)
+  const checking = useRef(false)
 
-  function typed(): AppSettings {
-    const base = loadSettings('personal')
-    return { ...base, anthropicApiKey: key.trim() || base.anthropicApiKey }
+  function fail(caught: unknown, fallback: string): void {
+    setError(caught instanceof Error ? caught.message.toLowerCase() : fallback)
+    setBusy(false)
   }
 
-  async function finishWith(data: PersonalGraphData): Promise<void> {
-    if (finishing.current) return
-    finishing.current = true
+  /** Signed in: take the account's settings if it has any, or go on to ask a new person's. */
+  async function afterSignIn(signedIn: PersonalGraphData): Promise<void> {
+    if (checking.current) return
+    checking.current = true
     try {
-      const now = new Date().toISOString()
-      const remote = await data.sidecar.readJson<AccountFile>(accountFile)
-      const fresh: DeviceAccount = { setupComplete: true, owner: false, name: name.trim(), workSpace: false }
+      const remote = await signedIn.sidecar.readJson<AccountFile>(accountFile)
       if (remote) {
-        const merged = mergeAccountFile({ account: fresh, settings: typed() }, remote, now)
-        writeDraft(undefined)
+        const blank: DeviceAccount = { setupComplete: true, owner: false, name: '', workSpace: false }
+        const merged = mergeAccountFile({ account: blank, settings: loadSettings('personal') }, remote, new Date().toISOString())
         onDone(merged.account, merged.settings)
         return
       }
-      const account = { ...fresh, updatedAt: now }
-      const settings = newPersonSettings(typed())
-      await data.sidecar.writeJson(accountFile, accountFileFrom(account, settings, now))
-      writeDraft(undefined)
-      onDone(account, settings)
-    } catch (caught) {
-      finishing.current = false
-      setError(caught instanceof Error ? caught.message.toLowerCase() : 'could not reach onedrive')
+      data.current = signedIn
+      setName((current) => current || firstName(signedIn.auth.account()?.name))
       setBusy(false)
+      setStep('name')
+    } catch (caught) {
+      checking.current = false
+      fail(caught, 'could not reach onedrive')
     }
   }
 
-  // Back from a redirect sign-in, or already signed in from an earlier visit: carry on from there.
+  // Back from the android shell's redirect sign-in, or signed in on an earlier visit: carry on.
   useEffect(() => {
     if (!clientId) return
-    void createPersonalGraphData(clientId).then((data) => {
-      if (data.auth.account()) {
-        setBusy(true)
-        void finishWith(data)
-      }
+    void createPersonalGraphData(clientId).then((signedIn) => {
+      if (!signedIn.auth.account()) return
+      setBusy(true)
+      void afterSignIn(signedIn)
     }).catch(() => {
       // Signing in from the button reports its own error.
     })
   }, [])
 
   async function connect(): Promise<void> {
-    if (!clientId) return
+    if (!clientId || busy) return
     setBusy(true)
     setError(undefined)
-    writeDraft({ name, key })
     try {
-      const data = await createPersonalGraphData(clientId)
-      await data.auth.signIn()
-      await finishWith(data)
+      const signedIn = await createPersonalGraphData(clientId)
+      await signedIn.auth.signIn()
+      await afterSignIn(signedIn)
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message.toLowerCase() : 'sign in failed')
-      setBusy(false)
+      fail(caught, 'sign in failed')
     }
   }
 
-  function skip(): void {
-    writeDraft(undefined)
-    onDone({ setupComplete: true, owner: false, name: name.trim(), workSpace: false }, newPersonSettings(typed()))
+  async function finish(): Promise<void> {
+    if (busy) return
+    const base = loadSettings('personal')
+    const settings = newPersonSettings({ ...base, anthropicApiKey: key.trim() || base.anthropicApiKey })
+    const now = new Date().toISOString()
+    const account: DeviceAccount = { setupComplete: true, owner: false, name: name.trim(), workSpace: false, ...(data.current ? { updatedAt: now } : {}) }
+    const ending: WelcomeFinish = settings.anthropicApiKey.trim() ? { kickoff: kickoffText } : {}
+    if (!data.current) {
+      onDone(account, settings, ending)
+      return
+    }
+    setBusy(true)
+    setError(undefined)
+    try {
+      await data.current.sidecar.writeJson(accountFile, accountFileFrom(account, settings, now))
+      onDone(account, settings, ending)
+    } catch (caught) {
+      fail(caught, 'could not reach onedrive')
+    }
   }
 
   if (installFirst) {
@@ -128,16 +134,45 @@ export function WelcomeView({ onDone }: { onDone: (account: DeviceAccount, setti
     </main>
   }
 
+  if (step === 'start') {
+    return <main className="welcome">
+      <h1>my brain</h1>
+      <div className="welcome-fill" />
+      {error && <p className="note is-error" role="alert">{error}</p>}
+      <div className="actions welcome-actions">
+        <button className="primary" disabled={busy} type="button" onClick={() => void connect()}>{busy ? 'connecting' : 'connect microsoft'}</button>
+        <button className="plain" disabled={busy} type="button" onClick={() => setStep('name')}>skip</button>
+      </div>
+    </main>
+  }
+
+  const index = questions.indexOf(step)
+  const last = step === 'chat'
+  // Signed in, there is nothing to go back to: the account is already chosen.
+  const canGoBack = step === 'chat' || (Boolean(clientId) && !data.current)
+  const ready = step !== 'name' || name.trim().length > 0
+  const next = () => {
+    if (!ready || busy) return
+    if (last) void finish()
+    else setStep('chat')
+  }
+  const nextLabel = last ? (busy ? 'starting' : key.trim() ? 'start' : 'skip') : 'next'
+
   return <main className="welcome">
-    <h1>my brain</h1>
-    <div className="stack">
-      <Field label="name"><input autoComplete="given-name" value={name} onChange={(event) => setName(event.target.value)} /></Field>
-      <Field label="anthropic api key"><input type="password" autoComplete="off" value={key} onChange={(event) => setKey(event.target.value)} /></Field>
+    <div className="welcome-top">
+      {canGoBack ? <button className="plain" type="button" disabled={busy} onClick={() => setStep(step === 'chat' ? 'name' : 'start')}>back</button> : <span />}
+      <div className="welcome-dots" role="img" aria-label={`step ${index + 1} of ${questions.length}`}>
+        {questions.map((item) => <span key={item} className={item === step ? 'is-current' : ''} />)}
+      </div>
     </div>
-    <div className="actions welcome-actions">
-      {clientId && <button className="primary" disabled={busy} type="button" onClick={() => void connect()}>{busy ? 'connecting' : 'connect microsoft'}</button>}
-      <button className={clientId ? 'plain' : 'primary'} disabled={busy} type="button" onClick={skip}>{clientId ? 'skip' : 'start'}</button>
-    </div>
+    <h1>{step === 'name' ? 'about you' : 'chat'}</h1>
+    <form className="stack welcome-fill" onSubmit={(event) => { event.preventDefault(); next() }}>
+      {step === 'name' && <Field label="name"><input autoComplete="given-name" autoFocus value={name} onChange={(event) => setName(event.target.value)} /></Field>}
+      {step === 'chat' && <Field label="anthropic api key"><input type="password" autoComplete="off" autoCapitalize="off" spellCheck={false} autoFocus value={key} onChange={(event) => setKey(event.target.value)} placeholder="sk-ant-" /></Field>}
+    </form>
     {error && <p className="note is-error" role="alert">{error}</p>}
+    <div className="actions welcome-actions">
+      <button className="primary" type="button" disabled={!ready || busy} onClick={next}>{nextLabel}</button>
+    </div>
   </main>
 }
