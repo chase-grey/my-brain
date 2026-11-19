@@ -138,6 +138,16 @@ describe('bridge companion', () => {
     const companion = createBridgeCompanion({ client: new BridgeCompanionClient(undefined, async () => { throw new TypeError('failed to fetch') }), sessionId: () => undefined, systemPrompt: () => '' })
     await expect(companion.send('hi')).rejects.toMatchObject({ kind: 'unreachable' })
   })
+
+  it('asks the bridge to open a thread in session runner and passes its refusal on', async () => {
+    const fetcher = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({ id: 't1' })))
+    await new BridgeCompanionClient(undefined, fetcher).openInSessionRunner('abc', 'plan my week')
+    expect(fetcher.mock.calls[0][0]).toBe('http://127.0.0.1:47321/chat/open')
+    expect(JSON.parse((fetcher.mock.calls[0][1] as RequestInit).body as string)).toEqual({ sessionId: 'abc', label: 'plan my week' })
+
+    const down = new BridgeCompanionClient(undefined, async () => new Response(JSON.stringify({ error: 'session runner is not running' }), { status: 500 }))
+    await expect(down.openInSessionRunner('abc', 'x')).rejects.toThrow('work bridge: session runner is not running')
+  })
 })
 
 describe('companion prompt and store', () => {

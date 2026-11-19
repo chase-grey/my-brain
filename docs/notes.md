@@ -48,6 +48,25 @@ migration is a separate effort and is covered here only by the assumptions it mu
 | **Companion** | **The companion's vault store becomes the mirror.** Reads come from the mirror; writes go through the same queue and merge. | One code path for every write means one merge behavior. The companion's reads stop costing API calls. |
 | **Notion migration** | **Out of scope.** Notes assumes markdown files in UTF-8 on `main`, links as wikilinks or relative `.md` links, images in the repo. | A separate agent owns the export. This spec names what it must produce. |
 
+## leaving
+
+Notes must be easy to take elsewhere. That is mostly free because of principle 1: the notes are
+markdown files in a git repo, so cloning the repo or opening it in Obsidian is already a full
+export. For moving from the phone or into an app that is not Obsidian:
+
+- **settings → notes → `export notes`** downloads every file in the vault, not only `.md`, at its
+  own path, in one zip. Phones hand it to the share sheet; desktops download it. It reads from
+  GitHub, so changes still waiting to push are not in it.
+- **`convert [[links]] to markdown links`** rewrites wikilinks as relative markdown links
+  (`[[Garden]]` → `[Garden](../20%20Projects/Garden.md)`), resolved the way Obsidian resolves
+  them. Embeds become image links, headings become anchors, links to notes that do not exist
+  become plain text. Off by default: Obsidian, Logseq, and Foam read wikilinks as is; Notion,
+  Bear, and most others need it on.
+- Frontmatter stays as YAML at the top of each file, which most importers read or ignore.
+- Rules for new features so this stays true: nothing a note needs lives outside the file (no
+  app-only metadata, IDs, or databases); links stay wikilinks or relative `.md` links; images live
+  in the repo beside the note or under `attachments/`.
+
 ## the vault
 
 HomeBase today: `00 Daily Plan/`, `00 Weekly Plans/`, `20 Projects/`, `50 Someday-Maybe/`,
@@ -121,6 +140,7 @@ Uses the existing github repo, branch, and token fields; nothing new to fill in.
 - `412 notes · synced 2 min ago`, `sync now`, `download again` (clears the mirror and clones).
 - The count of changes waiting, if any.
 - The last twenty sync events: merges with the note and time, pushes refused and why.
+- `export notes` and `convert [[links]] to markdown links`; see leaving.
 
 ### chat
 
@@ -202,23 +222,26 @@ minutes within the hourly quota; larger than that, cloning would move to a zip o
 
 ## editor fidelity
 
-**Load.** Frontmatter is split off and held. The body is parsed by a markdown parser that reports
-source positions (remark with GFM, frontmatter, and wikilink extensions) into blocks, and the
-same markdown is loaded into the editor. Wikilinks are a node of their own so the editor neither
-escapes nor rewrites them. Blocks the editor cannot represent (raw HTML, math, anything unknown)
-become a raw block that shows the source as plain text and serializes verbatim. Inline syntax the
-editor does not model, such as `==highlight==`, stays as the characters typed and is never
-escaped.
+**Load.** Frontmatter is split off and held. The body is cut into top-level blocks by the same
+markdown lexer the editor's markdown extension uses (marked), which gives each block's exact source
+bytes, and each block is parsed into editor nodes on its own. Wikilinks are a node of their own so
+the editor neither escapes nor rewrites them. Blocks the editor cannot represent (tables, raw HTML,
+link definitions, anything that fails to parse) become a source block that serializes verbatim;
+tables render, the rest show their source as plain text. Inline syntax the editor does not model,
+such as `==highlight==`, stays as the characters typed and is never escaped.
 
-**Save.** The editor serializes to markdown. The result is parsed into blocks and matched against
-the original blocks. A block whose serialized form is unchanged keeps its original source bytes;
-a changed, added, or removed block uses the new serialization. Frontmatter is prepended as held.
-Line endings and the trailing newline follow the original file.
+**Save.** The editor's nodes are matched against the nodes each original block became. A block
+whose nodes are unchanged keeps its original source bytes; a changed, added, or removed block is
+serialized fresh. The blank lines between untouched blocks are kept as they were. Frontmatter is
+prepended as held. Line endings and the trailing newline follow the original file. A list is one
+block, so checking one box rewrites that list in the editor's style and nothing else.
 
-**Test gate.** A corpus of every note in HomeBase, plus the Notion export once it exists, is
+**Test gate.** Notes written the way Obsidian, the companion, and a Notion export write them are
 loaded and saved with no edit and must come back identical. A second set of scripted edits
 (bold one word, add a paragraph, check a box, rename a heading) must change only the edited
-block. The gate runs in the normal test suite with the corpus checked into the test fixtures.
+block. Both run in the normal test suite from fixtures in `src/notes/noteSource.test.ts`. The
+vault itself is private and this repo is public, so real notes are not checked in: set
+`VITE_NOTES_CORPUS` to a checkout of HomeBase and the same suite runs over every note in it.
 
 ## phases
 

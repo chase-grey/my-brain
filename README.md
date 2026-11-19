@@ -68,7 +68,11 @@ from the Hivemind vault leaves the machine except through that sanctioned sessio
 vault's CLAUDE.md and skills apply. Outlook does not need to be running for chat. On the phone
 the work chat shows `only on the work pc`.
 
-Bridge options: `-VaultPath`, `-ChatAllowedTools`, `-ChatTimeoutSec`.
+A work thread is a Claude Code session in the vault folder, so `open in session runner` on the
+chat starts a Session Runner terminal there that resumes it (`claude --resume`). The bridge
+finds Session Runner through the `.port` file in its data folder.
+
+Bridge options: `-VaultPath`, `-ChatAllowedTools`, `-ChatTimeoutSec`, `-SessionRunnerDataPath`.
 
 Under the thread, two pickers choose the model (sonnet, opus, haiku) and the effort level (low to
 max) for the next message; personal sends them to the api, work passes them to `claude -p` as

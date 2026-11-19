@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { APP_BUILD_TIME, APP_COMMIT, checkForUpdate } from '../appUpdate'
 import { GitHubVault, normalizeBranch, normalizeRepo, vaultConfigured } from '../companion/githubVault'
 import type { Domain } from '../domain/types'
+import { exportFileName, exportVault, saveExport } from '../notes/exportNotes'
 import { companionModelOptions, type AppSettings } from '../settings'
 import { Card, Field } from '../ui'
 
@@ -56,6 +57,10 @@ export function SettingsView({ domain, accountName, connectionStatus, settings, 
       </div> : <p className="note">claude code on this pc, through the work bridge</p>}
     </Card>
 
+    {domain === 'personal' && <Card title="notes">
+      <NotesExport settings={settings} />
+    </Card>}
+
     <Card title="capacity">
       <div className="grid-2">
         {domain === 'work'
@@ -97,5 +102,36 @@ function VaultCheck({ settings }: { settings: AppSettings }) {
   return <div className="actions row-actions">
     <button className="secondary" disabled={busy} type="button" onClick={() => void check()}>{busy ? 'checking' : 'check vault'}</button>
     {result && <p className={`note${result.error ? ' is-error' : ''}`} role="status">{result.text}</p>}
+  </div>
+}
+
+// Downloads the whole vault from GitHub as a zip; with standard links on, [[wikilinks]] become relative markdown links for apps that don't read them.
+function NotesExport({ settings }: { settings: AppSettings }) {
+  const [standardLinks, setStandardLinks] = useState(false)
+  const [progress, setProgress] = useState<string>()
+  const [result, setResult] = useState<{ text: string; error: boolean }>()
+  const config = { repo: normalizeRepo(settings.githubRepo), token: settings.githubToken.replace(/\s+/g, ''), branch: normalizeBranch(settings.vaultBranch) }
+
+  async function run() {
+    setResult(undefined)
+    setProgress('starting')
+    try {
+      if (!vaultConfigured(config)) throw new Error('needs a github repo as owner/name and a token')
+      const blob = await exportVault(config, { standardLinks, onProgress: (done, total) => setProgress(`${done} of ${total}`) })
+      await saveExport(blob, exportFileName(config.repo))
+      setResult({ text: 'exported', error: false })
+    } catch (error) {
+      setResult({ text: error instanceof Error ? error.message : 'export failed', error: true })
+    } finally {
+      setProgress(undefined)
+    }
+  }
+
+  return <div className="stack">
+    <label className="check"><input type="checkbox" checked={standardLinks} onChange={(event) => setStandardLinks(event.target.checked)} /> convert [[links]] to markdown links</label>
+    <div className="actions row-actions">
+      <button className="secondary" disabled={Boolean(progress)} type="button" onClick={() => void run()}>{progress ?? 'export notes'}</button>
+      {result && <p className={`note${result.error ? ' is-error' : ''}`} role="status">{result.text}</p>}
+    </div>
   </div>
 }

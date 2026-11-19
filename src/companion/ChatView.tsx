@@ -114,6 +114,7 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
   const [conversation, setConversation] = useState<CompanionConversation>(() => (keepContextBySpace[domain] ? loadHistory(domain)[0] : undefined) ?? newConversation())
   const [history, setHistory] = useState<CompanionConversation[]>()
   const [sending, setSending] = useState(false)
+  const [openedId, setOpenedId] = useState<string>()
   const [bridge, setBridge] = useState<BridgeState>(domain === 'work' ? 'checking' : 'ready')
   const conversationRef = useRef(conversation)
   const keepContextRef = useRef(keepContext)
@@ -285,6 +286,18 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
     },
   }
 
+  // The work thread is a Claude Code session on this pc, so a terminal can pick it up where the chat left off.
+  async function openInSessionRunner() {
+    const { id, sessionId } = conversationRef.current
+    if (!sessionId) return
+    try {
+      await new BridgeCompanionClient().openInSessionRunner(sessionId, conversationTitle(conversationRef.current).slice(0, 60))
+      setOpenedId(id)
+    } catch (error) {
+      appendTurn({ role: 'assistant', text: error instanceof Error ? error.message.toLowerCase() : 'something went wrong', at: new Date().toISOString(), error: true })
+    }
+  }
+
   // Session-only state belongs to the thread that made it: a fresh or reopened thread starts without it.
   function show(next: CompanionConversation) {
     undosRef.current.clear()
@@ -339,6 +352,7 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
       <h1>chat</h1>
       {!unavailable && <button className="pill" type="button" aria-pressed={keepContext} onClick={() => setKeep(!keepContext)}>keep context</button>}
       {!unavailable && voice.supported && <button className="pill" type="button" aria-pressed={voice.handsFree} onClick={() => voice.setHandsFree(!voice.handsFree)}>hands-free</button>}
+      {!unavailable && domain === 'work' && conversation.sessionId && <button className="pill" type="button" disabled={sending || openedId === conversation.id} onClick={() => { void openInSessionRunner() }}>{openedId === conversation.id ? 'opened in session runner' : 'open in session runner'}</button>}
     </header>
     {unavailable
       ? <Empty>{domain === 'personal'

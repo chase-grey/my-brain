@@ -20,6 +20,11 @@ export class BridgeCompanionClient {
     return { text: response.text ?? '', sessionId: response.sessionId ?? request.sessionId ?? '', isError: response.isError === true }
   }
 
+  /** Continues the thread in a Session Runner terminal: the same Claude Code session, resumed in the vault. */
+  async openInSessionRunner(sessionId: string, label: string): Promise<void> {
+    await this.request<{ id: string }>('/chat/open', { method: 'POST', body: JSON.stringify({ sessionId, label }) })
+  }
+
   private async request<T>(path: string, init: RequestInit = {}): Promise<T> {
     let response: Response
     try {

@@ -16,6 +16,7 @@ import { toggleHabitPart } from './domain/habits'
 import type { Domain, Energy, Goal, Place, Priority, StoreType, Task } from './domain/types'
 import { loadProductState, saveProductState, type ProductState } from './productState'
 import { loadSettings, saveSettings } from './settings'
+import { GitHubVault, normalizeBranch, normalizeRepo, vaultConfigured } from './companion/githubVault'
 import { buildPlanSummary, companionGoal, companionTask, summarizeGoal, summarizeProject, summarizeTask, type CompanionActions, type GoalChanges } from './companion/companionTools'
 import { Icon, type IconName } from './navIcons'
 import { newId, today } from './format'
@@ -28,10 +29,11 @@ import { GoalsView, type GoalEdit } from './views/GoalsView'
 import { StoresView } from './views/StoresView'
 import { SettingsView, type ConnectionStatus } from './views/SettingsView'
 import { TaskPage } from './views/TaskPage'
+import { TripsView } from './views/TripsView'
 import { UsageView } from './views/UsageView'
 import { WorkDashboardView } from './views/WorkDashboardView'
 
-type View = 'today' | 'progress' | 'dashboard' | 'chat' | 'stores' | 'goals' | 'usage' | 'settings' | 'task'
+type View = 'today' | 'progress' | 'dashboard' | 'chat' | 'stores' | 'trips' | 'goals' | 'usage' | 'settings' | 'task'
 const taskStorageKey = (domain: Domain) => `my-brain.${domain}.tasks.v1`
 const dockedQuery = '(min-width: 87.5rem)'
 // Work reviews a dashboard where personal reviews progress; the other tab moves under more.
@@ -42,7 +44,7 @@ const primaryViewsFor = (domain: Domain): { view: View; icon: IconName }[] => [
 ]
 const ChatView = lazy(() => import('./companion/ChatView').then((module) => ({ default: module.ChatView })))
 const ShareLanding = lazy(() => import('./transcripts/ShareLanding'))
-const views: View[] = ['today', 'progress', 'dashboard', 'chat', 'stores', 'goals', 'usage', 'settings', 'task']
+const views: View[] = ['today', 'progress', 'dashboard', 'chat', 'stores', 'trips', 'goals', 'usage', 'settings', 'task']
 
 function parseHash(): { view: View; taskId?: string } {
   if (typeof location === 'undefined') return { view: 'today' }
@@ -161,6 +163,11 @@ export function Workspace({ activeDomain, onDomain }: { activeDomain: Domain; on
   productRef.current = product
 
   const currentDay = today()
+  // Trips read and write the HomeBase vault directly, with the same repo settings the chat uses.
+  const tripVault = useMemo(() => {
+    const config = { repo: normalizeRepo(settings.githubRepo), token: settings.githubToken.replace(/\s+/g, ''), branch: normalizeBranch(settings.vaultBranch) }
+    return activeDomain === 'personal' && vaultConfigured(config) ? new GitHubVault(config) : undefined
+  }, [activeDomain, settings.githubRepo, settings.githubToken, settings.vaultBranch])
   const currentPlace = placeOverride ?? inferredPlace()
   const openTasks = useMemo(() => tasks.filter((task) => task.domain === activeDomain && !isDoneToday(task, currentDay) && !task.storeType), [activeDomain, currentDay, tasks])
   const commitments = useMemo(() => todayCommitments(tasks, currentDay, activeDomain), [activeDomain, currentDay, tasks])
@@ -649,7 +656,7 @@ export function Workspace({ activeDomain, onDomain }: { activeDomain: Domain; on
   const strategicTodayMin = product.activities.filter((item) => item.domain === activeDomain && item.kind === 'strategic' && item.occurredAt.slice(0, 10) === currentDay).reduce((sum, item) => sum + (item.minutes ?? 0), 0)
   const primaryViews = primaryViewsFor(activeDomain)
   const moreItems = [
-    ...(activeDomain === 'personal' ? [{ label: 'stores', onSelect: () => setView('stores') }] : [{ label: 'progress', onSelect: () => setView('progress') }]),
+    ...(activeDomain === 'personal' ? [{ label: 'stores', onSelect: () => setView('stores') }, { label: 'trips', onSelect: () => setView('trips') }] : [{ label: 'progress', onSelect: () => setView('progress') }]),
     { label: 'goals', onSelect: () => setView('goals') },
     { label: 'usage', onSelect: () => setView('usage') },
     { label: 'settings', onSelect: () => setView('settings') },
@@ -691,6 +698,7 @@ export function Workspace({ activeDomain, onDomain }: { activeDomain: Domain; on
         {shownView === 'chat' && chat}
         {shownView === 'goals' && <GoalsView domain={activeDomain} product={product} tasks={tasks} currentDay={currentDay} heldEvents={heldEvents} canHold={activeDomain === 'personal' && connectionStatus === 'connected'} holdError={syncError} onProduct={setProduct} onEditGoal={(id, changes) => { updateGoal(id, changes) }} onHold={(id) => holdAction(() => holdGoal(id))} onRelease={(id) => holdAction(() => releaseGoal(id))} />}
         {shownView === 'stores' && <StoresView activeStore={activeStore} tasks={tasks} onStore={setActiveStore} onToggle={toggleComplete} onAdd={addTask} />}
+        {shownView === 'trips' && <TripsView vault={tripVault} currentDay={currentDay} onSettings={() => setView('settings')} />}
         {shownView === 'usage' && <UsageView domain={activeDomain} />}
         {shownView === 'settings' && <SettingsView domain={activeDomain} accountName={accountName} connectionStatus={connectionStatus} settings={settings} syncing={syncing} syncError={syncError} canInstall={Boolean(installPrompt)} onInstall={() => void installApp()} onConnect={connectPersonal} onDisconnect={disconnectPersonal} onSync={() => { void (activeDomain === 'work' ? syncWork() : syncPersonal()) }} onSettings={setSettings} />}
         {shownView === 'task' && <TaskPage key={editingTaskId ?? 'new'} domain={activeDomain} existingTask={tasks.find((task) => task.id === editingTaskId)} projects={product.projects.filter((project) => project.domain === activeDomain && project.status === 'active')} onAdd={addTask} onUpdate={updateTask} onDelete={deleteTask} onNotMine={delegateTask} onCancel={() => { setEditingTaskId(undefined); setView('today') }} />}

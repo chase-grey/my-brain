@@ -3,6 +3,8 @@ import type { Domain, Goal, Horizon, Plan, Priority, Project, Task } from '../do
 import type { AnthropicTool } from './anthropicClient'
 import type { VaultStore } from './githubVault'
 import { GitHubError } from './githubVault'
+import { today } from '../format'
+import { isTripTool, runTripTool, tripTools } from '../trips/tripTools'
 import { forgetMemory, memoryFilePath, memoryIndexPath, memoryTypes, readMemoryIndex, saveMemory, validateMemoryName } from './memory'
 
 export type TaskSummary = Pick<Task, 'id' | 'title' | 'dueDate' | 'completed' | 'estimateMin' | 'priority' | 'projectId' | 'notes'>
@@ -87,7 +89,7 @@ const calendarTools: AnthropicTool[] = [
 
 export function companionTools(options: { hasVault: boolean; hasCalendar?: boolean }): AnthropicTool[] {
   const tools = options.hasCalendar ? [...taskTools, ...calendarTools] : taskTools
-  return options.hasVault ? [...noteTools, ...memoryTools, ...tools] : tools
+  return options.hasVault ? [...noteTools, ...memoryTools, ...tripTools, ...tools] : tools
 }
 
 type Args = Record<string, unknown>
@@ -156,6 +158,7 @@ function requireVault(vault: VaultStore | undefined): VaultStore {
 }
 
 async function run(name: string, input: Args, { actions, vault, memoryFolder = 'memory' }: ToolContext): Promise<RunResult> {
+  if (isTripTool(name)) return runTripTool(name, input, requireVault(vault), today())
   switch (name) {
     case 'save_memory': {
       const store = requireVault(vault)
