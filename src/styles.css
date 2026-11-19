@@ -252,6 +252,14 @@ button.row-main { min-height: 3rem; }
   .sheet { max-width: 30rem; margin: auto; border-bottom: 1px solid var(--border); border-radius: 16px; }
   .sheet-body { padding: 1.25rem; }
   .view-chat { height: calc(100dvh - 6.75rem - var(--keyboard)); }
+  /* cards flow into as many columns as the window fits; single-column screens keep a readable measure */
+  .main { max-width: 120rem; }
+  .view-chat, .view-task, .view-stores, .view-usage { align-self: center; width: 100%; max-width: 44rem; }
+  .view-today, .view-progress, .view-goals, .view-settings, .view-trips { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr)); align-items: start; align-content: start; }
+  :is(.view-today, .view-progress, .view-goals, .view-settings, .view-trips) > :not(.card) { grid-column: 1 / -1; }
+  :is(.view-today, .view-progress, .view-goals, .view-settings, .view-trips) > .card { min-width: 0; }
+  .view-progress > .wheel-head:not(.is-open) { grid-column: auto; }
+  .view-trips > .add-line { max-width: 28rem; }
 }
 
 /* wide: dock the chat */
@@ -267,10 +275,9 @@ button.row-main { min-height: 3rem; }
   .icon-button:hover, .menu summary:hover, .rail button:hover { background: transparent; }
 }
 
-/* ultrawide and 4k at 100% scaling: a touch larger, slightly wider column */
+/* ultrawide and 4k at 100% scaling: a touch larger */
 @media (min-width: 120rem) {
   :root { font-size: 17px; }
-  .main { max-width: 46rem; }
 }
 
 /* life wheel */
