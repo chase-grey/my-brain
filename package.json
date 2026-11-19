@@ -12,7 +12,7 @@
     "test:watch": "vitest",
     "typecheck": "tsc -b",
     "lint": "oxlint",
-    "bridge": "powershell -NoProfile -ExecutionPolicy Bypass -File bridge/work-bridge.ps1"
+    "bridge": "powershell -NoProfile -ExecutionPolicy Bypass -File work/bridge/work-bridge.ps1"
   },
   "dependencies": {
     "@assistant-ui/react": "^0.15.32",

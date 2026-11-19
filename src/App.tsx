@@ -33,7 +33,7 @@ import { SettingsView, type ConnectionStatus } from './views/SettingsView'
 import { TaskPage } from './views/TaskPage'
 import { TripsView } from './views/TripsView'
 import { UsageView } from './views/UsageView'
-import { WorkDashboardView } from './views/WorkDashboardView'
+import { WorkScreens } from './views/WorkScreens'
 import { WelcomeView } from './views/WelcomeView'
 import { SetupLanding, landsOnInstall } from './views/SetupLanding'
 import { useInstallPrompt } from './installPrompt'
@@ -764,7 +764,7 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
           onStrategic={(minutes) => setProduct((current) => ({ ...current, activities: [...current.activities, { id: newId('activity'), domain: activeDomain, kind: 'strategic', occurredAt: new Date().toISOString(), minutes }] }))}
           untriaged={untriaged} openCount={openTasks.length} openMin={openEstimate} onToggle={toggleComplete} onOpen={editTask}
           calendar={activeDomain === 'personal' ? eventsOn(calendarEvents, currentDay) : []} inbox={activeDomain === 'personal' ? inboxCounts : undefined} mailAppUrl={activeDomain === 'personal' ? settings.mailAppUrl : ''} />}
-        {shownView === 'dashboard' && <WorkDashboardView currentDay={currentDay} />}
+        {shownView === 'dashboard' && <WorkScreens currentDay={currentDay} />}
         {shownView === 'progress' && <ProgressView domain={activeDomain} product={product} currentDay={currentDay} heldEvents={heldEvents} onProduct={setProduct} onGoals={() => setView('goals')} />}
         {shownView === 'chat' && chat}
         {shownView === 'goals' && <GoalsView domain={activeDomain} product={product} tasks={tasks} currentDay={currentDay} heldEvents={heldEvents} canHold={activeDomain === 'personal' && connectionStatus === 'connected'} holdError={syncError} onProduct={setProduct} onEditGoal={(id, changes) => { updateGoal(id, changes) }} onHold={(id) => holdAction(() => holdGoal(id))} onRelease={(id) => holdAction(() => releaseGoal(id))} />}

@@ -13,12 +13,12 @@
 
 ## restarting the bridge
 
-`npm run bridge` runs `bridge/work-bridge.ps1`, a PowerShell HttpListener on port 47321. To restart it after an edit, stop only that process, by PID:
+`npm run bridge` runs `work/bridge/work-bridge.ps1` (the work side is a separate private repo checked out at `work/`), a PowerShell HttpListener on port 47321. To restart it after an edit, stop only that process, by PID:
 
 ```powershell
 # HttpListener binds through http.sys, so Get-NetTCPConnection reports PID 4 (System) for the port; find the bridge by its command line instead.
 Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" | Where-Object { $_.CommandLine -like '*work-bridge.ps1*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
-Start-Process powershell -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File','bridge/work-bridge.ps1' -PassThru | Select-Object -ExpandProperty Id
+Start-Process powershell -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File','work/bridge/work-bridge.ps1' -PassThru | Select-Object -ExpandProperty Id
 ```
 
 Never kill powershell.exe by image name (`taskkill /IM`, `Stop-Process -Name`): every Session Runner terminal on this machine is a powershell.exe hosting a Claude session, and one such line killed all of them, twice, on 2026-11-05. A global hook now denies kills by image name; kill by PID.

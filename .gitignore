@@ -9,3 +9,6 @@ dist
 # per-user claude code settings
 .claude/settings.local.json
 .worktrees/
+
+# the work side is its own private repo, checked out here (see README)
+work/

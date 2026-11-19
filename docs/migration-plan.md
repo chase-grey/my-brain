@@ -32,7 +32,7 @@ Nothing leaves Microsoft for tasks. To Do is already the system of record for bo
 
 ## 2. work tasks (To Do, cgrey@epic.com)
 
-**What the app does now.** `bridge/work-bridge.ps1` reads `GetDefaultFolder(13)`, which is the Outlook Tasks folder and the To Do list named `Tasks`. Every other To Do list on the work account is a separate task folder under the mailbox and never reaches the app. The work space keeps metadata locally, not in a sidecar, and the companion runs through Claude Code so the `sort_task` tool does not apply there.
+**What the app does now.** `work/bridge/work-bridge.ps1` reads `GetDefaultFolder(13)`, which is the Outlook Tasks folder and the To Do list named `Tasks`. Every other To Do list on the work account is a separate task folder under the mailbox and never reaches the app. The work space keeps metadata locally, not in a sidecar, and the companion runs through Claude Code so the `sort_task` tool does not apply there.
 
 **Steps.**
 

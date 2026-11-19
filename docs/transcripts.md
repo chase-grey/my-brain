@@ -32,7 +32,7 @@ Written 2026-11-04 after reading Mark's repo and interviewing Chase.
 | **Personal filing** | **`40 Transcripts/YYYY-MM-DD title.md` in HomeBase** with frontmatter `date`, `duration`, `speakers`, `source`. *Chosen 2026-11-04.* | A folder of its own, date-prefixed so it sorts. Follows HomeBase's numbered top-level folders. |
 | **After filing (personal)** | **Open the note.** Until the notes tab ships, show the filed path with `open`. | Nothing else to do at that moment. |
 | **Who writes personal** | **The same GitHub vault store the companion uses**, one commit per transcript. Moves to the notes queue when notes phase 2 lands. | One write path, one merge behavior. |
-| **Who writes work** | **`bridge/transcript-inbox.ps1`**, run by the bridge at startup and every two minutes while idle, and callable alone for a scheduled task. A ledger of filed artifact ids lives under `%LOCALAPPDATA%\my-brain\`. | The bridge is the process already on the PC. The ledger keeps the vault free of bookkeeping and makes a re-run idempotent. |
+| **Who writes work** | **`work/bridge/transcript-inbox.ps1`**, run by the bridge at startup and every two minutes while idle, and callable alone for a scheduled task. A ledger of filed artifact ids lives under `%LOCALAPPDATA%\my-brain\`. | The bridge is the process already on the PC. The ledger keeps the vault free of bookkeeping and makes a re-run idempotent. |
 | **Duplicates** | A title already taken that day gets ` 2`, ` 3`. | Same rule as notes. |
 | **Which space a share belongs to** | **Always personal.** | Personal owns notes. A work recording goes out through `send transcript`, never through share. |
 
@@ -86,7 +86,7 @@ the landing says so and keeps the shared text until the next load, so nothing is
 
 ## work: bridge import
 
-`bridge/transcript-inbox.ps1` exposes `Import-TranscribePackages`:
+`work/bridge/transcript-inbox.ps1` exposes `Import-TranscribePackages`:
 
 - Scans `$env:USERPROFILE\OneDrive - Epic\TranscribeInbox` for `manifest.v1.json`.
 - Skips artifact ids already in the ledger.
@@ -101,7 +101,7 @@ for a request. `GET /chat/status` reports the inbox path and the count filed sin
 `POST /transcripts/import` runs it on demand. The script can also run alone:
 
 ```
-powershell -NoProfile -File bridge/transcript-inbox.ps1 -Once
+powershell -NoProfile -File work/bridge/transcript-inbox.ps1 -Once
 ```
 
 Packages stay in OneDrive untouched; the ledger is the only state.

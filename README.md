@@ -117,17 +117,13 @@ button starts a new conversation. Every conversation is kept in this browser's l
 **transcripts.** Record a conversation with Mark Zakharov's on-device Transcribe app. For work,
 `send transcript` puts the package on work OneDrive and the bridge files it into
 `07 Meetings/Transcripts/` in Hivemind (also `-TranscriptInboxPath`, `-TranscriptIntervalSec`, or
-run `bridge/transcript-inbox.ps1 -Once` alone). For personal, share the markdown to the installed
+run `work/bridge/transcript-inbox.ps1 -Once` alone). For personal, share the markdown to the installed
 app and it lands in `40 Transcripts/` in HomeBase. Details in [docs/transcripts.md](docs/transcripts.md).
 
-**work dashboard.** The work space's second tab. The bridge reads work data as
-you (Epic network, no setup beyond `npm run bridge`), keeps a snapshot in `99 System/` of
-Hivemind, and the app lays it out as cards: needs me, waiting on others, my work, one card per
-direct report, product quality and projects. Rows open in Track; the row menu ignores an item for
-good or for a while, and the panel head shows what the filters hid and why. Filters, ignores, and
-products live in `99 System/work-dashboard.json`, so another person's Claude Code can shape their
-own. `plan an outage` in the menu, or `/outage-plan` in the work chat, lists what needs a backup
-while you are out. Details in [docs/work-dashboard.md](docs/work-dashboard.md).
+**work dashboard.** The work space's second tab. Its screens are not in this repo: the bridge
+serves them as one module (`/work-ui.js`) and the app imports it when the tab opens, so the
+dashboard exists only where the bridge runs. The bridge and those screens live in a separate
+private repo checked out at `work/` (ignored here); `npm run bridge` starts it from there.
 
 **memory.** Each vault keeps what the companion remembers as one fact per file plus a
 `MEMORY.md` index: `memory/` in HomeBase, `99 System/Memory/` in Hivemind. The index goes
