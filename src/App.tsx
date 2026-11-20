@@ -36,7 +36,7 @@ import { UsageView } from './views/UsageView'
 import { WorkScreens } from './views/WorkScreens'
 import { WelcomeView } from './views/WelcomeView'
 import { SetupLanding, landsOnInstall } from './views/SetupLanding'
-import { useInstallPrompt } from './installPrompt'
+import { openInChrome, useInstallPrompt } from './installPrompt'
 
 type View = 'today' | 'progress' | 'dashboard' | 'chat' | 'stores' | 'trips' | 'goals' | 'usage' | 'settings' | 'task'
 const taskStorageKey = (domain: Domain) => `my-brain.${domain}.tasks.v1`
@@ -758,10 +758,13 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
       </header>
 
       <div className={`content view-${shownView}`}>
-        {install.offer && shownView === 'today' && <div className="install-banner">
+        {install.installed && shownView === 'today' && <div className="install-banner"><span>installed. open my brain from your apps</span></div>}
+        {install.offer && !install.installed && shownView === 'today' && <div className="install-banner">
           {install.offer === 'prompt'
             ? <><span>install my brain</span><button className="primary" type="button" onClick={() => void install.install()}>install</button></>
-            : <span>share → add to home screen</span>}
+            : install.offer === 'chrome'
+              ? <><span>install my brain</span><button className="primary" type="button" onClick={openInChrome}>open in chrome</button></>
+              : <span>share → add to home screen</span>}
           <button className="icon-button" type="button" aria-label="dismiss" onClick={install.dismiss}>×</button>
         </div>}
         {sharing && <Suspense fallback={null}><ShareLanding onClose={() => setSharing(false)} /></Suspense>}

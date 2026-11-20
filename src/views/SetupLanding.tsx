@@ -1,4 +1,4 @@
-import { isHandheld, isIOS, isStandalone, useInstallPrompt } from '../installPrompt'
+import { isHandheld, isIOS, isOtherAndroid, isStandalone, openInChrome, useInstallPrompt } from '../installPrompt'
 
 /**
  * Where a setup link lands. A phone or tablet still in a browser tab is offered the home screen
@@ -48,7 +48,9 @@ export function SetupLanding({ name, onDone }: { name: string; onDone: () => voi
         </section>
       </> : canPrompt
         ? <button className="primary" type="button" onClick={() => void install().then(onDone)}>install app</button>
-        : null}
+        : typeof navigator !== 'undefined' && isOtherAndroid(navigator.userAgent)
+          ? <button className="primary" type="button" onClick={openInChrome}>open in chrome</button>
+          : null}
     </div>
     <div className="actions welcome-actions">
       <button className="plain" type="button" onClick={onDone}>continue in the browser</button>

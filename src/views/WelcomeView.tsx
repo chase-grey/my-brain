@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { newPersonSettings, type DeviceAccount } from '../account'
 import { configuredPersonalClientId, createPersonalGraphData, type PersonalGraphData } from '../data/personalGraphData'
-import { useInstallPrompt } from '../installPrompt'
+import { openInChrome, useInstallPrompt } from '../installPrompt'
 import { loadSettings, type AppSettings } from '../settings'
 import { accountFile, accountFileFrom, mergeAccountFile, type AccountFile } from '../settingsSync'
 import { Field } from '../ui'
@@ -49,9 +49,13 @@ export function WelcomeView({ onDone }: { onDone: (account: DeviceAccount, setti
   const [error, setError] = useState<string>()
   const data = useRef<PersonalGraphData | undefined>(undefined)
   const checking = useRef(false)
-  // Android: the browser's install dialog, offered before anything is typed. iOS gets "install first" above.
+  // Android: chrome's install dialog, or the way over to chrome, offered before anything is typed. iOS gets "install first" above.
   const install = useInstallPrompt()
-  const installButton = install.offer === 'prompt' && <button className="plain" type="button" onClick={() => void install.install()}>install app</button>
+  const installButton = install.installed
+    ? <p className="note">installed. open my brain from your apps</p>
+    : install.offer === 'prompt'
+    ? <button className="primary" type="button" onClick={() => void install.install()}>install app</button>
+    : install.offer === 'chrome' && <button className="primary" type="button" onClick={openInChrome}>open in chrome</button>
 
   function fail(caught: unknown, fallback: string): void {
     setError(caught instanceof Error ? caught.message.toLowerCase() : fallback)
@@ -144,9 +148,9 @@ export function WelcomeView({ onDone }: { onDone: (account: DeviceAccount, setti
       <div className="welcome-fill" />
       {error && <p className="note is-error" role="alert">{error}</p>}
       <div className="actions welcome-actions">
-        <button className="primary" disabled={busy} type="button" onClick={() => void connect()}>{busy ? 'connecting' : 'connect microsoft'}</button>
-        <button className="plain" disabled={busy} type="button" onClick={() => setStep('name')}>skip</button>
         {installButton}
+        <button className={installButton ? 'secondary' : 'primary'} disabled={busy} type="button" onClick={() => void connect()}>{busy ? 'connecting' : 'connect microsoft'}</button>
+        <button className="plain" disabled={busy} type="button" onClick={() => setStep('name')}>skip</button>
       </div>
     </main>
   }
@@ -178,7 +182,6 @@ export function WelcomeView({ onDone }: { onDone: (account: DeviceAccount, setti
     {error && <p className="note is-error" role="alert">{error}</p>}
     <div className="actions welcome-actions">
       <button className="primary" type="button" disabled={!ready || busy} onClick={next}>{nextLabel}</button>
-      {step === 'name' && installButton}
     </div>
   </main>
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { dismissDays, installOffer, isHandheld, isIOS } from './installPrompt'
+import { chromeUrl, dismissDays, installOffer, isHandheld, isIOS, isOtherAndroid } from './installPrompt'
 
 const now = new Date('2026-11-15T12:00:00Z')
 const base = { standalone: false, canPrompt: false, ios: false, dismissedAt: null, now }
@@ -9,6 +9,14 @@ describe('install offer', () => {
     expect(installOffer({ ...base, canPrompt: true })).toBe('prompt')
     expect(installOffer({ ...base, ios: true })).toBe('ios')
     expect(installOffer(base)).toBeNull()
+  })
+
+  it('sends firefox on android over to chrome', () => {
+    expect(installOffer({ ...base, otherAndroid: true })).toBe('chrome')
+    expect(isOtherAndroid('Mozilla/5.0 (Android 14; Mobile; rv:132.0) Gecko/132.0 Firefox/132.0')).toBe(true)
+    expect(isOtherAndroid('Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/130.0.0.0 Mobile Safari/537.36')).toBe(false)
+    expect(isOtherAndroid('Mozilla/5.0 (Windows NT 10.0; rv:132.0) Gecko/20100101 Firefox/132.0')).toBe(false)
+    expect(chromeUrl('https://example.github.io/my-brain/?a=1#today')).toBe('intent://example.github.io/my-brain/?a=1#Intent;scheme=https;package=com.android.chrome;end')
   })
 
   it('offers nothing to the installed app', () => {
