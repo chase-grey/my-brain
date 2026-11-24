@@ -96,7 +96,7 @@ export function buildFacts({ domain, period, today, tasks, product, bumps }: Fac
     goalMin += minutes
     const progress = goalProgress(goal, product.projects, activities, lastDay)
     const moved = goal.revisions.filter((revision) => inPeriod(period, revision.on)).map((revision) =>
-      revision.field === 'date' ? `date moved ${revision.from || 'unset'} to ${revision.to || 'unset'} on ${shortDay(revision.on)}` : `${revision.field} changed ${revision.from} to ${revision.to} on ${shortDay(revision.on)}`)
+      revision.field === 'date' ? `date moved from ${revision.from ? shortDay(String(revision.from)) : 'unset'} to ${revision.to ? shortDay(String(revision.to)) : 'unset'} on ${shortDay(revision.on)}` : `${revision.field} changed ${revision.from} to ${revision.to} on ${shortDay(revision.on)}`)
     const standing = progress.shape === 'block'
       ? progress.state === 'missed' ? `missed its day, ${shortDay(progress.scheduledOn!)}` : progress.state === 'scheduled' ? `set for ${shortDay(progress.scheduledOn!)}` : progress.state
       : `${hoursOf(minutes)}h this ${unit}, ${progress.hoursDone}h${progress.hoursCommitted ? ` of ${progress.hoursCommitted}h` : ''} overall, ${progress.state}`

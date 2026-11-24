@@ -111,7 +111,7 @@ describe('facts', () => {
   })
 
   it('lines the work up with goals, life areas, and habits', () => {
-    expect(facts.lines).toContain('season goal "finish the deck": 0.5h this week, 0.5h of 40h overall, behind; date moved 2026-11-30 to 2026-12-31 on nov 19')
+    expect(facts.lines).toContain('season goal "finish the deck": 0.5h this week, 0.5h of 40h overall, behind; date moved from nov 30 to dec 31 on nov 19')
     expect(facts.lines).toContain('life area body (importance 1 of 8): 1 logged against 2 promised')
     expect(facts.lines).toContain('habit "vitamins": 2 of 7 days')
     expect(facts.lines).toContain('weekly target: cleared 1.5h of 5h (3.5h short)')
@@ -211,6 +211,10 @@ describe('writing the review', () => {
       expect(prompt).toContain('Never praise effort, intent, or awareness')
       expect(prompt).toContain('No softening, no advice')
       expect(prompt).toContain('never yes or no')
+      expect(prompt).toContain('the way a blunt friend would say it out loud')
+      expect(prompt).toContain('never copy its wording')
+      expect(prompt).toContain('never 2026-11-10')
+      expect(prompt).toContain('Do not mention the evidence')
       expect(prompt).toContain(`at most ${draftLimits[kind].truths}`)
     }
   })

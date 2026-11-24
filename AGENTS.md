@@ -41,5 +41,6 @@ The week, month and year reviews (`src/review/`) follow these rules. `review.tes
 - A period is written once and saved. Reopening it costs nothing.
 - Praise has to be earned: only for something the numbers show was done. An empty earned list is correct.
 - Every statement cites a number or a dated quote. No advice, no softening, no yes/no questions.
+- Everything a review shows reads the way a person would say it: titles, "nov 10", "2 hours". No ISO dates, ids, field names, or wording copied from the evidence, and errors in plain words.
 - The journal is never written to. Answers are saved with the review.
 - The work review goes through Claude Code on the bridge, never the personal key.

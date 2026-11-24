@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { activeModel, baseUrlFor, providerOf, usesAnthropic } from '../companion/aiProvider'
 import { AnthropicClient, type ChatClient } from '../companion/anthropicClient'
 import { BridgeCompanionClient } from '../companion/bridgeCompanion'
+import { mapCompanionError } from '../companion/companion'
 import { GitHubVault, normalizeBranch, normalizeRepo, vaultConfigured, type VaultStore } from '../companion/githubVault'
 import { OpenAiCompatClient } from '../companion/openAiClient'
 import { rungs } from '../companion/route'
@@ -82,7 +83,7 @@ export function useReviews({ domain, currentDay, tasks, product, settings, notes
     setShown({ period, review: countedReview(deps), writing: true, owed })
     runReview(deps)
       .then((review) => setShown((current) => current?.period.key === period.key && current.period.kind === period.kind ? { ...current, review, writing: false } : current))
-      .catch((error: unknown) => setShown((current) => current?.period.key === period.key && current.period.kind === period.kind ? { ...current, writing: false, error: error instanceof Error ? error.message.toLowerCase() : 'the review could not be written' } : current))
+      .catch((error: unknown) => setShown((current) => current?.period.key === period.key && current.period.kind === period.kind ? { ...current, writing: false, error: mapCompanionError(error).message } : current))
   }
 
   /** The next review that is owed and has something in it; empty periods are marked seen without a screen. */
