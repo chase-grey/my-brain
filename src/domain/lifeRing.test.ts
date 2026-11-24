@@ -8,8 +8,8 @@ describe('life ring', () => {
     expect(ring.find((arc) => arc.domain === 'projects')).toMatchObject({ state: 'dormant', focus: false })
   })
 
-  it('orders areas most important first with related ones side by side', () => {
-    expect(RING_DOMAINS).toEqual(['body', 'rest', 'connection', 'purpose', 'mind', 'creativity', 'projects', 'money'])
+  it('keeps the areas in the order Chase set', () => {
+    expect(RING_DOMAINS).toEqual(['purpose', 'connection', 'body', 'mind', 'creativity', 'projects', 'money', 'rest'])
     expect(buildLifeRing([], [], '2026-09-03').map((arc) => arc.domain)).toEqual(RING_DOMAINS)
   })
 

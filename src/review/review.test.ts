@@ -112,7 +112,7 @@ describe('facts', () => {
 
   it('lines the work up with goals, life areas, and habits', () => {
     expect(facts.lines).toContain('season goal "finish the deck": 0.5h this week, 0.5h of 40h overall, behind; date moved from nov 30 to dec 31 on nov 19')
-    expect(facts.lines).toContain('life area body (importance 1 of 8): 1 logged against 2 promised')
+    expect(facts.lines).toContain('life area body (importance 3 of 8): 1 logged against 2 promised')
     expect(facts.lines).toContain('habit "vitamins": 2 of 7 days')
     expect(facts.lines).toContain('weekly target: cleared 1.5h of 5h (3.5h short)')
     expect(facts.lines).toContain('people seen: 1')

@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef } from 'react'
-import { WHEEL_CLOCKWISE, type RingArc } from '../domain/lifeRing'
+import type { RingArc } from '../domain/lifeRing'
 import type { LifeDomain } from '../domain/types'
 
 export const wheelHue: Record<LifeDomain, string> = {
@@ -18,8 +18,8 @@ const OUTER = 100
 const LABEL = 112
 const VIEW = { x: 170, y: 118 }
 const GAP = 2.4
-// Where the first slice is centred: 10:30, the top left.
-const LEAD = 315
+// Where the first slice is centred: 9 o'clock. The rest follow clockwise.
+const LEAD = 270
 
 function point(radius: number, degrees: number): string {
   const radians = ((degrees - 90) * Math.PI) / 180
@@ -56,12 +56,11 @@ export function LifeWheel({ arcs, selected, compact, onSelect }: { arcs: RingArc
     )
   }, [compact])
 
-  const placed = [...arcs].sort((a, b) => WHEEL_CLOCKWISE.indexOf(a.domain) - WHEEL_CLOCKWISE.indexOf(b.domain))
-  const step = 360 / placed.length
+  const step = 360 / arcs.length
   const start = LEAD - step / 2
   return <div className={`wheel-frame${compact ? ' is-compact' : ''}`} ref={frame}>
     <svg className="wheel" viewBox={`-${VIEW.x} -${VIEW.y} ${VIEW.x * 2} ${VIEW.y * 2}`} role="group" aria-label="life wheel">
-      {placed.map((arc, index) => {
+      {arcs.map((arc, index) => {
         const from = start + index * step + GAP / 2
         const to = start + (index + 1) * step - GAP / 2
         const mid = ((from + to) / 2) % 360

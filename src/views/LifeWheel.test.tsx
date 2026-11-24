@@ -19,18 +19,15 @@ it('draws one slice per life domain with its fill in the label', () => {
   expect(html).toContain('is-dormant')
 })
 
-it('puts the most important area top left and the least bottom right', () => {
+it('runs the areas clockwise from 9 o\'clock in their set order', () => {
   const html = renderToStaticMarkup(<LifeWheel arcs={ring} onSelect={() => {}} />)
   const at = (area: string) => {
     const [, x, y] = html.match(new RegExp(`x="(-?[\\d.]+)" y="(-?[\\d.]+)"[^>]*>${area}<`))!
     return { x: Number(x), y: Number(y) }
   }
-  expect(at('body').x).toBeLessThan(0)
-  expect(at('body').y).toBeLessThan(0)
-  expect(at('money').x).toBeGreaterThan(0)
-  expect(at('money').y).toBeGreaterThan(0)
-  expect(html.indexOf('>body<')).toBeLessThan(html.indexOf('>rest<'))
-  expect(html.indexOf('>projects<')).toBeLessThan(html.indexOf('>connection<'))
+  const clock = (area: string) => (Math.atan2(at(area).x, -at(area).y) * 6 / Math.PI + 12) % 12
+  expect(ring.map((arc) => Math.round(clock(arc.domain) * 10) / 10)).toEqual([9, 10.5, 0, 1.5, 3, 4.5, 6, 7.5])
+  expect(ring.map((arc) => arc.domain)).toEqual(['purpose', 'connection', 'body', 'mind', 'creativity', 'projects', 'money', 'rest'])
 })
 
 it('reads healthier slices as more of their own hue', () => {
