@@ -1,4 +1,4 @@
-const cacheName = 'my-brain-shell-v2'
+const cacheName = 'my-brain-shell-v3'
 // Shared transcripts wait here between the share-target POST and the app draining them (docs/transcripts.md).
 const shareCacheName = 'my-brain-share'
 
@@ -39,15 +39,22 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  event.respondWith(
-    caches.match(event.request).then((cached) => cached ?? fetch(event.request).then((response) => {
-      if (response.ok) {
-        const copy = response.clone()
-        caches.open(cacheName).then((cache) => cache.put(event.request, copy))
-      }
-      return response
-    })),
-  )
+  const keep = (response) => {
+    if (response.ok) {
+      const copy = response.clone()
+      caches.open(cacheName).then((cache) => cache.put(event.request, copy))
+    }
+    return response
+  }
+
+  // Only the build's hashed files can be served from cache first. The manifest and icons keep their
+  // names when they change, so the cached copy is only for when the network is down.
+  if (url.pathname.includes('/assets/')) {
+    event.respondWith(caches.match(event.request).then((cached) => cached ?? fetch(event.request).then(keep)))
+    return
+  }
+
+  event.respondWith(fetch(event.request).then(keep).catch(() => caches.match(event.request).then((cached) => cached ?? Response.error())))
 })
 
 // Android's share sheet posts the form here. Each shared file or text becomes one cache entry;
