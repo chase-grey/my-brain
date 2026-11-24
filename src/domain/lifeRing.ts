@@ -19,7 +19,7 @@ export type RingArc = {
   focus: boolean
 }
 
-// Chase's order, 2026-11-24. Lists read it top to bottom; the wheel runs it clockwise from 9 o'clock.
+// Chase's order, 2026-11-24. Lists read it top to bottom; the wheel runs it clockwise starting at 9 o'clock.
 export const RING_DOMAINS: LifeDomain[] = ['purpose', 'connection', 'body', 'mind', 'creativity', 'projects', 'money', 'rest']
 
 function median(values: number[]): number | undefined {

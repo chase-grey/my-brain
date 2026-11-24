@@ -18,8 +18,8 @@ const OUTER = 100
 const LABEL = 112
 const VIEW = { x: 170, y: 118 }
 const GAP = 2.4
-// Where the first slice is centred: 9 o'clock. The rest follow clockwise.
-const LEAD = 270
+// The first slice starts at 9 o'clock and the rest follow clockwise, so the slices split evenly left and right with a seam at the top and bottom.
+const START = 270
 
 function point(radius: number, degrees: number): string {
   const radians = ((degrees - 90) * Math.PI) / 180
@@ -57,12 +57,11 @@ export function LifeWheel({ arcs, selected, compact, onSelect }: { arcs: RingArc
   }, [compact])
 
   const step = 360 / arcs.length
-  const start = LEAD - step / 2
   return <div className={`wheel-frame${compact ? ' is-compact' : ''}`} ref={frame}>
     <svg className="wheel" viewBox={`-${VIEW.x} -${VIEW.y} ${VIEW.x * 2} ${VIEW.y * 2}`} role="group" aria-label="life wheel">
       {arcs.map((arc, index) => {
-        const from = start + index * step + GAP / 2
-        const to = start + (index + 1) * step - GAP / 2
+        const from = START + index * step + GAP / 2
+        const to = START + (index + 1) * step - GAP / 2
         const mid = ((from + to) / 2) % 360
         const health = sliceHealth(arc)
         const extent = arc.fill === undefined ? 0 : INNER + (OUTER - INNER) * Math.max(0.12, arc.fill)
