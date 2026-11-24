@@ -19,7 +19,8 @@ export type RingArc = {
   focus: boolean
 }
 
-export const RING_DOMAINS: LifeDomain[] = ['body', 'purpose', 'connection', 'build', 'mind', 'creativity', 'money', 'rest']
+// Most important first, related areas side by side. Every list and the wheel read this order.
+export const RING_DOMAINS: LifeDomain[] = ['body', 'rest', 'connection', 'purpose', 'mind', 'creativity', 'build', 'money']
 
 function median(values: number[]): number | undefined {
   if (!values.length) return undefined

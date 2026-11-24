@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { CalendarBlock } from '../data/calendarGraphProvider'
 import { timeRange } from '../domain/calendar'
-import type { RingCommitment } from '../domain/lifeRing'
+import { RING_DOMAINS, type RingCommitment } from '../domain/lifeRing'
 import type { Commitment, Domain, Goal, GoalShape, LifeDomain, Project, Task } from '../domain/types'
 import { duration, newId, shortDate } from '../format'
 import type { ProductState } from '../productState'
@@ -9,7 +9,6 @@ import { Card, Field, Menu, Segmented, Sheet } from '../ui'
 
 export type GoalEdit = Partial<Pick<Goal, 'title' | 'status' | 'targetDate' | 'hoursCommitted' | 'shape' | 'scheduledOn' | 'calendarEventId'>>
 
-const ringDomains: LifeDomain[] = ['body', 'purpose', 'connection', 'build', 'mind', 'creativity', 'money', 'rest']
 const shapeOptions: { value: GoalShape; label: string }[] = [{ value: 'pace', label: 'hours a week' }, { value: 'block', label: 'one block' }]
 
 function describeGoal(goal: Goal, held?: CalendarBlock): string {
@@ -151,7 +150,7 @@ export function GoalsView({ domain, product, tasks, currentDay, heldEvents, canH
     </Card>
 
     {domain === 'personal' && <Card title="life ring · per 28 days">
-      <div className="grid-2">{ringDomains.map((ringDomain) => <Field key={ringDomain} label={ringDomain}><input inputMode="numeric" min="0" type="number" value={product.ringCommitments.find((item) => item.domain === ringDomain)?.commitment28 ?? 0} onChange={(event) => setRing(ringDomain, Number(event.target.value))} /></Field>)}</div>
+      <div className="grid-2">{RING_DOMAINS.map((ringDomain) => <Field key={ringDomain} label={ringDomain}><input inputMode="numeric" min="0" type="number" value={product.ringCommitments.find((item) => item.domain === ringDomain)?.commitment28 ?? 0} onChange={(event) => setRing(ringDomain, Number(event.target.value))} /></Field>)}</div>
     </Card>}
 
     {editing && <EditGoalSheet goal={editing} onClose={() => setEditing(undefined)} onSave={(changes) => { onEditGoal(editing.id, changes); setEditing(undefined) }} />}
