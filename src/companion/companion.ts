@@ -1,5 +1,5 @@
 import { actionLine, describeAction, type CompanionAction } from './actions'
-import { AnthropicError, textOf, toolUses, type AnthropicClient, type AnthropicMessage, type ContentBlock, type ToolUseBlock } from './anthropicClient'
+import { AnthropicError, textOf, toolUses, type AnthropicMessage, type ChatClient, type ContentBlock, type ToolUseBlock } from './anthropicClient'
 import { BridgeUnreachableError, type BridgeCompanionClient } from './bridgeCompanion'
 import { autoModel } from '../settings'
 import { companionTools, executeTool, toolGroups, type CompanionActions, type ToolContext, type Undo } from './companionTools'
@@ -65,7 +65,7 @@ function toolResult(use: ToolUseBlock, outcome: Awaited<ReturnType<typeof execut
 }
 
 export function createAnthropicCompanion(deps: {
-  client: AnthropicClient
+  client: ChatClient
   /** A model name, or `auto`: each message starts on the rung the route names and the model can hand off upward. */
   model: string
   /** low | medium | high | xhigh | max; the api's own default when left out. Auto sets its own. */
@@ -226,9 +226,9 @@ export function createBridgeCompanion(deps: {
 export function mapCompanionError(error: unknown): CompanionError {
   if (error instanceof CompanionError) return error
   if (error instanceof AnthropicError) {
-    if (error.status === 401 || error.status === 403) return new CompanionError('auth', 'anthropic rejected the api key')
-    if (error.status === 429 || error.status >= 500) return new CompanionError('busy', 'anthropic is busy, try again')
-    return new CompanionError('http', `anthropic returned ${error.status}`)
+    if (error.status === 401 || error.status === 403) return new CompanionError('auth', `${error.service} rejected the api key`)
+    if (error.status === 429 || error.status >= 500) return new CompanionError('busy', `${error.service} is busy, try again`)
+    return new CompanionError('http', `${error.service} returned ${error.status}`)
   }
   if (error instanceof GitHubError) return new CompanionError('vault', error.message)
   if (error instanceof BridgeUnreachableError) return new CompanionError('unreachable', error.message)

@@ -2,21 +2,24 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { AssistantRuntimeProvider, ComposerPrimitive, MessagePrimitive, ThreadPrimitive, useExternalStoreRuntime, type AppendMessage, type ThreadMessageLike } from '@assistant-ui/react'
 import { MarkdownTextPrimitive } from '@assistant-ui/react-markdown'
 import type { Domain } from '../domain/types'
-import { autoModel, chatModel, chatModelOptions, effortOptions, modelShortName, type AppSettings } from '../settings'
+import { copyText } from '../clipboard'
+import { autoModel, effortOptions, modelShortName, type AppSettings } from '../settings'
 import { Icon } from '../navIcons'
 import { Empty } from '../ui'
 import { useVoice } from '../voice/useVoice'
 import type { CompanionAction, ActionStatus } from './actions'
 import { ActionHandlersContext, ActionPart, type ActionHandlers } from './ActionParts'
+import { activeModel, baseUrlFor, modelChoices, modelField, providerOf, usesAnthropic } from './aiProvider'
 import { AnthropicClient } from './anthropicClient'
 import { BridgeCompanionClient } from './bridgeCompanion'
 import { CompanionError, createAnthropicCompanion, createBridgeCompanion, type AssistantReply, type Companion, type PendingApprovals, type Undo } from './companion'
-import { buildSystemPrompt } from './companionPrompt'
+import { buildSystemPrompt, pastePrompt } from './companionPrompt'
 import { memoryFolders } from './memory'
 import { clearHistory, conversationTitle, conversationUpdatedAt, deleteConversation, loadHistory, newConversation, saveConversation, type CompanionConversation, type CompanionTurn } from './companionStore'
 import type { CompanionActions, PlanSummary } from './companionTools'
 import { GitHubVault, normalizeBranch, normalizeRepo, vaultConfigured, type VaultStore } from './githubVault'
 import { JevClient } from './jev'
+import { OpenAiCompatClient } from './openAiClient'
 import { routeWithJev } from './route'
 
 type BridgeState = 'checking' | 'ready' | 'offline'
@@ -143,12 +146,16 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
 
   const apiKey = compact(settings.anthropicApiKey)
   const jevKey = compact(settings.jevApiKey)
-  const model = chatModel(domain, settings.anthropicModel)
+  const provider = providerOf(settings.aiProvider)
+  const anthropic = usesAnthropic(domain, settings)
+  const baseUrl = baseUrlFor(settings)
+  const model = activeModel(domain, settings)
+  const [copied, setCopied] = useState(false)
   const vaultConfig = { repo: normalizeRepo(settings.githubRepo), token: compact(settings.githubToken), branch: normalizeBranch(settings.vaultBranch) }
   const hasGitHubVault = domain === 'personal' && vaultConfigured(vaultConfig)
   const fallbackVault = domain === 'personal' && !hasGitHubVault ? notesVault : undefined
   const hasVault = hasGitHubVault || Boolean(fallbackVault)
-  const hasKey = domain === 'work' || apiKey.length > 0
+  const hasKey = domain === 'work' || (settings.aiMode === 'key' && apiKey.length > 0 && baseUrl.length > 0 && model.length > 0)
 
   const companion = useMemo<Companion | undefined>(() => {
     const systemPrompt = (memoryIndex?: string) => buildSystemPrompt({ domain, summary: summaryRef.current, vaultAvailable: domain === 'work' ? true : hasVault, memoryIndex, notes: fallbackVault ? 'onedrive' : 'homebase', userName })
@@ -157,10 +164,10 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
     }
     if (!hasKey) return undefined
     return createAnthropicCompanion({
-      client: new AnthropicClient(apiKey),
+      client: anthropic ? new AnthropicClient(apiKey) : new OpenAiCompatClient(apiKey, baseUrl, provider.id === 'custom' ? 'the ai service' : provider.label),
       model,
-      effort: settings.chatEffort,
-      route: jevKey ? (ask) => routeWithJev(new JevClient(jevKey), ask) : undefined,
+      effort: anthropic ? settings.chatEffort : undefined,
+      route: anthropic && jevKey ? (ask) => routeWithJev(new JevClient(jevKey), ask) : undefined,
       history: () => historyRef.current,
       systemPrompt,
       actions: () => actionsRef.current,
@@ -168,7 +175,7 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
       memoryFolder: memoryFolders[domain],
       hasCalendar: () => hasCalendarRef.current,
     })
-  }, [domain, hasKey, hasGitHubVault, fallbackVault, userName, settings.anthropicApiKey, settings.jevApiKey, settings.anthropicModel, settings.chatEffort, vaultConfig.repo, vaultConfig.token, vaultConfig.branch])
+  }, [domain, hasKey, hasGitHubVault, fallbackVault, userName, settings.aiMode, settings.aiProvider, baseUrl, model, settings.anthropicApiKey, settings.jevApiKey, settings.chatEffort, vaultConfig.repo, vaultConfig.token, vaultConfig.branch])
 
   useEffect(() => {
     if (domain !== 'work') return
@@ -354,6 +361,12 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
   }
 
   const unavailable = domain === 'personal' ? !hasKey : bridge === 'offline'
+
+  async function copyPlan() {
+    if (!await copyText(pastePrompt({ summary: summaryRef.current, userName }))) return
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1500)
+  }
   const runtime = useExternalStoreRuntime({
     messages: conversation.turns,
     convertMessage: toMessage,
@@ -378,7 +391,11 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
     </header>
     {unavailable
       ? <Empty>{domain === 'personal'
-        ? <>no api key · <button className="link" type="button" onClick={onSettings}>add one in settings</button></>
+        ? settings.aiMode === 'paste'
+          ? <button className="link" type="button" onClick={() => { void copyPlan() }}>{copied ? 'copied' : 'copy my plan for another ai app'}</button>
+          : settings.aiMode === 'off'
+            ? <>ai is off · <button className="link" type="button" onClick={onSettings}>turn it on in settings</button></>
+            : <>no api key · <button className="link" type="button" onClick={onSettings}>add one in settings</button></>
         : 'only on the work pc'}</Empty>
       : <AssistantRuntimeProvider runtime={runtime}>
         <ActionHandlersContext.Provider value={handlers}>
@@ -391,10 +408,10 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
               </ThreadPrimitive.Viewport>}
             {voice.state !== 'idle' && <p className="voice-caption" aria-live="polite">{voice.state === 'speaking' ? 'speaking' : voice.transcript ? `listening · ${voice.transcript}` : 'listening'}</p>}
             <div className="chat-tools">
-              <select className="picker" aria-label="model" value={model} onChange={(event) => onChangeSettings?.({ anthropicModel: event.target.value })}>
-                {chatModelOptions(domain).map((option) => <option key={option} value={option}>{option === autoModel && answeredBy ? `auto · ${modelShortName(answeredBy)}` : modelShortName(option)}</option>)}
+              <select className="picker" aria-label="model" value={model} onChange={(event) => onChangeSettings?.({ [modelField(domain, settings)]: event.target.value })}>
+                {modelChoices(domain, settings).map((option) => <option key={option} value={option}>{option === autoModel && answeredBy ? `auto · ${modelShortName(answeredBy)}` : anthropic ? modelShortName(option) : option}</option>)}
               </select>
-              {model !== autoModel && <select className="picker" aria-label="effort"value={settings.chatEffort} onChange={(event) => onChangeSettings?.({ chatEffort: event.target.value as AppSettings['chatEffort'] })}>
+              {anthropic && model !== autoModel && <select className="picker" aria-label="effort" value={settings.chatEffort} onChange={(event) => onChangeSettings?.({ chatEffort: event.target.value as AppSettings['chatEffort'] })}>
                 {effortOptions.map((level) => <option key={level} value={level}>{level}</option>)}
               </select>}
               <span className="chat-tools-gap" />

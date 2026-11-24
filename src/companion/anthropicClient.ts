@@ -11,13 +11,19 @@ export type AnthropicTool = {
 export type MessagesRequest = { model: string; system?: string; messages: AnthropicMessage[]; tools?: AnthropicTool[]; max_tokens?: number; output_config?: { effort: string } }
 export type MessagesResponse = { id: string; content: ContentBlock[]; stop_reason: 'end_turn' | 'tool_use' | 'max_tokens' | string }
 
+/** A failed model call. `service` names who answered, for the message the chat shows. */
 export class AnthropicError extends Error {
-  constructor(readonly status: number, readonly responseBody: string) {
-    super(`anthropic returned ${status}`)
+  constructor(readonly status: number, readonly responseBody: string, readonly service = 'anthropic') {
+    super(`${service} returned ${status}`)
   }
 }
 
-export class AnthropicClient {
+/** What the companion needs from a model service, whichever wire it speaks. */
+export interface ChatClient {
+  createMessage(request: MessagesRequest): Promise<MessagesResponse>
+}
+
+export class AnthropicClient implements ChatClient {
   constructor(
     private readonly apiKey: string,
     private readonly fetcher: typeof fetch = (input, init) => fetch(input, init),

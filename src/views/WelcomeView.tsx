@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { newPersonSettings, type DeviceAccount } from '../account'
+import { providerOf, providers, trimBaseUrl, type ProviderId } from '../companion/aiProvider'
 import { configuredPersonalClientId, createPersonalGraphData, type PersonalGraphData } from '../data/personalGraphData'
 import { openInChrome, useInstallPrompt } from '../installPrompt'
-import { loadSettings, type AppSettings } from '../settings'
+import { loadSettings, type AiMode, type AppSettings } from '../settings'
 import { accountFile, accountFileFrom, mergeAccountFile, type AccountFile } from '../settingsSync'
-import { Field } from '../ui'
+import { Field, Segmented } from '../ui'
 
 /** How setup ended: a new account opens on chat with a request typed, when it has a key to answer it. */
 export type WelcomeFinish = { kickoff?: string }
@@ -28,6 +29,36 @@ export function firstName(accountName: string | undefined): string {
   return accountName?.trim().split(/\s+/)[0] ?? ''
 }
 
+/** The ai step's answers. Nothing is picked for the person: `want` and `path` start unanswered. */
+export type AiAnswers = { want?: boolean; path?: 'key' | 'paste'; provider: ProviderId; baseUrl: string; model: string; key: string; jevKey: string }
+
+export const noAiAnswers: AiAnswers = { provider: 'anthropic', baseUrl: '', model: '', key: '', jevKey: '' }
+
+/** Whether the ai step has been answered through: declined, copy and paste, or a key with everything its provider needs. */
+export function aiAnswered(answers: AiAnswers): boolean {
+  if (answers.want === false) return true
+  if (!answers.want) return false
+  if (answers.path === 'paste') return true
+  // The provider with no address of its own has no model to start on either, so both are typed.
+  const typed = providerOf(answers.provider).baseUrl !== null || (trimBaseUrl(answers.baseUrl).length > 0 && answers.model.trim().length > 0)
+  return answers.path === 'key' && answers.key.trim().length > 0 && typed
+}
+
+/** The settings the ai step's answers come to. Only what the chosen path uses is kept. */
+export function aiSettings(answers: AiAnswers): Pick<AppSettings, 'aiMode' | 'aiProvider' | 'aiBaseUrl' | 'aiModel' | 'anthropicApiKey' | 'jevApiKey'> {
+  const aiMode: AiMode = !answers.want ? 'off' : answers.path === 'paste' ? 'paste' : 'key'
+  const keyed = aiMode === 'key'
+  const provider = providerOf(keyed ? answers.provider : undefined)
+  return {
+    aiMode,
+    aiProvider: provider.id,
+    aiBaseUrl: keyed && provider.baseUrl === null ? trimBaseUrl(answers.baseUrl) : '',
+    aiModel: keyed && provider.baseUrl === null ? answers.model.trim() : '',
+    anthropicApiKey: keyed ? answers.key.trim() : '',
+    jevApiKey: keyed && provider.wire === 'anthropic' ? answers.jevKey.trim() : '',
+  }
+}
+
 type Step = 'start' | 'name' | 'chat'
 const questions: Step[] = ['name', 'chat']
 
@@ -36,14 +67,20 @@ const questions: Step[] = ['name', 'chat']
  *
  * Connect microsoft comes first, because it answers the question the workout tracker has to ask:
  * an account whose app folder already holds settings.json is one of your own devices, and goes
- * straight in with nothing typed; one that holds none is a new person, who is asked a name and a
- * key and saves them there. Skipping keeps everything on this device and asks the same two things.
+ * straight in with nothing typed; one that holds none is a new person, who is asked a name and how
+ * they want ai, and saves them there. Skipping keeps everything on this device and asks the same
+ * two things.
+ *
+ * The ai step asks the workout tracker's questions in its order: whether to use ai at all, then a
+ * key of your own or copy and paste into another ai app, then the provider (anthropic unless
+ * changed), its key, and a jev key.
  */
 export function WelcomeView({ onDone }: { onDone: (account: DeviceAccount, settings: AppSettings, finish?: WelcomeFinish) => void }) {
   const clientId = configuredPersonalClientId()
   const [step, setStep] = useState<Step>(clientId ? 'start' : 'name')
   const [name, setName] = useState('')
-  const [key, setKey] = useState('')
+  const [ai, setAi] = useState<AiAnswers>(noAiAnswers)
+  const answerAi = (change: Partial<AiAnswers>) => setAi((current) => ({ ...current, ...change }))
   const [installFirst, setInstallFirst] = useState(inIosBrowserTab)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string>()
@@ -110,10 +147,10 @@ export function WelcomeView({ onDone }: { onDone: (account: DeviceAccount, setti
   async function finish(): Promise<void> {
     if (busy) return
     const base = loadSettings('personal')
-    const settings = newPersonSettings({ ...base, anthropicApiKey: key.trim() || base.anthropicApiKey })
+    const settings = newPersonSettings({ ...base, ...aiSettings(ai) })
     const now = new Date().toISOString()
     const account: DeviceAccount = { setupComplete: true, owner: false, name: name.trim(), workSpace: false, ...(data.current ? { updatedAt: now } : {}) }
-    const ending: WelcomeFinish = settings.anthropicApiKey.trim() ? { kickoff: kickoffText } : {}
+    const ending: WelcomeFinish = settings.aiMode === 'key' ? { kickoff: kickoffText } : {}
     if (!data.current) {
       onDone(account, settings, ending)
       return
@@ -164,13 +201,14 @@ export function WelcomeView({ onDone }: { onDone: (account: DeviceAccount, setti
   const last = step === 'chat'
   // Signed in, there is nothing to go back to: the account is already chosen.
   const canGoBack = step === 'chat' || (Boolean(clientId) && !data.current)
-  const ready = step !== 'name' || name.trim().length > 0
+  const ready = step === 'name' ? name.trim().length > 0 : aiAnswered(ai)
+  const provider = providerOf(ai.provider)
   const next = () => {
     if (!ready || busy) return
     if (last) void finish()
     else setStep('chat')
   }
-  const nextLabel = last ? (busy ? 'starting' : key.trim() ? 'start' : 'skip') : 'next'
+  const nextLabel = last ? (busy ? 'starting' : 'start') : 'next'
 
   return <main className="welcome">
     <div className="welcome-top">
@@ -179,10 +217,20 @@ export function WelcomeView({ onDone }: { onDone: (account: DeviceAccount, setti
         {questions.map((item) => <span key={item} className={item === step ? 'is-current' : ''} />)}
       </div>
     </div>
-    <h1>{step === 'name' ? 'about you' : 'chat'}</h1>
+    <h1>{step === 'name' ? 'about you' : 'use ai?'}</h1>
     <form className="stack welcome-fill" onSubmit={(event) => { event.preventDefault(); next() }}>
       {step === 'name' && <Field label="name"><input autoComplete="given-name" autoFocus value={name} onChange={(event) => setName(event.target.value)} /></Field>}
-      {step === 'chat' && <Field label="anthropic api key"><input type="password" autoComplete="off" autoCapitalize="off" spellCheck={false} autoFocus value={key} onChange={(event) => setKey(event.target.value)} placeholder="sk-ant-" /></Field>}
+      {step === 'chat' && <>
+        <Segmented label="use ai" value={ai.want === undefined ? '' : ai.want ? 'yes' : 'no'} onChange={(value) => answerAi({ want: value === 'yes' })} options={[{ value: 'yes', label: 'yes' }, { value: 'no', label: 'not now' }]} />
+        {ai.want && <div className="field"><span>how?</span><Segmented label="how" value={ai.path ?? ''} onChange={(value) => answerAi({ path: value as AiAnswers['path'] })} options={[{ value: 'key', label: 'my api key' }, { value: 'paste', label: 'copy & paste' }]} /></div>}
+        {ai.want && ai.path === 'key' && <>
+          <Field label="ai provider"><select value={provider.id} onChange={(event) => answerAi({ provider: providerOf(event.target.value).id })}>{providers.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></Field>
+          {provider.baseUrl === null && <Field label="base url"><input autoComplete="off" autoCapitalize="off" inputMode="url" spellCheck={false} value={ai.baseUrl} onChange={(event) => answerAi({ baseUrl: event.target.value })} placeholder="https://" /></Field>}
+          {provider.baseUrl === null && <Field label="model"><input autoComplete="off" autoCapitalize="off" spellCheck={false} value={ai.model} onChange={(event) => answerAi({ model: event.target.value })} /></Field>}
+          <Field label="api key"><input type="password" autoComplete="off" autoCapitalize="off" spellCheck={false} value={ai.key} onChange={(event) => answerAi({ key: event.target.value })} placeholder={provider.keyHint} /></Field>
+          {provider.wire === 'anthropic' && <Field label="jev api key (optional)"><input type="password" autoComplete="off" autoCapitalize="off" spellCheck={false} value={ai.jevKey} onChange={(event) => answerAi({ jevKey: event.target.value })} /></Field>}
+        </>}
+      </>}
     </form>
     {error && <p className="note is-error" role="alert">{error}</p>}
     <div className="actions welcome-actions">

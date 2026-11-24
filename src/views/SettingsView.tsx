@@ -4,7 +4,8 @@ import { GitHubVault, normalizeBranch, normalizeRepo, vaultConfigured } from '..
 import type { Domain } from '../domain/types'
 import { exportFileName, exportVault, saveExport } from '../notes/exportNotes'
 import type { DeviceAccount } from '../account'
-import type { AppSettings } from '../settings'
+import { providerOf, providers } from '../companion/aiProvider'
+import type { AiMode, AppSettings } from '../settings'
 import { Card, Field, Segmented } from '../ui'
 import { ShareCard } from './ShareCard'
 
@@ -31,6 +32,10 @@ export function SettingsView({ domain, accountName, connectionStatus, settings, 
   const set = <K extends keyof AppSettings>(key: K) => (event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     onSettings((current) => ({ ...current, [key]: typeof current[key] === 'number' ? Number(event.target.value) : event.target.value }))
 
+  const provider = providerOf(settings.aiProvider)
+  // A model belongs to its provider, so a new pick starts on that provider's default.
+  const pickProvider = (event: React.ChangeEvent<HTMLSelectElement>) => onSettings((current) => ({ ...current, aiProvider: providerOf(event.target.value).id, aiModel: '' }))
+
   return <>
     <header className="view-head"><h1>settings</h1></header>
 
@@ -50,8 +55,15 @@ export function SettingsView({ domain, accountName, connectionStatus, settings, 
 
     <Card title="chat">
       {domain === 'personal' ? <div className="stack">
-        <Field label="anthropic api key"><input type="password" autoComplete="off" value={settings.anthropicApiKey} onChange={set('anthropicApiKey')} /></Field>
-        <Field label="jev api key"><input type="password" autoComplete="off" value={settings.jevApiKey} onChange={set('jevApiKey')} /></Field>
+        <Segmented<AiMode> label="ai" value={settings.aiMode} onChange={(aiMode) => onSettings((current) => ({ ...current, aiMode }))} options={[{ value: 'key', label: 'api key' }, { value: 'paste', label: 'copy & paste' }, { value: 'off', label: 'off' }]} />
+        {settings.aiMode === 'key' && <>
+          <Field label="ai provider"><select value={provider.id} onChange={pickProvider}>{providers.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></Field>
+          {provider.baseUrl === null && <Field label="base url"><input autoComplete="off" autoCapitalize="off" inputMode="url" spellCheck={false} value={settings.aiBaseUrl} onChange={set('aiBaseUrl')} placeholder="https://" /></Field>}
+          <Field label="api key"><input type="password" autoComplete="off" value={settings.anthropicApiKey} onChange={set('anthropicApiKey')} placeholder={provider.keyHint} /></Field>
+          {provider.wire === 'anthropic'
+            ? <Field label="jev api key"><input type="password" autoComplete="off" value={settings.jevApiKey} onChange={set('jevApiKey')} /></Field>
+            : <Field label="model"><input autoComplete="off" autoCapitalize="off" spellCheck={false} list="ai-models" value={settings.aiModel} onChange={set('aiModel')} placeholder={provider.defaultModel} /><datalist id="ai-models">{provider.models.map((model) => <option key={model} value={model} />)}</datalist></Field>}
+        </>}
         <div className="grid-2">
           <Field label="github repo"><input autoComplete="off" value={settings.githubRepo} onChange={set('githubRepo')} placeholder="owner/name" /></Field>
           <Field label="branch"><input autoComplete="off" value={settings.vaultBranch} onChange={set('vaultBranch')} /></Field>

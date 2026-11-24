@@ -45,6 +45,14 @@ function memorySection(domain: Domain, vaultAvailable: boolean, memoryIndex: str
   return [`What you remember about the user (${index}):\n${listing}`, [...rules, 'Use save_memory and forget_memory; read a memory file with read_note.'].join(' ')].join('\n\n')
 }
 
+/** The plan as text to paste into another ai app, for someone who chose that over a key: the same briefing the chat gets, with no tools behind it. */
+export function pastePrompt(context: Omit<PromptContext, 'domain' | 'vaultAvailable' | 'memoryIndex'>): string {
+  return [
+    'Below is my plan from My Brain, my planning app, for you to answer my questions from. Ignore any mention of app tools, notes, or memory; you cannot reach them here.',
+    buildSystemPrompt({ ...context, domain: 'personal', vaultAvailable: false }),
+  ].join('\n\n')
+}
+
 export function buildSystemPrompt({ domain, summary, vaultAvailable, memoryIndex, notes = 'homebase', userName }: PromptContext): string {
   const vault = vaultNames[domain]
   const plainNotes = domain === 'personal' && notes === 'onedrive'
