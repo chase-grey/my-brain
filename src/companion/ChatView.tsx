@@ -3,6 +3,7 @@ import { AssistantRuntimeProvider, ComposerPrimitive, MessagePrimitive, ThreadPr
 import { MarkdownTextPrimitive } from '@assistant-ui/react-markdown'
 import type { Domain } from '../domain/types'
 import { copyText } from '../clipboard'
+import { holdUpdates } from '../appUpdate'
 import { autoModel, effortOptions, modelShortName, type AppSettings } from '../settings'
 import { Icon } from '../navIcons'
 import { Empty } from '../ui'
@@ -125,6 +126,8 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
   const [conversation, setConversation] = useState<CompanionConversation>(() => (keepContextBySpace[domain] ? loadHistory(domain)[0] : undefined) ?? newConversation())
   const [history, setHistory] = useState<CompanionConversation[]>()
   const [sending, setSending] = useState(false)
+  // A reload would cut off an answer that is still arriving.
+  useEffect(() => (sending ? holdUpdates() : undefined), [sending])
   const [openedId, setOpenedId] = useState<string>()
   // Under auto, the model that answered last, shown beside the choice.
   const [answeredBy, setAnsweredBy] = useState<string>()

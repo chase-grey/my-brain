@@ -30,6 +30,8 @@ import { ProgressView } from './views/ProgressView'
 import { GoalsView, type GoalEdit } from './views/GoalsView'
 import { StoresView } from './views/StoresView'
 import { SettingsView, type ConnectionStatus } from './views/SettingsView'
+import { UpdateToast } from './views/UpdateToast'
+import { checkForUpdate, holdUpdates, useAppUpdate } from './appUpdate'
 import { TaskPage } from './views/TaskPage'
 import { TripsView } from './views/TripsView'
 import { UsageView } from './views/UsageView'
@@ -166,6 +168,7 @@ const accountPushDelayMs = 1500
 
 export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff, onKickoffUsed }: { activeDomain: Domain; onDomain: (domain: Domain) => void; account: DeviceAccount; onAccount: (account: DeviceAccount) => void; kickoff?: string; onKickoffUsed?: () => void }) {
   const [view, setView] = useState<View>(() => parseHash().view)
+  const { ready: updateReady } = useAppUpdate()
   const [docked, setDocked] = useState(() => typeof matchMedia === 'function' && matchMedia(dockedQuery).matches)
   const [tasks, setTasks] = useState<Task[]>(() => loadTasks(activeDomain, account.owner))
   const [availableMin, setAvailableMin] = useState<number>(60)
@@ -275,6 +278,9 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
     setEditingTaskId(undefined)
     setView('task')
   }
+
+  // A task being written is lost by a reload, so the app does not update itself under it.
+  useEffect(() => (view === 'task' ? holdUpdates() : undefined), [view])
 
   useEffect(() => {
     const desired = hashFor(view, editingTaskId)
@@ -731,6 +737,7 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
   const strategicTodayMin = product.activities.filter((item) => item.domain === activeDomain && item.kind === 'strategic' && item.occurredAt.slice(0, 10) === currentDay).reduce((sum, item) => sum + (item.minutes ?? 0), 0)
   const primaryViews = primaryViewsFor(activeDomain)
   const moreItems = [
+    ...(updateReady ? [{ label: 'update ready · restart', onSelect: () => void checkForUpdate() }] : []),
     ...(activeDomain === 'personal' ? [{ label: 'stores', onSelect: () => setView('stores') }, { label: 'trips', onSelect: () => setView('trips') }] : [{ label: 'progress', onSelect: () => setView('progress') }]),
     { label: 'goals', onSelect: () => setView('goals') },
     { label: 'usage', onSelect: () => setView('usage') },
@@ -746,7 +753,7 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
   return <div className={`app${docked ? ' is-docked' : ''}`}>
     <nav className="rail" aria-label="primary">
       {primaryViews.filter((item) => !(docked && item.view === 'chat')).map(navButton)}
-      <div className="rail-more"><Menu label="more" align="start" items={moreItems}><Icon name="more" /><span>more</span></Menu></div>
+      <div className="rail-more"><Menu label="more" align="start" items={moreItems}><Icon name="more" /><span>more</span>{updateReady && <i className="nav-dot" aria-hidden="true" />}</Menu></div>
     </nav>
 
     <div className="main">
@@ -790,10 +797,11 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
 
       {shownView !== 'task' && <nav className="tabbar" aria-label="primary">
         {primaryViews.map(navButton)}
-        <Menu label="more" items={moreItems}><Icon name="more" /><span>more</span></Menu>
+        <Menu label="more" items={moreItems}><Icon name="more" /><span>more</span>{updateReady && <i className="nav-dot" aria-hidden="true" />}</Menu>
       </nav>}
     </div>
 
     {docked && <aside className="dock">{chat}</aside>}
+    <UpdateToast />
   </div>
 }

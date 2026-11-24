@@ -1,55 +1,58 @@
-import { describe, expect, it, vi } from 'vitest'
-import { pullNewWorker } from './appUpdate'
+import { describe, expect, it } from 'vitest'
+import { afterReloadToast, entryScript, idleMs, isNewBuild, isQuietMoment, type Moment } from './appUpdate'
 
-function fakeContainer(reg: { installing?: unknown; waiting?: unknown }) {
-  const listeners: (() => void)[] = []
-  const registration = { installing: reg.installing ?? null, waiting: reg.waiting ?? null, update: vi.fn(async () => undefined) }
-  return {
-    registration,
-    takeOver: () => listeners.forEach((listener) => listener()),
-    sw: {
-      addEventListener: (_type: 'controllerchange', listener: () => void) => { listeners.push(listener) },
-      getRegistrations: async () => [registration],
-    },
-  }
-}
+const page = (name: string) => `<head><link rel="icon" href="/app/icons/app-icon.svg" /><script type="module" crossorigin src="/app/assets/${name}.js"></script><link rel="stylesheet" href="/app/assets/index-a.css"></head>`
 
-describe('pullNewWorker', () => {
-  it('waits for the new worker to take over before resolving', async () => {
-    const { sw, takeOver } = fakeContainer({ installing: {} })
-    let done = false
-    const pull = pullNewWorker(sw).then(() => { done = true })
-    await Promise.resolve()
-    await Promise.resolve()
-    expect(done).toBe(false)
-    takeOver()
-    await pull
-    expect(done).toBe(true)
+describe('finding a newer build', () => {
+  it('reads the entry script out of the published page', () => {
+    expect(entryScript(page('index-abc123'))).toBe('/app/assets/index-abc123.js')
+    expect(entryScript('<html></html>')).toBeUndefined()
   })
 
-  it('resolves right away when there is no newer worker', async () => {
-    const { sw, registration } = fakeContainer({})
-    await pullNewWorker(sw, 0)
-    expect(registration.update).toHaveBeenCalledOnce()
+  it('sees a new build only when the published page names another one', () => {
+    expect(isNewBuild(page('index-new'), '/app/assets/index-old.js')).toBe(true)
+    expect(isNewBuild(page('index-old'), '/app/assets/index-old.js')).toBe(false)
+    // A page that could not be read, or a dev server with no built script, is never a new build.
+    expect(isNewBuild('<html></html>', '/app/assets/index-old.js')).toBe(false)
+    expect(isNewBuild(page('index-new'), undefined)).toBe(false)
+  })
+})
+
+describe('isQuietMoment', () => {
+  const inUse: Moment = { hidden: false, held: false, touchedSinceShown: true, idleMs: 1000 }
+
+  it('never reloads under someone using the app', () => {
+    expect(isQuietMoment(inUse)).toBe(false)
   })
 
-  it('gives up waiting after the timeout so the reload still happens', async () => {
-    vi.useFakeTimers()
-    try {
-      const { sw } = fakeContainer({ waiting: {} })
-      const pull = pullNewWorker(sw, 10_000)
-      await vi.advanceTimersByTimeAsync(10_000)
-      await expect(pull).resolves.toBeUndefined()
-    } finally {
-      vi.useRealTimers()
-    }
+  it('reloads while the app is off screen', () => {
+    expect(isQuietMoment({ ...inUse, hidden: true })).toBe(true)
   })
 
-  it('still waits when the update check fails', async () => {
-    const { sw, registration, takeOver } = fakeContainer({ installing: {} })
-    registration.update.mockRejectedValueOnce(new Error('offline'))
-    const pull = pullNewWorker(sw)
-    takeOver()
-    await expect(pull).resolves.toBeUndefined()
+  it('reloads on the way back in, before anything is touched', () => {
+    expect(isQuietMoment({ ...inUse, touchedSinceShown: false })).toBe(true)
+  })
+
+  it('reloads once the app has been left alone', () => {
+    expect(isQuietMoment({ ...inUse, idleMs: idleMs - 1 })).toBe(false)
+    expect(isQuietMoment({ ...inUse, idleMs })).toBe(true)
+  })
+
+  it('never reloads over something half-done, however quiet it is', () => {
+    expect(isQuietMoment({ hidden: true, held: true, touchedSinceShown: false, idleMs: idleMs * 10 })).toBe(false)
+  })
+})
+
+describe('afterReloadToast', () => {
+  it('says nothing on a load the settings button did not ask for', () => {
+    expect(afterReloadToast(null, 'abc1234')).toBeNull()
+  })
+
+  it('names the new build when the reload landed one', () => {
+    expect(afterReloadToast('abc1234', 'def5678')).toBe('updated to def5678')
+  })
+
+  it('says you are current when the reload landed the same build', () => {
+    expect(afterReloadToast('abc1234', 'abc1234')).toBe('you’re on the latest version')
   })
 })

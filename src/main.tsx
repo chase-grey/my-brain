@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import App from './App'
 import './styles.css'
 import { followAppLinks, isNativeApp } from './native/platform'
+import { watchForUpdates } from './appUpdate'
 
 /** Microsoft sends the sign-in popup, and the hidden frame that renews a sign-in, back to this page with the result in the url. */
 function isSignInResponse(): boolean {
@@ -26,6 +27,9 @@ function startApp(): void {
   )
 
   void followAppLinks()
+
+  // The android shell carries its own copy of the app, so there is no published page to compare with.
+  if (import.meta.env.PROD && !isNativeApp()) watchForUpdates()
 
   // The android shell serves the app itself and intercepts fetches, so a service worker would only get in the way.
   if ('serviceWorker' in navigator && import.meta.env.PROD && !isNativeApp()) {

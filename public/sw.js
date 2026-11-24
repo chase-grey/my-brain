@@ -25,10 +25,13 @@ self.addEventListener('fetch', (event) => {
   }
 
   if (event.request.method !== 'GET') return
+  // The update check asks for the published page past every cache; a cached answer would hide a new deploy.
+  if (event.request.cache === 'no-store') return
 
   if (event.request.mode === 'navigate') {
     event.respondWith(
-      fetch(event.request)
+      // The host lets the browser reuse the page for ten minutes; asking it to check keeps a new deploy from hiding behind that.
+      fetch(event.request, { cache: 'no-cache' })
         .then((response) => {
           const copy = response.clone()
           caches.open(cacheName).then((cache) => cache.put('./', copy))
