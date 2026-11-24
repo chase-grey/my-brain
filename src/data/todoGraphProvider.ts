@@ -51,7 +51,8 @@ export class TodoGraphProvider implements TaskProvider {
   constructor(private readonly graph: GraphClient) {}
 
   async listTaskLists(): Promise<GraphTaskList[]> {
-    return await this.graph.collection<GraphTaskList>('/me/todo/lists?$select=id,displayName,wellknownListName')
+    // No $select on To Do: for a personal account Graph answers 400 invalidRequest (RequestBroker--ParseUri).
+    return await this.graph.collection<GraphTaskList>('/me/todo/lists')
   }
 
   async defaultListId(): Promise<string> {
@@ -64,7 +65,7 @@ export class TodoGraphProvider implements TaskProvider {
   async listTasks(): Promise<ProviderTask[]> {
     const lists = await this.listTaskLists()
     const taskGroups = await Promise.all(lists.map(async (list) => {
-      const path = `/me/todo/lists/${encode(list.id)}/tasks?$select=id,title,status,dueDateTime`
+      const path = `/me/todo/lists/${encode(list.id)}/tasks`
       const tasks = await this.graph.collection<GraphTodoTask>(path)
       return tasks.map((task) => toProviderTask(task, list.id))
     }))

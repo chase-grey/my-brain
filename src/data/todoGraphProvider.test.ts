@@ -25,8 +25,8 @@ describe('microsoft to-do provider', () => {
       id: 'task-one', providerListId: 'list/a', domain: 'personal', title: 'call dentist',
       dueDate: '2026-09-10', completed: false,
     }])
-    expect(graph.collection).toHaveBeenNthCalledWith(1, '/me/todo/lists?$select=id,displayName,wellknownListName')
-    expect(graph.collection).toHaveBeenLastCalledWith('/me/todo/lists/list%2Fa/tasks?$select=id,title,status,dueDateTime')
+    expect(graph.collection).toHaveBeenNthCalledWith(1, '/me/todo/lists')
+    expect(graph.collection).toHaveBeenLastCalledWith('/me/todo/lists/list%2Fa/tasks')
   })
 
   it('maps completion back to graph', async () => {
