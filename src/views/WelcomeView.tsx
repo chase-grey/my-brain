@@ -51,11 +51,9 @@ export function WelcomeView({ onDone }: { onDone: (account: DeviceAccount, setti
   const checking = useRef(false)
   // Android: chrome's install dialog, or the way over to chrome, offered before anything is typed. iOS gets "install first" above.
   const install = useInstallPrompt()
-  const installButton = install.installed
-    ? <p className="note">installed. open my brain from your apps</p>
-    : install.offer === 'prompt'
-    ? <button className="primary" type="button" onClick={() => void install.install()}>install app</button>
-    : install.offer === 'chrome' && <button className="primary" type="button" onClick={openInChrome}>open in chrome</button>
+  const [installSkipped, setInstallSkipped] = useState(false)
+  // One thing to do at a time: the install while there is one to do, and connecting only after it.
+  const installStep = !installSkipped && (install.installed || install.offer === 'prompt' || install.offer === 'chrome')
 
   function fail(caught: unknown, fallback: string): void {
     setError(caught instanceof Error ? caught.message.toLowerCase() : fallback)
@@ -147,11 +145,18 @@ export function WelcomeView({ onDone }: { onDone: (account: DeviceAccount, setti
       <h1>my brain</h1>
       <div className="welcome-fill" />
       {error && <p className="note is-error" role="alert">{error}</p>}
-      <div className="actions welcome-actions">
-        {installButton}
-        <button className={installButton ? 'secondary' : 'primary'} disabled={busy} type="button" onClick={() => void connect()}>{busy ? 'connecting' : 'connect microsoft'}</button>
-        <button className="plain" disabled={busy} type="button" onClick={() => setStep('name')}>skip</button>
-      </div>
+      {installStep && install.installed && <p className="note is-good" role="status">✓ installed! search for My Brain from your apps to open</p>}
+      {installStep
+        ? <div className="actions welcome-actions">
+          {!install.installed && (install.offer === 'prompt'
+            ? <button className="primary" type="button" onClick={() => void install.install()}>install app</button>
+            : <button className="primary" type="button" onClick={openInChrome}>open in chrome</button>)}
+          <button className="plain" type="button" onClick={() => setInstallSkipped(true)}>skip</button>
+        </div>
+        : <div className="actions welcome-actions">
+          <button className="primary" disabled={busy} type="button" onClick={() => void connect()}>{busy ? 'connecting' : 'connect microsoft'}</button>
+          <button className="plain" disabled={busy} type="button" onClick={() => setStep('name')}>skip</button>
+        </div>}
     </main>
   }
 

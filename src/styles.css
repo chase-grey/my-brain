@@ -10,6 +10,7 @@
   --on-accent: light-dark(#ffffff, #0f0f14);
   --loud: light-dark(#b45309, #f0a23a);
   --danger: light-dark(#b42318, #f08080);
+  --good: light-dark(#15803d, #5fd38d);
   --radius: 12px;
   --rail: 5rem;
   --tabbar: calc(3.6rem + env(safe-area-inset-bottom));
@@ -100,6 +101,7 @@ button.row-main { min-height: 3rem; }
 .empty { padding: 0.35rem 0 0.6rem; color: var(--muted); }
 .note { padding: 0.25rem 0 0.5rem; color: var(--muted); font-size: 0.9rem; }
 .note.is-error { color: var(--danger); }
+.note.is-good { color: var(--good); font-size: 1rem; text-align: center; }
 .fit { padding: 0.5rem 0 0.4rem; color: var(--muted); font-size: 0.85rem; font-variant-numeric: tabular-nums; }
 .ledger { padding: 0.25rem 0; color: var(--muted); font-size: 0.85rem; text-align: center; font-variant-numeric: tabular-nums; }
 .link { color: var(--accent); font-weight: 500; }
