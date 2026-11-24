@@ -19,8 +19,12 @@ export type RingArc = {
   focus: boolean
 }
 
-// Most important first, related areas side by side. Every list and the wheel read this order.
+// Most important first, related areas side by side. Lists read this order.
 export const RING_DOMAINS: LifeDomain[] = ['body', 'rest', 'connection', 'purpose', 'mind', 'creativity', 'projects', 'money']
+
+// The wheel, clockwise from 10:30. Importance falls away from the top left down both sides
+// to the bottom right, and related areas still sit side by side.
+export const WHEEL_CLOCKWISE: LifeDomain[] = ['body', 'rest', 'mind', 'creativity', 'money', 'projects', 'purpose', 'connection']
 
 function median(values: number[]): number | undefined {
   if (!values.length) return undefined

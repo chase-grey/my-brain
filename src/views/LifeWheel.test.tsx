@@ -19,6 +19,20 @@ it('draws one slice per life domain with its fill in the label', () => {
   expect(html).toContain('is-dormant')
 })
 
+it('puts the most important area top left and the least bottom right', () => {
+  const html = renderToStaticMarkup(<LifeWheel arcs={ring} onSelect={() => {}} />)
+  const at = (area: string) => {
+    const [, x, y] = html.match(new RegExp(`x="(-?[\\d.]+)" y="(-?[\\d.]+)"[^>]*>${area}<`))!
+    return { x: Number(x), y: Number(y) }
+  }
+  expect(at('body').x).toBeLessThan(0)
+  expect(at('body').y).toBeLessThan(0)
+  expect(at('money').x).toBeGreaterThan(0)
+  expect(at('money').y).toBeGreaterThan(0)
+  expect(html.indexOf('>body<')).toBeLessThan(html.indexOf('>rest<'))
+  expect(html.indexOf('>projects<')).toBeLessThan(html.indexOf('>connection<'))
+})
+
 it('reads healthier slices as more of their own hue', () => {
   const body = ring.find((arc) => arc.domain === 'body')!
   const mind = ring.find((arc) => arc.domain === 'mind')!
