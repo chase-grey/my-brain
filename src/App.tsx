@@ -27,6 +27,8 @@ import { useKeyboardInset } from './useKeyboardInset'
 import { pushWidget, widgetSnapshot } from './native/widget'
 import { TodayView } from './views/TodayView'
 import { ProgressView } from './views/ProgressView'
+import { bumpsBetween, recordBumps } from './review/bumpLog'
+import { useReviews } from './review/useReviews'
 import { GoalsView, type GoalEdit } from './views/GoalsView'
 import { StoresView } from './views/StoresView'
 import { SettingsView, type ConnectionStatus } from './views/SettingsView'
@@ -308,6 +310,8 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
 
   function commitTasks(next: Task[]): void {
     const scoped = next.filter((task) => task.domain === activeDomain)
+    // Every path that moves a task's day passes through here, so this is where a bump is seen.
+    recordBumps(activeDomain, bumpsBetween(tasksRef.current, scoped, currentDay), currentDay)
     tasksRef.current = scoped
     setTasks(scoped)
     try {
@@ -732,6 +736,7 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
   }
 
   const shownView: View = docked && view === 'chat' ? 'today' : view
+  const reviews = useReviews({ domain: activeDomain, currentDay, tasks, product, settings, notesVault: connectionStatus === 'connected' ? personalData?.notes : undefined, userName: account.name })
   const untriaged = tasks.filter((task) => task.domain === activeDomain && task.metadataComplete === false && !task.completed && !task.storeType)
   const floorToday = product.dayOverrides.some((item) => item.domain === activeDomain && item.date === currentDay && item.kind === 'floor')
   const strategicTodayMin = product.activities.filter((item) => item.domain === activeDomain && item.kind === 'strategic' && item.occurredAt.slice(0, 10) === currentDay).reduce((sum, item) => sum + (item.minutes ?? 0), 0)
@@ -785,7 +790,7 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
           untriaged={untriaged} openCount={openTasks.length} openMin={openEstimate} onToggle={toggleComplete} onOpen={editTask}
           calendar={activeDomain === 'personal' ? eventsOn(calendarEvents, currentDay) : []} inbox={activeDomain === 'personal' ? inboxCounts : undefined} mailAppUrl={activeDomain === 'personal' ? settings.mailAppUrl : ''} />}
         {shownView === 'dashboard' && <WorkScreens currentDay={currentDay} />}
-        {shownView === 'progress' && <ProgressView domain={activeDomain} product={product} currentDay={currentDay} heldEvents={heldEvents} onProduct={setProduct} onGoals={() => setView('goals')} />}
+        {shownView === 'progress' && <ProgressView domain={activeDomain} product={product} currentDay={currentDay} heldEvents={heldEvents} onProduct={setProduct} onGoals={() => setView('goals')} onReview={reviews.open} />}
         {shownView === 'chat' && chat}
         {shownView === 'goals' && <GoalsView domain={activeDomain} product={product} tasks={tasks} currentDay={currentDay} heldEvents={heldEvents} canHold={activeDomain === 'personal' && connectionStatus === 'connected'} holdError={syncError} onProduct={setProduct} onEditGoal={(id, changes) => { updateGoal(id, changes) }} onHold={(id) => holdAction(() => holdGoal(id))} onRelease={(id) => holdAction(() => releaseGoal(id))} />}
         {shownView === 'stores' && <StoresView activeStore={activeStore} tasks={tasks} onStore={setActiveStore} onToggle={toggleComplete} onAdd={addTask} />}
@@ -802,6 +807,7 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
     </div>
 
     {docked && <aside className="dock">{chat}</aside>}
+    {reviews.overlay}
     <UpdateToast />
   </div>
 }

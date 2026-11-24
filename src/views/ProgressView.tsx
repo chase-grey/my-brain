@@ -7,6 +7,7 @@ import { buildWeekReceipt } from '../domain/receipt'
 import type { Domain, Goal, LifeDomain, RestCheckIn } from '../domain/types'
 import { hours, newId, shortDate, today } from '../format'
 import type { ProductState } from '../productState'
+import { reviewKinds, type ReviewKind } from '../review/period'
 import { Icon } from '../navIcons'
 import { Card, Empty, Field, Menu, Sheet } from '../ui'
 import { LifeWheel, wheelHue } from './LifeWheel'
@@ -53,13 +54,14 @@ function GoalRow({ goal, product, currentDay, held, onOpen }: { goal: Goal; prod
   </li>
 }
 
-export function ProgressView({ domain, product, currentDay, heldEvents, onProduct, onGoals }: {
+export function ProgressView({ domain, product, currentDay, heldEvents, onProduct, onGoals, onReview }: {
   domain: Domain
   product: ProductState
   currentDay: string
   heldEvents: Record<string, CalendarBlock>
   onProduct: React.Dispatch<React.SetStateAction<ProductState>>
   onGoals: () => void
+  onReview?: (kind: ReviewKind) => void
 }) {
   const [log, setLog] = useState<LogKind>()
   const [slice, setSlice] = useState<LifeDomain | undefined>(sliceFromHash)
@@ -96,10 +98,13 @@ export function ProgressView({ domain, product, currentDay, heldEvents, onProduc
         : <h1>progress</h1>}
       {domain === 'personal' && <LifeWheel arcs={ring} selected={open?.domain} compact={!!open} onSelect={openSlice} />}
       {open && <h1 className="slice-title">{open.domain}</h1>}
-      {domain === 'personal' && <Menu items={[
-        { label: 'saw someone', onSelect: () => setLog('connection') },
-        { label: 'this month’s money', onSelect: () => setLog('money') },
-        { label: 'rest check-in', onSelect: () => setLog('rest') },
+      {(domain === 'personal' || onReview) && <Menu items={[
+        ...(domain === 'personal' ? [
+          { label: 'saw someone', onSelect: () => setLog('connection') },
+          { label: 'this month’s money', onSelect: () => setLog('money') },
+          { label: 'rest check-in', onSelect: () => setLog('rest') },
+        ] : []),
+        ...(onReview ? reviewKinds.map((kind) => ({ label: `${kind} in review`, onSelect: () => onReview(kind) })) : []),
       ]} />}
     </header>
 
