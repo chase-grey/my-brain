@@ -22,6 +22,8 @@ export type ProviderTask = {
   title: string
   dueDate?: string
   completed: boolean
+  /** When the provider first had it. Old unsorted tasks are not offered for sorting. */
+  createdAt?: string
 }
 
 export type TaskMeta = {

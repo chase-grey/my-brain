@@ -15,7 +15,7 @@ describe('microsoft to-do provider', () => {
     vi.mocked(graph.collection)
       .mockResolvedValueOnce([{ id: 'list/a', displayName: 'tasks' }])
       .mockResolvedValueOnce([{
-        id: 'task-one', title: 'call dentist', status: 'notStarted',
+        id: 'task-one', title: 'call dentist', status: 'notStarted', createdDateTime: '2026-09-01T08:00:00Z',
         dueDateTime: { dateTime: '2026-09-10T00:00:00', timeZone: 'UTC' },
       }])
 
@@ -23,7 +23,7 @@ describe('microsoft to-do provider', () => {
 
     expect(tasks).toEqual([{
       id: 'task-one', providerListId: 'list/a', domain: 'personal', title: 'call dentist',
-      dueDate: '2026-09-10', completed: false,
+      dueDate: '2026-09-10', completed: false, createdAt: '2026-09-01T08:00:00Z',
     }])
     expect(graph.collection).toHaveBeenNthCalledWith(1, '/me/todo/lists')
     expect(graph.collection).toHaveBeenLastCalledWith('/me/todo/lists/list%2Fa/tasks')

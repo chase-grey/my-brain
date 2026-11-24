@@ -18,6 +18,7 @@ type GraphTodoTask = {
   title: string
   status: 'notStarted' | 'inProgress' | 'completed' | 'waitingOnOthers' | 'deferred'
   dueDateTime?: GraphDateTime
+  createdDateTime?: string
 }
 
 function encode(value: string): string {
@@ -32,6 +33,7 @@ function toProviderTask(task: GraphTodoTask, listId: string): ProviderTask {
     title: task.title,
     dueDate: task.dueDateTime?.dateTime.slice(0, 10),
     completed: task.status === 'completed',
+    createdAt: task.createdDateTime,
   }
 }
 

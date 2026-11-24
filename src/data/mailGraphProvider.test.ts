@@ -11,4 +11,11 @@ describe('inbox glance', () => {
     expect(counts).toEqual({ unread: 12, total: 40, flagged: 2 })
     for (const call of request.mock.calls) expect(call[1] ?? {}).not.toHaveProperty("method")
   })
+
+  it('counts only flags on mail from the last thirty days', async () => {
+    const request = vi.fn(async (path: string) => path.includes('/messages') ? { value: [] } : { unreadItemCount: 0, totalItemCount: 0 })
+    await new MailGraphProvider({ request } as unknown as GraphClient).inboxCounts('2026-11-24T12:00:00.000Z')
+    const query = new URL(`https://x${request.mock.calls.find((call) => call[0].includes('/messages'))![0]}`).searchParams
+    expect(query.get('$filter')).toBe("flag/flagStatus eq 'flagged' and receivedDateTime ge 2026-10-25T12:00:00.000Z")
+  })
 })

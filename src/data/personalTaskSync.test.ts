@@ -30,6 +30,20 @@ describe('personal task sync', () => {
     expect(merged[0]).toMatchObject({ estimateMin: 30, metadataComplete: false })
   })
 
+  it('leaves old unsorted tasks in to-do, and keeps old ones already sorted', () => {
+    const now = '2026-11-24T12:00:00.000Z'
+    const old: ProviderTask = { ...provider, id: 'old', title: 'renew passport', createdAt: '2019-03-02T09:00:00Z' }
+    const recent: ProviderTask = { ...provider, id: 'recent', createdAt: '2026-11-20T09:00:00Z' }
+    const undated: ProviderTask = { ...provider, id: 'undated' }
+    const sorted: ProviderTask = { ...provider, createdAt: '2019-03-02T09:00:00Z' }
+
+    expect(mergePersonalTasks([old, recent, undated, sorted], [meta], [], now).map((task) => task.id)).toEqual(['provider', 'recent', 'undated'])
+    // An earlier sync saved a record for the old task while it was still waiting to be sorted.
+    const saved: TaskMeta = { ...meta, taskId: 'old', metadataComplete: false }
+    expect(mergePersonalTasks([old], [saved], [], now)).toEqual([])
+    expect(mergePersonalTasks([{ ...old, completed: true }], [saved], [], now)).toHaveLength(1)
+  })
+
   it('preserves multiline notes and clearing notes through metadata sync', () => {
     const notes = 'Call Alex\nAsk about the PC setup: https://example.com'
     const task: Task = { ...provider, ...meta, notes }
