@@ -118,6 +118,15 @@ describe('facts', () => {
     expect(facts.lines).toContain('people seen: 1')
   })
 
+  it('reads the body area from workout-tracker when it has a summary, not from a target', () => {
+    const bodyTracker = { v: 1 as const, asOf: '2026-11-22', streak: 11, freezes: 4, weeksTracked: 16, weeks: [{ week: '2026-11-09', result: 'hit' as const }, { week: '2026-11-16', result: 'hit' as const }], goals: { open: 3, onPace: 3, met: 0 } }
+    const tracked = buildFacts({ domain: 'personal', period: week, today: '2026-11-23', tasks, product: { ...product, bodyTracker }, bumps })
+    expect(tracked.lines).toContain('life area body (importance 3 of 8): 1 of 1 weeks hit every training goal, 11 week streak, 3 of 3 committed goals on pace')
+    expect(tracked.lines.some((line) => line.includes('logged against'))).toBe(false)
+    const later = buildFacts({ domain: 'personal', period: week, today: '2026-11-23', tasks, product: { ...product, bodyTracker: { ...bodyTracker, asOf: '2026-12-01' } }, bumps })
+    expect(later.lines).toContain('life area body (importance 3 of 8): 1 of 1 weeks hit every training goal')
+  })
+
   it('says what the coming week already holds', () => {
     expect(facts.next).toEqual(['finish the deck · 22.8h behind', 'draft the deck · due nov 24', 'call the bank · due nov 26'])
   })

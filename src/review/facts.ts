@@ -108,6 +108,17 @@ export function buildFacts({ domain, period, today, tasks, product, bumps }: Fac
   const days = Math.max(1, Math.round((Date.parse(addDays(lastDay, 1)) - Date.parse(period.start)) / 86_400_000))
   const areas = RING_DOMAINS.filter((area) => !product.ringOff.includes(area))
   areas.forEach((area, index) => {
+    if (area === 'body' && product.bodyTracker) {
+      const tracker = product.bodyTracker
+      const weeks = tracker.weeks.filter((item) => !item.inProgress && inPeriod(period, item.week))
+      const said = weeks.length ? [`${weeks.filter((item) => item.result === 'hit').length} of ${weeks.length} weeks hit every training goal`] : []
+      if (inPeriod(period, tracker.asOf)) {
+        if (tracker.streak > 0) said.push(`${tracker.streak} week streak`)
+        if (tracker.goals.open > 0) said.push(`${tracker.goals.onPace} of ${tracker.goals.open} committed goals on pace`)
+      }
+      if (said.length) lines.push(`life area body (importance ${index + 1} of ${areas.length}): ${said.join(', ')}`)
+      return
+    }
     const promised = product.ringCommitments.find((item) => item.domain === area)?.commitment28 ?? 0
     if (!promised) return
     const logged = product.ringEvidence.filter((item) => item.domain === area && inPeriod(period, item.on)).reduce((sum, item) => sum + item.value, 0)

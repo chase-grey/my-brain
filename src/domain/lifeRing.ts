@@ -1,3 +1,4 @@
+import type { BodyReading } from './bodyTracker'
 import type { LifeDomain } from './types'
 
 export type RingEvidence = {
@@ -17,6 +18,8 @@ export type RingArc = {
   drift?: number
   state: 'unknown' | 'dormant' | 'establishing' | 'early-signal' | 'ready'
   focus: boolean
+  /** Set on the body slice when workout-tracker is the source: the slice reads this, not a 28-day target. */
+  tracker?: BodyReading
 }
 
 // Chase's order, 2026-11-24. Lists read it top to bottom; the wheel runs it clockwise starting at 9 o'clock.
@@ -29,10 +32,14 @@ function median(values: number[]): number | undefined {
   return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2
 }
 
-/** Areas in `off` are left out of the ring altogether. */
-export function buildLifeRing(evidence: RingEvidence[], commitments: RingCommitment[], today: string, off: LifeDomain[] = []): RingArc[] {
+/** Areas in `off` are left out of the ring altogether. With `body`, the body slice is workout-tracker's reading and needs no target. */
+export function buildLifeRing(evidence: RingEvidence[], commitments: RingCommitment[], today: string, off: LifeDomain[] = [], body?: BodyReading): RingArc[] {
   const todayMs = new Date(`${today}T00:00:00Z`).getTime()
   return RING_DOMAINS.filter((domain) => !off.includes(domain)).map((domain) => {
+    if (domain === 'body' && body) {
+      const state = body.weeksTracked < 12 ? 'establishing' : body.weeksTracked < 26 ? 'early-signal' : 'ready'
+      return { domain, fill: body.fill, state, focus: false, tracker: body }
+    }
     const commitment = commitments.find((item) => item.domain === domain)?.commitment28 ?? 0
     if (commitment === 0) return { domain, state: 'dormant', focus: false }
     const domainEvidence = evidence.filter((item) => item.domain === domain && item.on <= today)

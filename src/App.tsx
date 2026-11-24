@@ -15,6 +15,7 @@ import { buildWeekReceipt } from './domain/receipt'
 import { toggleHabitPart } from './domain/habits'
 import type { Domain, Energy, Goal, Place, Priority, StoreType, Task } from './domain/types'
 import { loadProductState, saveProductState, type ProductState } from './productState'
+import { readTrackerSummary } from './domain/bodyTracker'
 import { loadSettings, saveSettings, type AppSettings } from './settings'
 import { applyDeviceSetup, loadAccount, saveAccount, setupFromHash, showsWork, type DeviceAccount } from './account'
 import { accountFile, accountFileFrom, mergeAccountFile, type AccountFile } from './settingsSync'
@@ -275,6 +276,19 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
   useEffect(() => saveSettings(settings, activeDomain), [settings])
 
   useEffect(() => saveProductState(product, activeDomain), [product])
+
+  // The body slice follows workout-tracker: pick up its summary on open and whenever the app comes back to the front.
+  useEffect(() => {
+    if (activeDomain !== 'personal') return
+    const read = () => {
+      const summary = readTrackerSummary()
+      if (summary) setProduct((current) => JSON.stringify(current.bodyTracker) === JSON.stringify(summary) ? current : { ...current, bodyTracker: summary })
+    }
+    read()
+    const onVisible = () => { if (document.visibilityState === 'visible') read() }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [])
 
   function startAddingTask() {
     setEditingTaskId(undefined)

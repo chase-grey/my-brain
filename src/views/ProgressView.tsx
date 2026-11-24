@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { CalendarBlock } from '../data/calendarGraphProvider'
+import { bodyReading } from '../domain/bodyTracker'
 import { timeRange } from '../domain/calendar'
 import { goalProgress } from '../domain/goals'
 import { buildLifeRing, RING_DOMAINS, type RingArc } from '../domain/lifeRing'
@@ -88,7 +89,7 @@ export function ProgressView({ domain, product, currentDay, heldEvents, onProduc
   const commitment = [...product.commitments].reverse().find((item) => item.domain === domain)
   const receipt = commitment ? buildWeekReceipt(commitment, product.activities.filter((item) => item.domain === domain), product.dayOverrides) : undefined
   const waiting = product.delegations.filter((item) => item.domain === domain && item.status !== 'delivered')
-  const ring = domain === 'personal' ? buildLifeRing(product.ringEvidence, product.ringCommitments, currentDay, product.ringOff) : []
+  const ring = domain === 'personal' ? buildLifeRing(product.ringEvidence, product.ringCommitments, currentDay, product.ringOff, product.bodyTracker && bodyReading(product.bodyTracker, currentDay)) : []
   const open = domain === 'personal' ? ring.find((arc) => arc.domain === slice) : undefined
 
   return <>
@@ -134,7 +135,24 @@ function stateLabel(state: RingArc['state']): string {
   return state === 'early-signal' ? 'early signal' : state
 }
 
+function TrackerDetail({ arc }: { arc: RingArc }) {
+  const body = arc.tracker!
+  const weeks = `${body.weeksHit} of ${body.weeksJudged}`
+  return <Card className="slice-detail" title="last 4 weeks">
+    <p className="slice-stat">{body.streak
+      ? <><strong>{body.streak}</strong> week streak</>
+      : <><strong>{weeks}</strong> weeks hit</>}</p>
+    <div className="slice-bar" style={{ '--hue': wheelHue[arc.domain] } as React.CSSProperties}><Bar fraction={body.fill} /></div>
+    <ul className="slice-facts">
+      {body.streak ? <li><span>weeks hit</span><small>{weeks}</small></li> : null}
+      {body.goalsOpen > 0 && <li><span>goals on pace</span><small>{body.goalsOnPace} of {body.goalsOpen}</small></li>}
+      {body.goalsMet > 0 && <li><span>goals met</span><small>{body.goalsMet}</small></li>}
+    </ul>
+  </Card>
+}
+
 function SliceDetail({ arc, onGoals }: { arc: RingArc; onGoals: () => void }) {
+  if (arc.tracker) return <TrackerDetail arc={arc} />
   const drift = arc.drift === undefined ? undefined : Math.round(arc.drift * 100)
   return <Card className="slice-detail" title="last 28 days">
     {arc.fill === undefined

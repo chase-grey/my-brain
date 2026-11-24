@@ -14,6 +14,7 @@ import type {
   TravelWindow,
 } from './domain/types'
 import type { RingCommitment, RingEvidence } from './domain/lifeRing'
+import type { TrackerSummary } from './domain/bodyTracker'
 import type { LifeDomain } from './domain/types'
 import { defaultPersonalHabits } from './domain/habits'
 
@@ -34,6 +35,8 @@ export type ProductState = {
   restCheckIns: RestCheckIn[]
   moneySnapshots: MoneySnapshot[]
   people: PersonRef[]
+  /** The last summary read from workout-tracker; the body slice and reviews read it. */
+  bodyTracker?: TrackerSummary
 }
 
 export const emptyProductState: ProductState = {
@@ -69,6 +72,7 @@ export function scopeProductState(state: ProductState, domain: Domain): ProductS
     scoped.restCheckIns = []
     scoped.moneySnapshots = []
     scoped.people = []
+    delete scoped.bodyTracker
   }
   return scoped
 }
@@ -97,9 +101,9 @@ export function loadProductState(domain: Domain, seedHabits = true): ProductStat
 export function saveProductState(state: ProductState, domain: Domain): void {
   try {
     const scoped = scopeProductState(state, domain)
-    const { ringEvidence, ringCommitments, ringOff, restCheckIns, moneySnapshots, people, ...common } = scoped
+    const { ringEvidence, ringCommitments, ringOff, restCheckIns, moneySnapshots, people, bodyTracker, ...common } = scoped
     localStorage.setItem(storageKey(domain), JSON.stringify(domain === 'personal'
-      ? { ...common, ringEvidence, ringCommitments, ringOff, restCheckIns, moneySnapshots, people }
+      ? { ...common, ringEvidence, ringCommitments, ringOff, restCheckIns, moneySnapshots, people, bodyTracker }
       : common))
   } catch {
     // The active in-memory state remains usable.
