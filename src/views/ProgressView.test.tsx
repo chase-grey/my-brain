@@ -17,6 +17,14 @@ it('shows the wheel above the week and goals on personal, and bars only on work'
   expect(render('work')).not.toContain('life wheel')
 })
 
+it('drops a switched-off area from the wheel and will not open it', () => {
+  vi.stubGlobal('location', { hash: '#progress/projects' })
+  const html = renderToStaticMarkup(<ProgressView domain="personal" product={{ ...product, ringOff: ['projects'] }} currentDay="2026-11-04" heldEvents={{}} onProduct={() => {}} onGoals={() => {}} />)
+  expect(html.match(/class="slice-hit"/g)).toHaveLength(7)
+  expect(html).not.toContain('projects')
+  expect(html).toContain('this week')
+})
+
 it('opens the slice named in the hash with the wheel shrunk into the header', () => {
   vi.stubGlobal('location', { hash: '#progress/body' })
   const html = render('personal')

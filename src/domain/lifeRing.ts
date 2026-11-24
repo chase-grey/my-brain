@@ -20,7 +20,7 @@ export type RingArc = {
 }
 
 // Most important first, related areas side by side. Every list and the wheel read this order.
-export const RING_DOMAINS: LifeDomain[] = ['body', 'rest', 'connection', 'purpose', 'mind', 'creativity', 'build', 'money']
+export const RING_DOMAINS: LifeDomain[] = ['body', 'rest', 'connection', 'purpose', 'mind', 'creativity', 'projects', 'money']
 
 function median(values: number[]): number | undefined {
   if (!values.length) return undefined
@@ -29,9 +29,10 @@ function median(values: number[]): number | undefined {
   return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2
 }
 
-export function buildLifeRing(evidence: RingEvidence[], commitments: RingCommitment[], today: string): RingArc[] {
+/** Areas in `off` are left out of the ring altogether. */
+export function buildLifeRing(evidence: RingEvidence[], commitments: RingCommitment[], today: string, off: LifeDomain[] = []): RingArc[] {
   const todayMs = new Date(`${today}T00:00:00Z`).getTime()
-  return RING_DOMAINS.map((domain) => {
+  return RING_DOMAINS.filter((domain) => !off.includes(domain)).map((domain) => {
     const commitment = commitments.find((item) => item.domain === domain)?.commitment28 ?? 0
     if (commitment === 0) return { domain, state: 'dormant', focus: false }
     const domainEvidence = evidence.filter((item) => item.domain === domain && item.on <= today)

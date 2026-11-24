@@ -86,7 +86,7 @@ export function ProgressView({ domain, product, currentDay, heldEvents, onProduc
   const commitment = [...product.commitments].reverse().find((item) => item.domain === domain)
   const receipt = commitment ? buildWeekReceipt(commitment, product.activities.filter((item) => item.domain === domain), product.dayOverrides) : undefined
   const waiting = product.delegations.filter((item) => item.domain === domain && item.status !== 'delivered')
-  const ring = domain === 'personal' ? buildLifeRing(product.ringEvidence, product.ringCommitments, currentDay) : []
+  const ring = domain === 'personal' ? buildLifeRing(product.ringEvidence, product.ringCommitments, currentDay, product.ringOff) : []
   const open = domain === 'personal' ? ring.find((arc) => arc.domain === slice) : undefined
 
   return <>

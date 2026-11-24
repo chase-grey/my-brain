@@ -14,6 +14,7 @@ import type {
   TravelWindow,
 } from './domain/types'
 import type { RingCommitment, RingEvidence } from './domain/lifeRing'
+import type { LifeDomain } from './domain/types'
 import { defaultPersonalHabits } from './domain/habits'
 
 export type ProductState = {
@@ -28,6 +29,8 @@ export type ProductState = {
   dayOverrides: DayOverride[]
   ringEvidence: RingEvidence[]
   ringCommitments: RingCommitment[]
+  /** Life areas this person has switched off; they leave the wheel and the targets form. */
+  ringOff: LifeDomain[]
   restCheckIns: RestCheckIn[]
   moneySnapshots: MoneySnapshot[]
   people: PersonRef[]
@@ -35,7 +38,19 @@ export type ProductState = {
 
 export const emptyProductState: ProductState = {
   goals: [], habits: defaultPersonalHabits, habitEntries: [], projects: [], activities: [], commitments: [], delegations: [], travelWindows: [],
-  dayOverrides: [], ringEvidence: [], ringCommitments: [], restCheckIns: [], moneySnapshots: [], people: [],
+  dayOverrides: [], ringEvidence: [], ringCommitments: [], ringOff: [], restCheckIns: [], moneySnapshots: [], people: [],
+}
+
+// The 'projects' area was stored as 'build' until 2026-11-24.
+const renamed = <T extends string | undefined>(area: T): T => (area === 'build' ? 'projects' : area) as T
+
+export function renameBuildArea(stored: Partial<ProductState>): Partial<ProductState> {
+  return {
+    ...stored,
+    ...(stored.ringEvidence && { ringEvidence: stored.ringEvidence.map((item) => ({ ...item, domain: renamed(item.domain) })) }),
+    ...(stored.ringCommitments && { ringCommitments: stored.ringCommitments.map((item) => ({ ...item, domain: renamed(item.domain) })) }),
+    ...(stored.projects && { projects: stored.projects.map((item) => item.servesDomain ? { ...item, servesDomain: renamed(item.servesDomain) } : item) }),
+  }
 }
 
 const storageKey = (domain: Domain) => `my-brain.${domain}.product.v1`
@@ -50,6 +65,7 @@ export function scopeProductState(state: ProductState, domain: Domain): ProductS
   if (domain === 'work') {
     scoped.ringEvidence = []
     scoped.ringCommitments = []
+    scoped.ringOff = []
     scoped.restCheckIns = []
     scoped.moneySnapshots = []
     scoped.people = []
@@ -60,7 +76,7 @@ export function scopeProductState(state: ProductState, domain: Domain): ProductS
 /** `seedHabits` adds the owner's own habits (vitamins, whitening); everyone else starts with none. */
 export function loadProductState(domain: Domain, seedHabits = true): ProductState {
   try {
-    const stored = JSON.parse(localStorage.getItem(storageKey(domain)) ?? localStorage.getItem('my-brain.product.v1') ?? '{}') as Partial<ProductState>
+    const stored = renameBuildArea(JSON.parse(localStorage.getItem(storageKey(domain)) ?? localStorage.getItem('my-brain.product.v1') ?? '{}') as Partial<ProductState>)
     const habits = [...(stored.habits ?? [])].filter((habit) => habit.domain === domain)
     for (const habit of seedHabits ? defaultPersonalHabits.filter((item) => item.domain === domain) : []) {
       const index = habits.findIndex((item) => item.id === habit.id)
@@ -81,9 +97,9 @@ export function loadProductState(domain: Domain, seedHabits = true): ProductStat
 export function saveProductState(state: ProductState, domain: Domain): void {
   try {
     const scoped = scopeProductState(state, domain)
-    const { ringEvidence, ringCommitments, restCheckIns, moneySnapshots, people, ...common } = scoped
+    const { ringEvidence, ringCommitments, ringOff, restCheckIns, moneySnapshots, people, ...common } = scoped
     localStorage.setItem(storageKey(domain), JSON.stringify(domain === 'personal'
-      ? { ...common, ringEvidence, ringCommitments, restCheckIns, moneySnapshots, people }
+      ? { ...common, ringEvidence, ringCommitments, ringOff, restCheckIns, moneySnapshots, people }
       : common))
   } catch {
     // The active in-memory state remains usable.

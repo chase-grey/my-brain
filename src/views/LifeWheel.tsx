@@ -6,7 +6,7 @@ export const wheelHue: Record<LifeDomain, string> = {
   body: '#e0564d',
   purpose: '#e39b2e',
   connection: '#d8508f',
-  build: '#4f9d5b',
+  projects: '#4f9d5b',
   mind: '#3f7fd6',
   creativity: '#9b5de5',
   money: '#2aa08a',

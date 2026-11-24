@@ -13,7 +13,7 @@ export type Rhythm = 'pace' | 'burst'
 export type Drive = 'enforced' | 'intrinsic'
 export type Season = 'winter' | 'spring' | 'summer' | 'fall'
 export type Mode = string
-export type LifeDomain = 'body' | 'purpose' | 'connection' | 'build' | 'mind' | 'creativity' | 'money' | 'rest'
+export type LifeDomain = 'body' | 'purpose' | 'connection' | 'projects' | 'mind' | 'creativity' | 'money' | 'rest'
 
 export type ProviderTask = {
   id: string
