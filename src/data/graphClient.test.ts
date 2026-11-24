@@ -23,6 +23,13 @@ describe('graph client', () => {
   it('returns graph response details on failure', async () => {
     const client = new GraphClient(async () => 'token', async () => new Response('denied', { status: 403 }))
 
-    await expect(client.request('/items')).rejects.toEqual(new GraphError(403, 'denied'))
+    await expect(client.request('/items')).rejects.toEqual(new GraphError(403, 'denied', 'GET /items'))
+  })
+
+  it('says which request failed and why', async () => {
+    const body = JSON.stringify({ error: { code: 'invalidRequest', message: 'Bad filter' } })
+    const client = new GraphClient(async () => 'token', async () => new Response(body, { status: 400 }))
+
+    await expect(client.request('/me/todo/lists?$select=id', { method: 'post' })).rejects.toThrow('microsoft graph returned 400 for POST /me/todo/lists: invalidRequest, Bad filter')
   })
 })

@@ -5,12 +5,31 @@ type GraphCollection<T> = {
   '@odata.nextLink'?: string
 }
 
+/** What graph said went wrong, when the body is its usual `{ error: { code, message } }`. */
+function graphReason(body: string): string {
+  try {
+    const error = (JSON.parse(body) as { error?: { code?: string; message?: string } }).error
+    const reason = [error?.code, error?.message].filter(Boolean).join(', ')
+    return reason ? `: ${reason}` : ''
+  } catch {
+    return ''
+  }
+}
+
+/** The path without its query, short enough to show. */
+function requestLabel(method: string | undefined, path: string): string {
+  const bare = path.replace(/^https:\/\/[^/]+(\/v1\.0)?/, '').split('?')[0]
+  return `${(method ?? 'GET').toUpperCase()} ${bare.length > 70 ? `${bare.slice(0, 70)}…` : bare}`
+}
+
 export class GraphError extends Error {
   constructor(
     public readonly status: number,
     public readonly responseBody: string,
+    /** The request that failed, such as `GET /me/todo/lists`. */
+    public readonly request?: string,
   ) {
-    super(`microsoft graph returned ${status}`)
+    super(`microsoft graph returned ${status}${request ? ` for ${request}` : ''}${graphReason(responseBody)}`)
     this.name = 'GraphError'
   }
 }
@@ -40,7 +59,7 @@ export class GraphClient {
     if (init.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json')
 
     const response = await this.fetcher(this.url(path), { ...init, headers })
-    if (!response.ok) throw new GraphError(response.status, await response.text())
+    if (!response.ok) throw new GraphError(response.status, await response.text(), requestLabel(init.method, path))
     return response
   }
 
