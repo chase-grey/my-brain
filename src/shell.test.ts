@@ -29,3 +29,14 @@ it('holds the page still at its ends, so the tab bar never drags with it', () =>
   const page = /^html, body \{[^}]*\}/m.exec(css)?.[0] ?? ''
   expect(page).toMatch(/overscroll-behavior(-y)?:\s*none/)
 })
+
+// The top of the app meets the phone's status bar. The android shell draws the app under it (Android 15 and up give
+// no choice) and says how tall it is, so everything at the top edge pads itself by that.
+it('keeps everything at the top edge clear of the status bar', () => {
+  expect(css).toContain('--top-inset: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));')
+  const lines = css.split(/\r?\n/)
+  const atTop = lines.filter((line) => /(?<![-\w])top: 0;|\binset: 0;|^\.welcome \{|100dvh -/.test(line))
+  expect(atTop.length).toBeGreaterThanOrEqual(8)
+  for (const line of atTop) expect(line).toContain('var(--top-inset)')
+  expect(css).not.toContain('env(safe-area-inset-top)')
+})

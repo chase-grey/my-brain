@@ -21,6 +21,10 @@ The accent itself can be changed: settings has a swatch for the app's color and 
 
 A new deploy reaches an open tab or installed window on its own (`src/appUpdate.ts`, the pattern in `~/.claude/patterns/app-update.md`; my-mail carries the same file). The app reloads onto it at a quiet moment: off screen, just reopened and not yet touched, or left alone for five minutes. It never reloads over an open sheet, a draft, or a screen that called `holdUpdates`. Until the reload happens, the more menu wears a dot and offers `update ready · restart`, and the settings button says the same. A new screen whose state a reload would lose calls `holdUpdates()`. Do not reload any other way.
 
+## status bar
+
+Chase, 2026-11-25. The android shell draws the app under the phone's status bar and tells the page how tall it is. `--top-inset` in `src/styles.css` holds that height, and anything at the top edge (the top bar, a full-screen layer, the rail, a height worked out from the screen) pads itself by it. Never use `env(safe-area-inset-top)` directly: older phones report it wrong, and the shell's own number comes first. `shell.test.ts` holds this.
+
 ## monitors
 
 Chase, 2026-11-25, after two asks. `src/fitColumns.ts` lays out every screen made of cards (today, progress, goals, settings, trips, the work dashboard) from the size of the window in both directions, and `fitColumns.test.ts` holds the rules.
