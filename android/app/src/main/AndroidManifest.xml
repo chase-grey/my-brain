@@ -59,6 +59,9 @@
                 android:resource="@xml/today_widget_info" />
         </receiver>
 
+        <!-- which native build this apk is, so the app can tell when a new one is needed (UpdatePlugin) -->
+        <meta-data android:name="nativeStamp" android:value="${nativeStamp}" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -73,6 +76,8 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- the app downloads its own new apk and opens the installer, which still asks before installing -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- the chat listens through the webview's speech recognition -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />

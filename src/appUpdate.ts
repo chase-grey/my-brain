@@ -36,13 +36,15 @@ export function isNewBuild(html: string, running: string | undefined): boolean {
 type UpdateState = {
   /** A newer build is published; this page is still the old one. */
   ready: boolean
+  /** The newer build cannot be reloaded onto: it has to be installed, and only the button starts that. */
+  byHand: boolean
   /** A check is in flight from the settings button. */
   checking: boolean
   /** The one-line answer to show, keyed so the same text twice shows again. */
   toast: { id: number; text: string } | null
 }
 
-let state: UpdateState = { ready: false, checking: false, toast: null }
+let state: UpdateState = { ready: false, byHand: false, checking: false, toast: null }
 const listeners = new Set<() => void>()
 function set(patch: Partial<UpdateState>): void {
   state = { ...state, ...patch }
@@ -64,13 +66,34 @@ export function dismissUpdateToast(id: number): void {
   if (state.toast?.id === id) set({ toast: null })
 }
 
-/** The entry script this page was loaded with. Undefined on a dev server and in the android shell, where there is nothing to compare. */
+/**
+ * Somewhere other than the published page to find new builds. A native shell carries its own copy of the app, so it
+ * gives one of these (`src/native/update.ts`); a web app gives none and the published page is compared.
+ */
+export type UpdateSource = {
+  /** The name of the build that is running. */
+  running: string
+  /** The newer build once it is ready to move onto, or undefined when there is none. Throws when it could not ask. */
+  look(): Promise<{ name: string; byHand?: boolean } | undefined>
+  /** Make the move. When the build is not `byHand` the page is reloaded once this settles. */
+  move(): Promise<void>
+}
+
+let source: UpdateSource | undefined
+/** The build this page was loaded with: its entry script, or the source's name for it. Undefined on a dev server, where there is nothing to compare. */
 let running: string | undefined
 let published: string | undefined
 
-/** Ask for the published page past every cache and compare its build with the one running. */
+/** Ask for the published build past every cache and compare it with the one running. */
 async function look(): Promise<'new' | 'current' | 'failed'> {
   try {
+    if (source) {
+      const found = await source.look()
+      if (!found) return 'current'
+      published = found.name
+      set({ ready: true, byHand: Boolean(found.byHand) })
+      return 'new'
+    }
     const response = await fetch(pageUrl, { cache: 'no-store' })
     if (!response.ok) return 'failed'
     const name = entryScript(await response.text())
@@ -149,6 +172,14 @@ export function afterReloadToast(from: string | null, now: string): string | nul
 }
 
 function reload(announce: boolean): void {
+  if (state.byHand && source) {
+    // An install is handed to the phone, which asks first. Nothing is reloaded here.
+    set({ checking: true })
+    void source.move()
+      .catch(() => showUpdateToast('couldn’t download — are you offline?'))
+      .finally(() => set({ checking: false }))
+    return
+  }
   try {
     if (announce) sessionStorage.setItem(fromKey, APP_COMMIT)
     if (published) sessionStorage.setItem(reloadedForKey, published)
@@ -156,7 +187,8 @@ function reload(announce: boolean): void {
   } catch {
     // Blocked storage costs only the toast and the place.
   }
-  window.location.reload()
+  if (!source) return window.location.reload()
+  void source.move().then(() => window.location.reload(), () => { set({ checking: false }); showUpdateToast('couldn’t update') })
 }
 
 function announceReload(): void {
@@ -185,13 +217,15 @@ export async function checkForUpdate(): Promise<void> {
 }
 
 /**
- * Watch for new deploys while the app is open. Call once at startup, in a production build served over the web.
+ * Watch for new deploys while the app is open. Call once at startup, in a production build: served over the web,
+ * or inside a native shell that passes where its builds come from.
  * A check runs on open, on every return to the app and on a slow timer. A newer build is reloaded onto at the
  * first quiet moment, once per build so a stale answer cannot loop; until then `ready` drives the dot and the button.
  */
-export function watchForUpdates(): void {
+export function watchForUpdates(from?: UpdateSource): void {
   announceReload()
-  running = document.querySelector('script[src*="/assets/"]')?.getAttribute('src') ?? undefined
+  source = from
+  running = source ? source.running : document.querySelector('script[src*="/assets/"]')?.getAttribute('src') ?? undefined
   if (!running) return
 
   let checked = 0
@@ -199,7 +233,7 @@ export function watchForUpdates(): void {
   let lastTouch = Date.now()
 
   const reloadIfQuiet = () => {
-    if (!state.ready || !published) return
+    if (!state.ready || state.byHand || !published) return
     try {
       if (sessionStorage.getItem(reloadedForKey) === published) return
     } catch {

@@ -10,6 +10,8 @@ android {
         // The github build passes its run number, so each apk installs over the one before it.
         versionCode((project.findProperty('versionCode') ?: 1) as int)
         versionName((project.findProperty('versionName') ?: "1.0") as String)
+        // A fingerprint of the native part, worked out by the github build. The app compares it with the published one.
+        manifestPlaceholders = [nativeStamp: (project.findProperty('nativeStamp') ?: "local") as String]
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

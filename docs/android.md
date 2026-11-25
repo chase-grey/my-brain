@@ -56,6 +56,25 @@ Studio (it is blocked there), so this is how the app gets built. Each build is s
 secrets `ANDROID_KEYSTORE_BASE64` and `ANDROID_KEYSTORE_PASSWORD`, which is what lets a new apk install over the
 last one and keep the app's data. The key exists only in those secrets; replacing it means uninstalling the app once.
 
+## updates
+
+The phone does not need a reinstall for each change. Every build also publishes the web part of the app
+(`web-<commit>.zip`) and `update.json` on the same release. `update.json` names the commit and a fingerprint of the
+native part: the `android/` folder, `capacitor.config.ts` and the versions of the capacitor packages.
+
+- **Web part changed, native part the same** (nearly every push): the app downloads the zip into its own files,
+  and at a quiet moment has the shell serve that folder instead of the copy inside the apk, then reloads. The
+  rules for a quiet moment, the dot and `update ready · restart` are the web app's (`src/appUpdate.ts`). The shell
+  remembers the folder, so a cold start opens on it too.
+- **Native part changed**: the web part is not taken on its own. The more menu and settings read
+  `update ready · install`; the button downloads the apk and opens android's installer, which asks before it
+  installs (and, the first time, asks to let My Brain install apps). A new apk starts from its own copy again.
+- A downloaded build that starts twice without the app coming up is dropped, the copy inside the apk is used,
+  and that build is not downloaded again.
+- The app only ever downloads from the `android` release (`UpdatePlugin.java` holds the address).
+
+`src/native/update.ts` decides which of the two a published build needs; `UpdatePlugin.java` does the downloading.
+
 To build on a PC instead, it needs Android Studio (or the SDK plus JDK 21). Nothing else is required beyond Node
 for the web part.
 

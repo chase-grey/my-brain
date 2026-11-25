@@ -118,7 +118,7 @@ export function SettingsView({ domain, accountName, connectionStatus, settings, 
     <Card title="app">
       <p className="note">build {APP_COMMIT} · {new Date(APP_BUILD_TIME).toLocaleString()}</p>
       <div className="actions row-actions">
-        <button className={update.ready ? 'primary' : 'secondary'} disabled={update.checking} type="button" onClick={() => void checkForUpdate()}>{update.checking ? 'checking…' : update.ready ? 'update ready · restart' : 'check for updates'}</button>
+        <button className={update.ready ? 'primary' : 'secondary'} disabled={update.checking} type="button" onClick={() => void checkForUpdate()}>{update.checking ? 'checking…' : update.ready ? (update.byHand ? 'update ready · install' : 'update ready · restart') : 'check for updates'}</button>
         {canInstall && <button className="primary" type="button" onClick={onInstall}>install on this device</button>}
       </div>
     </Card>

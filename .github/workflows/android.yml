@@ -31,6 +31,17 @@ jobs:
       - run: npm run build:android
         env:
           VITE_MICROSOFT_CLIENT_ID: ${{ secrets.VITE_MICROSOFT_CLIENT_ID }}
+      # The installed app takes a new web part on its own, and asks for the apk only when the native part changed.
+      # This fingerprint is how it tells: the android folder, the shell's config, and the capacitor packages that were installed.
+      - name: Fingerprint the native part
+        run: |
+          stamp=$( {
+            git rev-parse HEAD:android
+            git hash-object capacitor.config.ts
+            node -e "const fs=require('fs');for(const scope of ['@capacitor','@capacitor-community'])for(const name of fs.readdirSync('node_modules/'+scope).sort())if(name!=='cli')console.log(scope+'/'+name,require('./node_modules/'+scope+'/'+name+'/package.json').version)"
+          } | sha256sum | cut -c1-12 )
+          echo "NATIVE_STAMP=n$stamp" >> "$GITHUB_ENV"
+          echo "WEB_COMMIT=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
       # Every build is signed with the same key, so a new apk installs over the last one and keeps the app's data.
       - name: Build apk
         working-directory: android
@@ -45,13 +56,22 @@ jobs:
             echo "::warning::No signing key in the repo secrets. This apk will not install over an earlier one."
           fi
           chmod +x gradlew
-          ./gradlew assembleDebug -PversionCode=${{ github.run_number }} -PversionName=1.0.${{ github.run_number }}
+          ./gradlew assembleDebug -PversionCode=${{ github.run_number }} -PversionName=1.0.${{ github.run_number }} -PnativeStamp="$NATIVE_STAMP"
           rm -f "$RUNNER_TEMP/my-brain.p12"
           cp app/build/outputs/apk/debug/app-debug.apk "$RUNNER_TEMP/my-brain.apk"
+      - name: Pack the web part
+        run: |
+          cd dist && zip -qr "$RUNNER_TEMP/web-$WEB_COMMIT.zip" .
+          echo "{\"web\":\"$WEB_COMMIT\",\"native\":\"$NATIVE_STAMP\"}" > "$RUNNER_TEMP/update.json"
       # One release, replaced on every build, so the phone always downloads from the same address.
-      - name: Publish apk
+      # update.json goes up last: it is what the installed app reads, and what it names has to be there already.
+      - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release view android >/dev/null 2>&1 || gh release create android --prerelease --title "android app" --notes "The latest build of the phone app. Replaced on every push to main."
-          gh release upload android "$RUNNER_TEMP/my-brain.apk" --clobber
+          gh release upload android "$RUNNER_TEMP/my-brain.apk" "$RUNNER_TEMP/web-$WEB_COMMIT.zip" --clobber
+          gh release upload android "$RUNNER_TEMP/update.json" --clobber
+          for old in $(gh release view android --json assets -q '.assets[].name' | grep '^web-' | grep -v "^web-$WEB_COMMIT.zip$" || true); do
+            gh release delete-asset android "$old" -y
+          done

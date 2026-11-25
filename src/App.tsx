@@ -200,7 +200,7 @@ const accountPushDelayMs = 1500
 
 export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff, onKickoffUsed }: { activeDomain: Domain; onDomain: (domain: Domain) => void; account: DeviceAccount; onAccount: (account: DeviceAccount) => void; kickoff?: string; onKickoffUsed?: () => void }) {
   const [view, setView] = useState<View>(() => parseHash().view)
-  const { ready: updateReady } = useAppUpdate()
+  const { ready: updateReady, byHand: updateByHand } = useAppUpdate()
   const [docked, setDocked] = useState(() => typeof matchMedia === 'function' && matchMedia(dockedQuery).matches)
   const [tasks, setTasks] = useState<Task[]>(() => loadTasks(activeDomain, account.owner))
   // The time picked on today. Until one is picked the calendar chooses, and chat is told no number.
@@ -856,7 +856,7 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
   useFitColumns(contentRef, `${activeDomain} ${shownView}`)
   const moreViews = moreViewsFor(activeDomain)
   const menuFor = (shown: typeof moreViews) => [
-    ...(updateReady ? [{ label: 'update ready · restart', onSelect: () => void checkForUpdate() }] : []),
+    ...(updateReady ? [{ label: updateByHand ? 'update ready · install' : 'update ready · restart', onSelect: () => void checkForUpdate() }] : []),
     ...shown.map((item) => ({ label: item.view, onSelect: () => setView(item.view) })),
     ...(install.canPrompt ? [{ label: 'install app', onSelect: () => void install.install() }] : []),
   ]
