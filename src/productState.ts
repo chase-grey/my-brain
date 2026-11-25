@@ -7,7 +7,6 @@ import type {
   Goal,
   Habit,
   HabitEntry,
-  MoneySnapshot,
   PersonRef,
   Project,
   RestCheckIn,
@@ -15,6 +14,8 @@ import type {
 } from './domain/types'
 import type { RingCommitment, RingEvidence } from './domain/lifeRing'
 import type { TrackerSummary } from './domain/bodyTracker'
+import { addMoneyReading, type MoneyAccount, type MoneyFigure, type MoneyGoal, type MoneySnapshot } from './domain/money'
+import type { RestDay, RestGoals } from './domain/rest'
 import type { LifeDomain } from './domain/types'
 import { defaultPersonalHabits, retiredHabitIds } from './domain/habits'
 
@@ -34,6 +35,11 @@ export type ProductState = {
   ringOff: LifeDomain[]
   restCheckIns: RestCheckIn[]
   moneySnapshots: MoneySnapshot[]
+  /** What the money slice is judged against. With none set, money takes a 28-day target like any other area. */
+  moneyGoals: MoneyGoal[]
+  /** Sleep and screen time by day, as read from the phone. */
+  restDays: RestDay[]
+  restGoals: RestGoals
   people: PersonRef[]
   /** The last summary read from workout-tracker; the body slice and reviews read it. */
   bodyTracker?: TrackerSummary
@@ -41,7 +47,7 @@ export type ProductState = {
 
 export const emptyProductState: ProductState = {
   goals: [], habits: defaultPersonalHabits, habitEntries: [], projects: [], activities: [], commitments: [], delegations: [], travelWindows: [],
-  dayOverrides: [], ringEvidence: [], ringCommitments: [], ringOff: [], restCheckIns: [], moneySnapshots: [], people: [],
+  dayOverrides: [], ringEvidence: [], ringCommitments: [], ringOff: [], restCheckIns: [], moneySnapshots: [], moneyGoals: [], restDays: [], restGoals: {}, people: [],
 }
 
 // The 'projects' area was stored as 'build' until 2026-11-24.
@@ -54,6 +60,14 @@ export function renameBuildArea(stored: Partial<ProductState>): Partial<ProductS
     ...(stored.ringCommitments && { ringCommitments: stored.ringCommitments.map((item) => ({ ...item, domain: renamed(item.domain) })) }),
     ...(stored.projects && { projects: stored.projects.map((item) => item.servesDomain ? { ...item, servesDomain: renamed(item.servesDomain) } : item) }),
   }
+}
+
+/** Saves a day's money numbers, whoever read them: a screenshot, the chat, or the form. */
+export function withMoneyReading(state: ProductState, on: string, figures: Partial<Record<MoneyFigure, number>>, accounts: MoneyAccount[] = []): ProductState {
+  const moneySnapshots = addMoneyReading(state.moneySnapshots, on, figures, accounts)
+  if (moneySnapshots === state.moneySnapshots) return state
+  const logged = state.ringEvidence.some((item) => item.domain === 'money' && item.on === on)
+  return { ...state, moneySnapshots, ringEvidence: logged ? state.ringEvidence : [...state.ringEvidence, { domain: 'money', on, value: 1 }] }
 }
 
 const storageKey = (domain: Domain) => `my-brain.${domain}.product.v1`
@@ -71,6 +85,9 @@ export function scopeProductState(state: ProductState, domain: Domain): ProductS
     scoped.ringOff = []
     scoped.restCheckIns = []
     scoped.moneySnapshots = []
+    scoped.moneyGoals = []
+    scoped.restDays = []
+    scoped.restGoals = {}
     scoped.people = []
     delete scoped.bodyTracker
   }
@@ -101,9 +118,9 @@ export function loadProductState(domain: Domain, seedHabits = true): ProductStat
 export function saveProductState(state: ProductState, domain: Domain): void {
   try {
     const scoped = scopeProductState(state, domain)
-    const { ringEvidence, ringCommitments, ringOff, restCheckIns, moneySnapshots, people, bodyTracker, ...common } = scoped
+    const { ringEvidence, ringCommitments, ringOff, restCheckIns, moneySnapshots, moneyGoals, restDays, restGoals, people, bodyTracker, ...common } = scoped
     localStorage.setItem(storageKey(domain), JSON.stringify(domain === 'personal'
-      ? { ...common, ringEvidence, ringCommitments, ringOff, restCheckIns, moneySnapshots, people, bodyTracker }
+      ? { ...common, ringEvidence, ringCommitments, ringOff, restCheckIns, moneySnapshots, moneyGoals, restDays, restGoals, people, bodyTracker }
       : common))
   } catch {
     // The active in-memory state remains usable.

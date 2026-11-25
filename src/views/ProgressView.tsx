@@ -4,7 +4,10 @@ import { bodyReading } from '../domain/bodyTracker'
 import { timeRange } from '../domain/calendar'
 import { goalProgress } from '../domain/goals'
 import { buildLifeRing, RING_DOMAINS, type RingArc } from '../domain/lifeRing'
+import { moneyReading } from '../domain/money'
 import { buildWeekReceipt } from '../domain/receipt'
+import { restReading } from '../domain/rest'
+import type { MoneyRead } from '../companion/moneyRead'
 import type { Domain, Goal, LifeDomain, RestCheckIn } from '../domain/types'
 import { hours, newId, shortDate, today } from '../format'
 import type { ProductState } from '../productState'
@@ -12,6 +15,7 @@ import { reviewKinds, type ReviewKind } from '../review/period'
 import { Icon } from '../navIcons'
 import { Card, Empty, Field, Menu, Sheet } from '../ui'
 import { LifeWheel, wheelHue } from './LifeWheel'
+import { hasPhoneRest, MoneyDetail, MoneySheet, RestDetail } from './MoneyRest'
 
 type LogKind = 'connection' | 'money' | 'rest'
 
@@ -55,7 +59,7 @@ function GoalRow({ goal, product, currentDay, held, onOpen }: { goal: Goal; prod
   </li>
 }
 
-export function ProgressView({ domain, product, currentDay, heldEvents, onProduct, onGoals, onReview }: {
+export function ProgressView({ domain, product, currentDay, heldEvents, onProduct, onGoals, onReview, readMoney }: {
   domain: Domain
   product: ProductState
   currentDay: string
@@ -63,6 +67,8 @@ export function ProgressView({ domain, product, currentDay, heldEvents, onProduc
   onProduct: React.Dispatch<React.SetStateAction<ProductState>>
   onGoals: () => void
   onReview?: (kind: ReviewKind) => void
+  /** Reads money screenshots with the person's own key; left out when the chat has none. */
+  readMoney?: (files: File[]) => Promise<MoneyRead>
 }) {
   const [log, setLog] = useState<LogKind>()
   const [slice, setSlice] = useState<LifeDomain | undefined>(sliceFromHash)
@@ -89,7 +95,7 @@ export function ProgressView({ domain, product, currentDay, heldEvents, onProduc
   const commitment = [...product.commitments].reverse().find((item) => item.domain === domain)
   const receipt = commitment ? buildWeekReceipt(commitment, product.activities.filter((item) => item.domain === domain), product.dayOverrides) : undefined
   const waiting = product.delegations.filter((item) => item.domain === domain && item.status !== 'delivered')
-  const ring = domain === 'personal' ? buildLifeRing(product.ringEvidence, product.ringCommitments, currentDay, product.ringOff, product.bodyTracker && bodyReading(product.bodyTracker, currentDay)) : []
+  const ring = domain === 'personal' ? buildLifeRing(product.ringEvidence, product.ringCommitments, currentDay, product.ringOff, product.bodyTracker && bodyReading(product.bodyTracker, currentDay), { money: moneyReading(product.moneyGoals, product.moneySnapshots, currentDay), rest: restReading(product.restDays, product.restGoals, currentDay) }) : []
   const open = domain === 'personal' ? ring.find((arc) => arc.domain === slice) : undefined
 
   return <>
@@ -102,14 +108,16 @@ export function ProgressView({ domain, product, currentDay, heldEvents, onProduc
       {(domain === 'personal' || onReview) && <Menu items={[
         ...(domain === 'personal' ? [
           { label: 'saw someone', onSelect: () => setLog('connection') },
-          { label: 'this month’s money', onSelect: () => setLog('money') },
+          { label: 'money numbers', onSelect: () => setLog('money') },
           { label: 'rest check-in', onSelect: () => setLog('rest') },
         ] : []),
         ...(onReview ? reviewKinds.map((kind) => ({ label: `${kind} in review`, onSelect: () => onReview(kind) })) : []),
       ]} />}
     </header>
 
-    {open && <SliceDetail key={open.domain} arc={open} onGoals={onGoals} />}
+    {open?.domain === 'money' && <MoneyDetail arc={open} product={product} day={currentDay} onProduct={onProduct} readMoney={readMoney} />}
+    {open?.domain === 'rest' && hasPhoneRest(product) && <RestDetail arc={open} product={product} day={currentDay} onProduct={onProduct} />}
+    {open && !open.money && !open.rest && <SliceDetail key={open.domain} arc={open} onGoals={onGoals} />}
 
     {!open && <Card title="this week" aside={receipt && <span className="count">{receipt.paid ? 'paid' : `${hours(receipt.remainingMin)} left`}</span>}>
       {receipt
@@ -127,7 +135,8 @@ export function ProgressView({ domain, product, currentDay, heldEvents, onProduc
       <ul className="rows">{waiting.map((item) => <li className="row" key={item.id}><div className="row-main"><span className="row-title">{item.title}</span>{item.assignee && <small>{item.assignee}</small>}</div><button className="link" type="button" onClick={() => onProduct((current) => ({ ...current, delegations: current.delegations.map((entry) => entry.id === item.id ? { ...entry, status: 'delivered' } : entry) }))}>delivered</button></li>)}</ul>
     </Card>}
 
-    {log && <LogSheet kind={log} onClose={() => setLog(undefined)} onProduct={onProduct} />}
+    {log === 'money' && <MoneySheet day={currentDay} onClose={() => setLog(undefined)} onProduct={onProduct} />}
+    {log && log !== 'money' && <LogSheet kind={log} onClose={() => setLog(undefined)} onProduct={onProduct} />}
   </>
 }
 
@@ -168,11 +177,9 @@ function SliceDetail({ arc, onGoals }: { arc: RingArc; onGoals: () => void }) {
   </Card>
 }
 
-function LogSheet({ kind, onClose, onProduct }: { kind: LogKind; onClose: () => void; onProduct: React.Dispatch<React.SetStateAction<ProductState>> }) {
+function LogSheet({ kind, onClose, onProduct }: { kind: Exclude<LogKind, 'money'>; onClose: () => void; onProduct: React.Dispatch<React.SetStateAction<ProductState>> }) {
   const [person, setPerson] = useState('')
   const [rating, setRating] = useState(5)
-  const [money, setMoney] = useState({ netWorth: '', homeRemaining: '', carRemaining: '', incomeMonthly: '', spendingMonthly: '' })
-  const moneyLabels: Record<keyof typeof money, string> = { netWorth: 'net worth', homeRemaining: 'home loan left', carRemaining: 'car loan left', incomeMonthly: 'monthly income', spendingMonthly: 'monthly spending' }
   const day = today()
 
   function submit(event: React.FormEvent) {
@@ -185,13 +192,6 @@ function LogSheet({ kind, onClose, onProduct }: { kind: LogKind; onClose: () => 
         ringEvidence: [...current.ringEvidence, { domain: 'connection', on: day, value: 1 }],
         activities: [...current.activities, { id: newId('activity'), domain: 'personal', kind: 'connection', occurredAt: new Date().toISOString(), withPeople: [name] }],
       }))
-    } else if (kind === 'money') {
-      const month = day.slice(0, 7)
-      const snapshot = Object.fromEntries(Object.entries(money).map(([key, value]) => [key, Number(value) || 0])) as Record<keyof typeof money, number>
-      onProduct((current) => ({ ...current,
-        moneySnapshots: [...current.moneySnapshots.filter((item) => item.month !== month), { month, ...snapshot }],
-        ringEvidence: [...current.ringEvidence, { domain: 'money', on: day, value: 1 }],
-      }))
     } else {
       const start = new Date(`${day}T00:00:00`)
       start.setDate(start.getDate() - 27)
@@ -201,11 +201,10 @@ function LogSheet({ kind, onClose, onProduct }: { kind: LogKind; onClose: () => 
     onClose()
   }
 
-  const title = kind === 'connection' ? 'saw someone' : kind === 'money' ? 'this month’s money' : 'rest check-in'
+  const title = kind === 'connection' ? 'saw someone' : 'rest check-in'
   return <Sheet title={title} onClose={onClose}>
     <form onSubmit={submit}>
       {kind === 'connection' && <Field label="who"><input autoFocus value={person} onChange={(event) => setPerson(event.target.value)} /></Field>}
-      {kind === 'money' && <div className="grid-2">{(Object.keys(money) as (keyof typeof money)[]).map((key) => <Field key={key} label={moneyLabels[key]}><input inputMode="decimal" type="number" value={money[key]} onChange={(event) => setMoney((current) => ({ ...current, [key]: event.target.value }))} /></Field>)}</div>}
       {kind === 'rest' && <Field label={`rested enough this month · ${rating} of 10`}><input min="1" max="10" type="range" value={rating} onChange={(event) => setRating(Number(event.target.value))} /></Field>}
       <div className="actions"><button className="primary" type="submit" disabled={kind === 'connection' && !person.trim()}>save</button><button className="plain" type="button" onClick={onClose}>cancel</button></div>
     </form>

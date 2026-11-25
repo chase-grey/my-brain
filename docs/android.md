@@ -1,8 +1,8 @@
 # android shell
 
 The phone app is the same web app inside a Capacitor shell (`android/`). The shell exists for three things a
-browser cannot do on Android: a home-screen widget, speech recognition inside the app, and later an always-on
-assistant. GitHub Pages keeps serving the web build for the PC and anyone else.
+browser cannot do on Android: a home-screen widget, speech recognition inside the app, reading sleep and screen
+time for the rest slice, and later an always-on assistant. GitHub Pages keeps serving the web build for the PC and anyone else.
 
 ## voice
 
@@ -26,6 +26,26 @@ same hints as the today card, plus a talk button. The web app pushes the lines w
 `Widget` Capacitor plugin (`src/native/widget.ts` → `WidgetPlugin.java`), which stores them in shared preferences
 and redraws every placed widget. Taps are `mybrain://` links: `mybrain://today`, `mybrain://task/<id>`,
 `mybrain://chat/talk`. `src/native/platform.ts` turns those into hash routes on launch and while the app is open.
+
+## sleep and screen time
+
+The rest slice reads the phone through the `Health` plugin (`src/native/health.ts` -> `HealthPlugin.java`). It only
+reads, and nothing leaves the phone except the daily totals the app keeps for itself.
+
+- Sleep comes from Health Connect, so whatever writes sleep there (the Pixel's bedtime tracking, a watch, a ring)
+  is the source. It needs Android 14 or later. `connect sleep` on the rest slice raises the Health Connect prompt.
+- Screen time is the usage record (`UsageStatsManager`): time with any app in front, the home screen left out.
+  `allow screen time` opens Android's usage access screen, where the switch for my brain is turned on.
+- The phone holds daily screen time for about a week, so the app reads on every open and return to the front and
+  keeps the days itself (`mergeRestDays` in `src/domain/rest.ts`, 400 days). A week without opening the app
+  leaves a gap; those days are left out of the slice.
+- The days live on the phone only. The PC's rest slice does not see them.
+
+## texts
+
+The chat drafts a text only when asked, and never sends one. The draft card's `open in messages` is an `sms:`
+link, which the shell hands to the phone's messaging app with the words filled in. Nothing reads messages, so
+the shell asks for no SMS permission.
 
 ## building
 
@@ -55,6 +75,7 @@ Studio or a signed APK sideloaded is enough; the internal testing track works if
    USB debugging on, run.
 3. On the phone, long-press the home screen, add the **today** widget, and allow the microphone the first time the
    mic is tapped.
+4. On progress, open the rest slice, tap **connect sleep** and **allow screen time**, then set the two goals.
 
 ## not done yet
 

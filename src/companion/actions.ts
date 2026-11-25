@@ -2,6 +2,7 @@ import type { VaultStore } from './githubVault'
 import { GitHubError } from './githubVault'
 import { memoryFilePath, readMemoryIndex } from './memory'
 import type { CompanionActions } from './companionTools'
+import { money, moneyFigureLabels, type MoneyFigure } from '../domain/money'
 import { describeTripAction, isTripTool, tripReadTools } from '../trips/tripTools'
 import { mailToolNames } from './mailTools'
 
@@ -104,6 +105,14 @@ export async function describeAction(name: string, input: Record<string, unknown
       const goal = actions.findGoal(text(input, 'id'))
       const title = goal?.title ?? text(input, 'id')
       return { weight: 'light', title: `hold ${quote(title)} in the calendar`, done: `held ${quote(title)} in the calendar`, fields: goal?.scheduledOn ? [{ label: 'day', value: goal.scheduledOn }] : undefined }
+    }
+    case 'record_money': {
+      const fields = Object.entries(input).filter(([key, value]) => key !== 'accounts' && typeof value === 'number').map(([key, value]) => ({ label: moneyFigureLabels[key as MoneyFigure] ?? key, value: money(value as number) }))
+      return { weight: 'light', title: 'save money numbers', done: 'saved money numbers', fields }
+    }
+    case 'draft_text': {
+      const to = text(input, 'to')
+      return { weight: 'light', title: 'draft a text', done: to ? `text for ${to}` : 'text', fields: [...(to ? [{ label: 'to', value: to }] : []), { label: 'text', value: text(input, 'body') }] }
     }
     case 'save_memory': {
       const name = text(input, 'name')

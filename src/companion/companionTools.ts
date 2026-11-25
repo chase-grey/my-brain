@@ -1,5 +1,6 @@
 import type { CalendarBlock } from '../data/calendarGraphProvider'
 import type { FreeNow } from '../domain/calendar'
+import { MONEY_FIGURES, type MoneyAccount, type MoneyFigure } from '../domain/money'
 import type { Domain, Goal, Horizon, Plan, Priority, Project, Task } from '../domain/types'
 import type { AnthropicTool } from './anthropicClient'
 import type { VaultStore } from './githubVault'
@@ -26,6 +27,8 @@ export type PlanSummary = {
   goals: GoalSummary[]
   projects: ProjectSummary[]
   calendar?: CalendarSummary[]
+  /** Personal only: the latest money figures and how each money goal stands, as lines for the prompt. */
+  money?: string[]
 }
 export type CalendarSummary = Pick<CalendarBlock, 'subject' | 'start' | 'end' | 'isAllDay'>
 
@@ -53,6 +56,8 @@ export interface CompanionActions {
   holdGoal(id: string): Promise<GoalSummary>
   releaseGoal(id: string): Promise<void>
   todaySummary(): PlanSummary
+  /** Personal only. Saves today's money numbers and hands back the way to take them out again. */
+  recordMoney?(figures: Partial<Record<MoneyFigure, number>>, accounts: MoneyAccount[]): { saved: string[]; undo(): void }
 }
 
 export type ToolContext = { actions: CompanionActions; vault?: VaultStore; memoryFolder?: string; mail?: MailReader }
@@ -92,6 +97,14 @@ const calendarTools: AnthropicTool[] = [
   { name: 'hold_in_calendar', description: 'Write a block goal\'s scheduled day into the personal calendar as a busy afternoon so the day stays free. Set scheduled_on with update_goal first.', input_schema: { type: 'object', properties: { id: { type: 'string', description: 'goal id' } }, required: ['id'] } },
 ]
 
+const moneyTools: AnthropicTool[] = [
+  { name: 'record_money', description: 'Save money numbers as of today, read off screenshots the user sent or stated by them. Only figures that were shown or stated; never work one out. savings is cash in checking and savings together, investments is brokerage and retirement together, and the three debts are what is still owed as positive numbers.', input_schema: { type: 'object', properties: { ...Object.fromEntries(MONEY_FIGURES.map((figure) => [figure, { type: 'number', description: 'dollars' }])), accounts: { type: 'array', description: 'each account shown, named as on screen without account numbers; debts negative', items: { type: 'object', properties: { name: { type: 'string' }, balance: { type: 'number' } }, required: ['name', 'balance'] } } } } },
+]
+
+const textTools: AnthropicTool[] = [
+  { name: 'draft_text', description: "Show a text message draft with a button that opens the user's messaging app with it filled in. Only when the user asks for a text to be drafted. Nothing is sent: they send it themselves from there.", input_schema: { type: 'object', properties: { body: { type: 'string', description: 'the message, exactly as it should be sent' }, to: { type: 'string', description: 'who it is for: a name, or a phone number when the user gave one' } }, required: ['body'] } },
+]
+
 /** The tools a message can do without. Tasks and goals always go along. */
 export type ToolGroup = 'notes' | 'trips' | 'calendar' | 'mail'
 
@@ -107,6 +120,8 @@ export function companionTools(options: { hasVault: boolean; hasCalendar?: boole
     ...(has('trips') ? tripTools : []),
     ...taskTools,
     ...(has('calendar') ? calendarTools : []),
+    ...moneyTools,
+    ...textTools,
     ...(has('mail') ? mailTools : []),
   ]
 }
@@ -310,6 +325,24 @@ async function run(name: string, input: Args, { actions, vault, memoryFolder = '
     }
     case 'today_summary':
       return done(actions.todaySummary())
+    case 'record_money': {
+      if (!actions.recordMoney) throw new Error('money is not kept in this space')
+      const figures: Partial<Record<MoneyFigure, number>> = {}
+      for (const figure of MONEY_FIGURES) {
+        const amount = optionalNumber(input, figure)
+        if (amount !== undefined) figures[figure] = figure === 'netWorth' ? amount : Math.abs(amount)
+      }
+      const listed = arg(input, 'accounts')
+      const accounts = (Array.isArray(listed) ? listed : [])
+        .filter((item): item is MoneyAccount => !!item && typeof (item as MoneyAccount).name === 'string' && typeof (item as MoneyAccount).balance === 'number')
+        .map((item) => ({ name: item.name.trim(), balance: item.balance }))
+      if (!Object.keys(figures).length && !accounts.length) throw new Error('no numbers to save')
+      const { saved, undo } = actions.recordMoney(figures, accounts)
+      return done({ ok: true, saved }, async () => undo())
+    }
+    case 'draft_text':
+      requireString(input, 'body')
+      return done({ ok: true, shown: 'the draft is on screen with a button that opens their messaging app. it has not been sent. do not repeat the draft in words.' })
     default:
       throw new Error(`unknown tool ${name}`)
   }
@@ -373,6 +406,7 @@ export function buildPlanSummary(input: {
   calendar?: CalendarBlock[]
   pickedMin?: number
   freeNow?: FreeNow
+  money?: string[]
 }): PlanSummary {
   const open = input.tasks.filter((task) => task.domain === input.domain && !task.completed && !task.storeType)
   return {
@@ -387,5 +421,6 @@ export function buildPlanSummary(input: {
     goals: input.goals.filter((goal) => goal.domain === input.domain && goal.status === 'active').map(summarizeGoal),
     projects: input.projects.filter((project) => project.domain === input.domain && project.status === 'active').map(summarizeProject),
     calendar: (input.calendar ?? []).map(summarizeEvent),
+    ...(input.money?.length ? { money: input.money } : {}),
   }
 }

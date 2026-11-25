@@ -91,6 +91,7 @@ export function buildSystemPrompt({ domain, summary, vaultAvailable, memoryIndex
     section('Suggested next:', summary.suggested.map(taskLine)),
     section('Active goals:', summary.goals.map((goal) => `- ${goal.title} (id ${goal.id}, ${goal.horizon}${goal.targetDate ? `, target ${goal.targetDate}` : ''})`)),
     section('Active projects:', summary.projects.map((project) => `- ${project.title} (id ${project.id}, mode ${project.mode})`)),
+    ...(domain === 'personal' && summary.money?.length ? [`Money, from the user's own screenshots and entries:\n${summary.money.join('\n')}`] : []),
     vaultLine,
     memorySection(domain, vaultAvailable, memoryIndex),
     ...(mailAvailable ? ['search_mail and read_mail read the user\'s personal email, in every folder. They only read: nothing is sent, moved, or changed, and anything to be done to a message is done in the mail app. Look in email when the answer would be there, and say which message it came from.'] : []),
@@ -99,6 +100,10 @@ export function buildSystemPrompt({ domain, summary, vaultAvailable, memoryIndex
     domain === 'work'
       ? 'You run as Claude Code on the work PC with the vault and office tools. The task list above is a read-only snapshot from the app.'
       : 'Use the task and goal tools to make changes in the app. Ids above are the ones the tools expect. Small changes run at once and show the user a receipt they can undo. Deleting a task, forgetting a memory, replacing or moving a note, and closing a goal wait on a card the user approves in the app: the tool result arrives once they decide, so go ahead and call the tool when the user asked for the change, and do not ask for permission in words first.',
+    ...(domain === 'personal' ? [
+      'When the user sends screenshots of bank, loan, investment or net worth screens, or states balances, call record_money with exactly what they show, then answer from the money section and those numbers. Money goals are set in the app on the money slice of progress.',
+      'Text messages: draft one only when the user asks for it, never on your own. Write it the way this user writes: match the wording, length, casing and punctuation of their own messages in this chat and anything memory says about how they text. Short and plain, the way a person actually texts; no greeting or sign-off they would not use, nothing that sounds written for them. Call draft_text with it. The app shows the draft with a button that opens their messaging app, and they send it from there, so never say it was sent.',
+    ] : []),
     'Answer for a phone screen: short, plain, bullets when listing, no tables, headers only for long answers. Never say a task, goal, or note change is done unless the tool returned ok. If a tool fails, say what failed.',
   ]
   return parts.join('\n\n')

@@ -433,3 +433,10 @@ button.row-main { min-height: 3rem; }
 .review-question textarea { width: 100%; min-height: 4.5rem; padding: 0.55rem 0.75rem; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); resize: vertical; }
 .review-question small.is-loud { color: var(--text); }
 .review-done { margin-top: auto; }
+
+/* money and rest slices, and a drafted text */
+.slice-detail .goals { margin-top: 0.4rem; }
+.slice-detail .actions { padding-top: 0.6rem; }
+.rest-goals { padding: 0.6rem 0 0.4rem; }
+.text-draft-body { padding: 0.25rem 1rem 0.75rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+.text-draft a.primary { display: inline-flex; align-items: center; text-decoration: none; }

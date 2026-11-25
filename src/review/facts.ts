@@ -1,7 +1,9 @@
 import { goalProgress } from '../domain/goals'
 import { dueParts, habitDone } from '../domain/habits'
 import { RING_DOMAINS } from '../domain/lifeRing'
+import { moneyReading, standingText } from '../domain/money'
 import { buildWeekReceipt } from '../domain/receipt'
+import { restReading } from '../domain/rest'
 import type { Domain, Task } from '../domain/types'
 import type { ProductState } from '../productState'
 import type { Bump } from './bumpLog'
@@ -117,6 +119,22 @@ export function buildFacts({ domain, period, today, tasks, product, bumps }: Fac
         if (tracker.goals.open > 0) said.push(`${tracker.goals.onPace} of ${tracker.goals.open} committed goals on pace`)
       }
       if (said.length) lines.push(`life area body (importance ${index + 1} of ${areas.length}): ${said.join(', ')}`)
+      return
+    }
+    if (area === 'money' && product.moneyGoals.length) {
+      const money = moneyReading(product.moneyGoals, product.moneySnapshots, lastDay)!
+      const read = product.moneySnapshots.some((item) => item.on && inPeriod(period, item.on))
+      const said = money.standings.map((standing) => `"${standing.goal.title}" ${standingText(standing)}`)
+      lines.push(`life area money (importance ${index + 1} of ${areas.length}): ${read ? '' : `no new numbers this ${unit}; `}${said.join('; ')}`)
+      return
+    }
+    const rest = area === 'rest' ? restReading(product.restDays.filter((item) => inPeriod(period, item.day)), product.restGoals, lastDay) : undefined
+    if (rest) {
+      const said = [
+        ...(rest.sleep ? [`${rest.sleep.met} of ${rest.sleep.judged} nights reached the ${round1(rest.sleep.goalMin / 60)}h sleep goal, averaging ${round1(rest.sleep.averageMin / 60)}h`] : []),
+        ...(rest.screen ? [`${rest.screen.met} of ${rest.screen.judged} days stayed under the ${round1(rest.screen.goalMin / 60)}h screen time limit, averaging ${round1(rest.screen.averageMin / 60)}h`] : []),
+      ]
+      lines.push(`life area rest (importance ${index + 1} of ${areas.length}): ${said.join('; ')}`)
       return
     }
     const promised = product.ringCommitments.find((item) => item.domain === area)?.commitment28 ?? 0

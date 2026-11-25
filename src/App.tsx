@@ -14,7 +14,7 @@ import { projectTasks } from './domain/taskProjection'
 import { buildWeekReceipt } from './domain/receipt'
 import { toggleHabitPart } from './domain/habits'
 import type { Domain, Energy, Goal, Place, Priority, StoreType, Task } from './domain/types'
-import { loadProductState, saveProductState, type ProductState } from './productState'
+import { loadProductState, saveProductState, withMoneyReading, type ProductState } from './productState'
 import { fetchTrackerSummary, newerSummary, readTrackerSummary, readTrackerToken, type TrackerSummary } from './domain/bodyTracker'
 import { loadSettings, saveSettings, type AppSettings } from './settings'
 import { applyDeviceSetup, loadAccount, saveAccount, setupFromHash, showsWork, type DeviceAccount } from './account'
@@ -27,6 +27,9 @@ import { newId, today } from './format'
 import { Menu } from './ui'
 import { useKeyboardInset } from './useKeyboardInset'
 import { pushWidget, widgetSnapshot } from './native/widget'
+import { syncPhoneRest } from './native/health'
+import { moneyBriefing } from './domain/money'
+import { moneyReader } from './companion/moneyRead'
 import { minuteOptions, TodayView } from './views/TodayView'
 import { ProgressView } from './views/ProgressView'
 import { bumpsBetween, recordBumps } from './review/bumpLog'
@@ -324,6 +327,16 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
     document.addEventListener('visibilitychange', onVisible)
     return () => document.removeEventListener('visibilitychange', onVisible)
   }, [settings.trackerToken])
+
+  // The rest slice reads the phone: fold in its sleep and screen time on open and whenever the app comes back to the front.
+  useEffect(() => {
+    if (activeDomain !== 'personal') return
+    const read = () => void syncPhoneRest(setProduct, today())
+    read()
+    const onVisible = () => { if (document.visibilityState === 'visible') read() }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [activeDomain])
 
   function startAddingTask() {
     setEditingTaskId(undefined)
@@ -729,7 +742,14 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
     listCalendar: () => activeDomain === 'personal' ? calendarEvents : [],
     holdGoal: async (id) => { await holdGoal(id); return summarizeGoal(productRef.current.goals.find((goal) => goal.id === id)!) },
     releaseGoal,
-    todaySummary: () => buildPlanSummary({ today: currentDay, domain: activeDomain, tasks: tasksRef.current, commitments, weeklyCommitments, plan, goals: productRef.current.goals, projects: productRef.current.projects, calendar: activeDomain === 'personal' ? eventsOn(calendarEvents, currentDay) : [], pickedMin, freeNow: calendarRead ? freeNow(calendarEvents) : undefined }),
+    ...(activeDomain === 'personal' ? {
+      recordMoney: (figures, accounts) => {
+        const before = productRef.current.moneySnapshots
+        setProduct((current) => withMoneyReading(current, currentDay, figures, accounts))
+        return { saved: Object.keys(figures), undo: () => setProduct((current) => ({ ...current, moneySnapshots: before })) }
+      },
+    } satisfies Partial<CompanionActions> : {}),
+    todaySummary: () => buildPlanSummary({ today: currentDay, domain: activeDomain, tasks: tasksRef.current, commitments, weeklyCommitments, plan, goals: productRef.current.goals, projects: productRef.current.projects, calendar: activeDomain === 'personal' ? eventsOn(calendarEvents, currentDay) : [], pickedMin, freeNow: calendarRead ? freeNow(calendarEvents) : undefined, money: activeDomain === 'personal' ? moneyBriefing(productRef.current.moneyGoals, productRef.current.moneySnapshots, currentDay) : undefined }),
   }
 
   function editTask(id: string) {
@@ -854,7 +874,7 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
           untriaged={untriaged} openCount={openTasks.length} openMin={openEstimate} onToggle={toggleComplete} onOpen={editTask}
           calendar={activeDomain === 'personal' ? eventsOn(calendarEvents, currentDay) : []} inbox={activeDomain === 'personal' ? inboxCounts : undefined} mailAppUrl={activeDomain === 'personal' ? settings.mailAppUrl : ''} />}
         {shownView === 'dashboard' && <WorkScreens currentDay={currentDay} />}
-        {shownView === 'progress' && <ProgressView domain={activeDomain} product={product} currentDay={currentDay} heldEvents={heldEvents} onProduct={setProduct} onGoals={() => setView('goals')} onReview={reviews.open} />}
+        {shownView === 'progress' && <ProgressView domain={activeDomain} product={product} currentDay={currentDay} heldEvents={heldEvents} onProduct={setProduct} onGoals={() => setView('goals')} onReview={reviews.open} readMoney={activeDomain === 'personal' ? moneyReader(settings) : undefined} />}
         {shownView === 'chat' && chat}
         {shownView === 'goals' && <GoalsView domain={activeDomain} product={product} tasks={tasks} currentDay={currentDay} heldEvents={heldEvents} canHold={activeDomain === 'personal' && connectionStatus === 'connected'} holdError={syncError} onProduct={setProduct} onEditGoal={(id, changes) => { updateGoal(id, changes) }} onHold={(id) => holdAction(() => holdGoal(id))} onRelease={(id) => holdAction(() => releaseGoal(id))} />}
         {shownView === 'stores' && <StoresView activeStore={activeStore} tasks={tasks} onStore={setActiveStore} onToggle={toggleComplete} onAdd={addTask} />}

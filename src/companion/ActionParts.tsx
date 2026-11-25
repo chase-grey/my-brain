@@ -2,6 +2,7 @@ import { createContext, useContext, useState } from 'react'
 import type { ToolCallMessagePartProps } from '@assistant-ui/react'
 import { Icon } from '../navIcons'
 import type { CompanionAction } from './actions'
+import { smsLink } from './textDraft'
 
 // What the chat can do about an action after the fact. Undo closures live for the session only,
 // so a receipt offers undo only while one is still held for it.
@@ -54,6 +55,17 @@ function Receipt({ action }: { action: CompanionAction }) {
   </div>
 }
 
+// A drafted text: the words, and the way into the messaging app with them filled in. Sending happens there.
+function TextDraft({ action }: { action: CompanionAction }) {
+  const field = (label: string) => action.fields?.find((item) => item.label === label)?.value ?? ''
+  const body = field('text')
+  return <div className="action-card text-draft" role="group" aria-label={action.done}>
+    <div className="action-card-title">{action.done}</div>
+    <p className="text-draft-body">{body}</p>
+    <div className="action-card-foot"><a className="primary small" href={smsLink(body, field('to'))}>open in messages</a></div>
+  </div>
+}
+
 /** Renders one tool-call part of an assistant message. The action record rides in the part's artifact. */
 export function ActionPart(props: ToolCallMessagePartProps) {
   const action = props.artifact as CompanionAction | undefined
@@ -66,5 +78,6 @@ export function ActionPart(props: ToolCallMessagePartProps) {
     }
     return <ApprovalCard action={action} respond={respond} busy={busy || action.status === 'running'} />
   }
+  if (action.tool === 'draft_text' && action.status === 'done') return <TextDraft action={action} />
   return <Receipt action={action} />
 }

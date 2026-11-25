@@ -94,6 +94,34 @@ The body slice follows workout-tracker (Chase, 2026-11-24), on every device (202
 - With a summary, body needs no 28-day target and the targets form does not ask for one. Without one, body works like every other area.
 - Reviews read the body area from the same summary.
 
+## money slice
+
+The money slice follows money goals (Chase, 2026-11-25). `src/domain/money.ts` holds the rules and `money.test.ts` holds them to it.
+
+- A money goal is one of three kinds: reach an amount by a date, pay a loan off by a date, or keep so many months of spending in savings.
+- The numbers come from screenshots or are typed in. A screenshot is read once with the personal key, the numbers are shown to be checked before they are saved, and the picture is not kept. Account numbers are never kept.
+- Pace is a straight line from the figure on the day the goal was set to the target on its date. On or ahead of the line fills that goal's share; behind fills the share of the expected ground that was covered. Every goal weighs the same.
+- Today is the yardstick, so numbers that have gone stale read as behind until new ones arrive.
+- With a money goal set, money needs no 28-day target and the targets form does not ask for one. Without one, money works like every other area.
+- The chat is told the latest figures and where each goal stands, and reviews read the money area from the same goals.
+- Nothing links to a bank. Do not add an aggregator or store a bank login without asking.
+
+## rest slice
+
+The rest slice reads the phone (Chase, 2026-11-25): sleep from Health Connect and screen time from Android's usage record, each against a goal Chase sets. `src/domain/rest.ts` holds the rules and `rest.test.ts` holds them to it.
+
+- The slice reads the last 28 days: the share of nights that reached the sleep goal and the share of days under the screen time limit, each weighing the same.
+- Today's screen time is still running and is left out. A day the phone has nothing for is left out, not counted as missed.
+- With a goal that has days behind it, rest needs no 28-day target. Without one, rest works like every other area.
+- The app only reads. Days are kept on the phone for 400 days and then dropped.
+
+## texts and people
+
+- The chat drafts a text only when Chase asks for one. The draft always opens in the messaging app and is sent from there; the app never sends a message and has no approve-to-send of its own (Chase, 2026-11-25).
+- A draft sounds like Chase: his wording, length and casing, nothing a person would not actually text.
+- The app does not read messages.
+- Connection is logged when Chase is with someone (`saw someone`). Never infer it from texts or calls, and do not track who he has been out of touch with (Chase, 2026-11-25).
+
 ## time available
 
 Chat is told how much time there is right now only when it is known: a length picked on today, or what the calendar shows (clear until the next event, in one until it ends, nothing else today). A default is never passed along as a fact. Until a length is picked, the picker starts on the longest choice that fits before the next event, and on the shortest during one (`freeNow` and `fittingMinutes` in `src/domain/calendar.ts`). With no calendar read, as at work, it starts on 1h and chat hears no number. `calendar.test.ts` and `companion.test.ts` hold these.

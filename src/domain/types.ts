@@ -230,11 +230,4 @@ export type RestCheckIn = {
   revisedAt?: string
 }
 
-export type MoneySnapshot = {
-  month: string
-  netWorth: number
-  homeRemaining: number
-  carRemaining: number
-  incomeMonthly: number
-  spendingMonthly: number
-}
+export type { MoneySnapshot } from './money'
