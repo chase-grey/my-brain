@@ -159,22 +159,24 @@ function stateLabel(state: RingArc['state']): string {
 
 const goalState = { met: 'met', onPace: 'on pace', behind: 'behind' } as const
 
+/** What a part takes off the slice, or nothing when it takes nothing. */
+const cost = (share: number) => share > 0 ? ` · −${Math.max(1, Math.round(share * 100))}%` : ''
+
 function TrackerDetail({ arc }: { arc: RingArc }) {
   const body = arc.tracker!
   const [listed, setListed] = useState(false)
-  const weeks = `${body.weeksHit} of ${body.weeksJudged}`
-  const goalCount = body.goalsMet + body.goalsOpen
-  const goals = `${body.goalsMet + body.goalsOnPace} of ${goalCount}`
-  return <Card className="slice-detail" title="last 4 weeks" aside={<span className="count">{Math.round(body.fill * 100)}%</span>}>
+  const weeks = `${body.weeksMissed} of ${body.weeksJudged}${cost(body.weeksCost)}`
+  const goals = `${body.goalsBehind} of ${body.goalsCounted}${cost(body.goalsCost)}`
+  return <Card className="slice-detail" title="last 8 weeks" aside={<span className="count">{Math.round(body.fill * 100)}%</span>}>
     <p className="slice-stat">{body.streak
       ? <><strong>{body.streak}</strong> week streak</>
-      : <><strong>{weeks}</strong> weeks hit</>}</p>
+      : <><strong>{body.weeksJudged - body.weeksMissed} of {body.weeksJudged}</strong> weeks kept</>}</p>
     <div className="slice-bar" style={{ '--hue': wheelHue[arc.domain] } as React.CSSProperties}><Bar fraction={body.fill} /></div>
     <ul className="slice-facts">
-      {body.streak ? <li><span>weeks hit</span><small>{weeks}</small></li> : null}
-      {goalCount > 0 && <li>{body.goals.length
-        ? <button className="slice-fact-button" type="button" aria-expanded={listed} onClick={() => setListed(!listed)}><span>goals met or on pace</span><small>{goals}</small></button>
-        : <><span>goals met or on pace</span><small>{goals}</small></>}</li>}
+      <li><span>weeks missed</span><small>{weeks}</small></li>
+      {body.goalsCounted > 0 && <li>{body.goals.length
+        ? <button className="slice-fact-button" type="button" aria-expanded={listed} onClick={() => setListed(!listed)}><span>goals behind</span><small>{goals}</small></button>
+        : <><span>goals behind</span><small>{goals}</small></>}</li>}
       {listed && body.goals.map((goal) => <li className="slice-goal" key={goal.title}><span>{goal.title}</span><small className={goal.state === 'behind' ? 'is-loud' : ''}>{goalState[goal.state]}</small></li>)}
       <li><a className="link" href={TRACKER_GOALS_LINK}>open workout tracker</a></li>
     </ul>

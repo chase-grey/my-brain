@@ -30,21 +30,25 @@ export type TrackerGoal = { title: string; state: 'met' | 'onPace' | 'behind' }
 export type BodyReading = {
   /** 0 to 1: how the slice fills. */
   fill: number
-  weeksHit: number
+  /** Weeks in the window the streak did not survive. */
+  weeksMissed: number
   weeksJudged: number
   /** Left out when the tracker has not been opened since a week ended, so the run is not known to stand. */
   streak?: number
-  goalsOpen: number
-  goalsOnPace: number
-  goalsMet: number
+  /** Committed goals behind their line, out of every goal met or committed to. */
+  goalsBehind: number
+  goalsCounted: number
+  /** 0 to 1: what the missed weeks and the goals behind each take off the fill. */
+  weeksCost: number
+  goalsCost: number
   /** The goals by name, when the tracker sent them. */
   goals: TrackerGoal[]
   weeksTracked: number
 }
 
-const WINDOW = 4
-/** How much of the fill the weeks are when there are goals to read; the goals are the rest. */
-const WEEKS_WEIGHT = 0.75
+const WINDOW = 8
+/** The most the goals can take off: with the streak held across the window the slice never reads under 80%. */
+const GOALS_COST = 0.2
 const isDay = (value: unknown): value is string => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)
 const isCount = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value) && value >= 0
 
@@ -146,12 +150,12 @@ const ms = (day: string) => new Date(`${day}T00:00:00Z`).getTime()
 const iso = (time: number) => new Date(time).toISOString().slice(0, 10)
 
 /**
- * The last four weeks as the tracker judged them, and the committed goals beside them.
+ * The last eight weeks as the tracker judged them, and the committed goals beside them.
  *
- * A week that ended with no word from the tracker counts as missed: logging is the only thing that opens it,
- * so a week it never reported is one that was not finished. A hit week is 1, a week saved by freezes a half.
- * With goals to read, the weeks are three quarters of the fill and the goals the last quarter:
- * the share of them that are met or on pace, out of every goal met or committed to.
+ * The streak is what fills the slice: a week hit or saved by freezes kept it, so with no week missed the slice is full
+ * before the goals are read. Each missed week takes an eighth. A week that ended with no word from the tracker counts
+ * as missed: logging is the only thing that opens it, so a week it never reported is one that was not finished.
+ * Goals behind their line take off up to a fifth: the share behind, out of every goal met or committed to.
  */
 export function bodyReading(summary: TrackerSummary, today: string): BodyReading {
   const weeks = [...summary.weeks].sort((a, b) => a.week.localeCompare(b.week))
@@ -161,8 +165,7 @@ export function bodyReading(summary: TrackerSummary, today: string): BodyReading
   const current = ms(last) + Math.floor((ms(today) - ms(last)) / (7 * dayMs)) * 7 * dayMs
   const reported = new Map(weeks.map((item) => [item.week, item.result]))
   const newest = reported.has(iso(current)) ? current : current - 7 * dayMs
-  let score = 0
-  let weeksHit = 0
+  let weeksMissed = 0
   let weeksJudged = 0
   let unreported = 0
   for (let index = 0; index < WINDOW; index += 1) {
@@ -171,21 +174,22 @@ export function bodyReading(summary: TrackerSummary, today: string): BodyReading
     weeksJudged += 1
     const result = reported.get(week)
     if (!result) unreported += 1
-    if (result === 'hit') { score += 1; weeksHit += 1 }
-    else if (result === 'froze') score += 0.5
+    if (result !== 'hit' && result !== 'froze') weeksMissed += 1
   }
-  const weekShare = weeksJudged ? score / weeksJudged : 0
-  const { open, onPace, met } = summary.goals
-  const good = met + Math.min(onPace, open)
-  const fill = met + open > 0 ? WEEKS_WEIGHT * weekShare + (1 - WEEKS_WEIGHT) * (good / (met + open)) : weekShare
+  const { open, met } = summary.goals
+  const goalsCounted = met + open
+  const goalsBehind = open - Math.min(summary.goals.onPace, open)
+  const weeksCost = weeksJudged ? weeksMissed / weeksJudged : 1
+  const goalsCost = goalsCounted ? Math.min(GOALS_COST * (goalsBehind / goalsCounted), 1 - weeksCost) : 0
   return {
-    fill,
-    weeksHit,
+    fill: 1 - weeksCost - goalsCost,
+    weeksMissed,
     weeksJudged,
     ...(unreported === 0 && ms(today) >= ms(summary.asOf) ? { streak: summary.streak } : {}),
-    goalsOpen: open,
-    goalsOnPace: Math.min(onPace, open),
-    goalsMet: met,
+    goalsBehind,
+    goalsCounted,
+    weeksCost,
+    goalsCost,
     goals: summary.goals.list ?? [],
     weeksTracked: summary.weeksTracked,
   }

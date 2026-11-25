@@ -14,28 +14,42 @@ const summary = (over: Partial<TrackerSummary> = {}): TrackerSummary => ({
 })
 
 describe('body slice from workout-tracker', () => {
-  it('fills the slice when the last four weeks were hit and every committed goal is on pace', () => {
-    expect(bodyReading(summary(), '2026-11-24')).toEqual({ fill: 1, weeksHit: 4, weeksJudged: 4, streak: 11, goalsOpen: 3, goalsOnPace: 3, goalsMet: 1, goals: [], weeksTracked: 16 })
+  it('fills the slice when no week was missed and no committed goal is behind', () => {
+    expect(bodyReading(summary(), '2026-11-24')).toEqual({ fill: 1, weeksMissed: 0, weeksJudged: 5, streak: 11, goalsBehind: 0, goalsCounted: 4, weeksCost: 0, goalsCost: 0, goals: [], weeksTracked: 16 })
+  })
+
+  it('reads eight weeks, not the last few', () => {
+    const weeks = ['2026-09-21', '2026-09-28', '2026-10-05', '2026-10-12', '2026-10-19', '2026-10-26', '2026-11-02', '2026-11-09', '2026-11-16'].map((week, index) => index === 0 ? { week, result: 'missed' as const } : hit(week))
+    expect(bodyReading(summary({ weeks }), '2026-11-24')).toMatchObject({ fill: 1, weeksMissed: 0, weeksJudged: 8 })
+    expect(bodyReading(summary({ weeks: [...weeks.slice(0, 1), { week: '2026-09-28', result: 'missed' }, ...weeks.slice(2)] }), '2026-11-24')).toMatchObject({ fill: 0.875, weeksMissed: 1, weeksJudged: 8 })
+  })
+
+  it('never reads under 80% while the streak holds, however the goals stand', () => {
+    const froze = ['2026-10-26', '2026-11-02', '2026-11-09', '2026-11-16'].map((week) => ({ week, result: 'froze' as const }))
+    expect(bodyReading(summary({ weeks: froze, goals: { open: 7, onPace: 0, met: 0 } }), '2026-11-24').fill).toBe(0.8)
+    expect(bodyReading(summary({ goals: { open: 7, onPace: 1, met: 4 } }), '2026-11-24').fill).toBeCloseTo(1 - 0.2 * (6 / 11))
   })
 
   it('counts the week being lived once the tracker calls it hit', () => {
     const reading = bodyReading(summary({ weeks: [...summary().weeks.slice(1, 4), { week: '2026-11-16', result: 'missed' }, hit('2026-11-23', true)], streak: 1 }), '2026-11-24')
-    expect(reading).toMatchObject({ weeksHit: 3, weeksJudged: 4, streak: 1 })
+    expect(reading).toMatchObject({ weeksMissed: 1, weeksJudged: 5, streak: 1 })
   })
 
-  it('scores a week saved by freezes a half and a missed week nothing', () => {
+  it('counts a week saved by freezes as kept and takes a share off for each missed week', () => {
     const weeks = [hit('2026-10-26'), { week: '2026-11-02', result: 'froze' as const }, { week: '2026-11-09', result: 'missed' as const }, hit('2026-11-16')]
-    expect(bodyReading(summary({ weeks, goals: { open: 0, onPace: 0, met: 0 } }), '2026-11-24').fill).toBe(0.625)
+    expect(bodyReading(summary({ weeks, goals: { open: 0, onPace: 0, met: 0 } }), '2026-11-24')).toMatchObject({ fill: 0.75, weeksMissed: 1, weeksCost: 0.25, goalsCost: 0 })
   })
 
-  it('gives the weeks three quarters of the fill and the goals the rest', () => {
-    expect(bodyReading(summary({ goals: { open: 4, onPace: 1, met: 0 } }), '2026-11-24').fill).toBe(0.8125)
+  it('takes up to a fifth off for goals behind, and never goes under nothing', () => {
+    expect(bodyReading(summary({ goals: { open: 4, onPace: 1, met: 0 } }), '2026-11-24')).toMatchObject({ goalsBehind: 3, goalsCounted: 4 })
+    expect(bodyReading(summary({ goals: { open: 4, onPace: 1, met: 0 } }), '2026-11-24').fill).toBeCloseTo(0.85)
     const missed = ['2026-10-26', '2026-11-02', '2026-11-09', '2026-11-16'].map((week) => ({ week, result: 'missed' as const }))
-    expect(bodyReading(summary({ weeks: missed, streak: 0 }), '2026-11-24').fill).toBe(0.25)
+    expect(bodyReading(summary({ weeks: missed, streak: 0 }), '2026-11-24').fill).toBe(0)
+    expect(bodyReading(summary({ weeks: missed, streak: 0, goals: { open: 4, onPace: 0, met: 0 } }), '2026-11-24').fill).toBe(0)
   })
 
   it('counts a goal already met alongside the ones on pace', () => {
-    expect(bodyReading(summary({ goals: { open: 4, onPace: 1, met: 4 } }), '2026-11-24').fill).toBe(0.75 + 0.25 * (5 / 8))
+    expect(bodyReading(summary({ goals: { open: 4, onPace: 1, met: 4 } }), '2026-11-24').fill).toBeCloseTo(1 - 0.2 * (3 / 8))
     expect(bodyReading(summary({ goals: { open: 0, onPace: 0, met: 2 } }), '2026-11-24').fill).toBe(1)
   })
 
@@ -47,21 +61,21 @@ describe('body slice from workout-tracker', () => {
 
   it('counts a week the tracker never reported as missed and stops claiming the streak', () => {
     const reading = bodyReading(summary({ asOf: '2026-11-18' }), '2026-12-09')
-    expect(reading).toMatchObject({ weeksHit: 2, weeksJudged: 4 })
+    expect(reading).toMatchObject({ weeksMissed: 2, weeksJudged: 7 })
     expect(reading.streak).toBeUndefined()
-    expect(bodyReading(summary({ asOf: '2026-11-18' }), '2027-02-01').fill).toBe(0.25)
+    expect(bodyReading(summary({ asOf: '2026-11-18' }), '2027-02-01').fill).toBe(0)
   })
 
   it('judges a new tracker on the weeks it has', () => {
     const reading = bodyReading(summary({ weeks: [hit('2026-11-16')], streak: 1, weeksTracked: 1, goals: { open: 0, onPace: 0, met: 0 } }), '2026-11-24')
-    expect(reading).toMatchObject({ fill: 1, weeksHit: 1, weeksJudged: 1 })
+    expect(reading).toMatchObject({ fill: 1, weeksMissed: 0, weeksJudged: 1 })
   })
 
   it('follows a week that does not start on monday', () => {
     const weeks = ['2026-10-25', '2026-11-01', '2026-11-08', '2026-11-15'].map((week) => hit(week))
-    expect(bodyReading(summary({ weeks, asOf: '2026-11-20' }), '2026-11-21')).toMatchObject({ weeksHit: 4, weeksJudged: 4, streak: 11 })
-    expect(bodyReading(summary({ weeks, asOf: '2026-11-20' }), '2026-11-22')).toMatchObject({ weeksHit: 4, weeksJudged: 4, streak: 11 })
-    expect(bodyReading(summary({ weeks, asOf: '2026-11-20' }), '2026-11-29')).toMatchObject({ weeksHit: 3, weeksJudged: 4 })
+    expect(bodyReading(summary({ weeks, asOf: '2026-11-20' }), '2026-11-21')).toMatchObject({ weeksMissed: 0, weeksJudged: 4, streak: 11 })
+    expect(bodyReading(summary({ weeks, asOf: '2026-11-20' }), '2026-11-22')).toMatchObject({ weeksMissed: 0, weeksJudged: 4, streak: 11 })
+    expect(bodyReading(summary({ weeks, asOf: '2026-11-20' }), '2026-11-29')).toMatchObject({ weeksMissed: 1, weeksJudged: 5 })
   })
 
   it('keeps the tracker off today: training is tracked in workout-tracker', () => {
