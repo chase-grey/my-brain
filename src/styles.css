@@ -53,7 +53,7 @@ h2 { font-size: 1rem; font-weight: 600; }
 .icon-button { display: inline-grid; place-items: center; width: 2.75rem; height: 2.75rem; border-radius: 50%; color: var(--text); }
 .icon-button:hover { background: var(--surface-2); }
 
-.tabbar { position: fixed; inset: auto 0 0; z-index: 6; display: grid; grid-template-columns: repeat(4, 1fr); padding: 0.3rem 0.5rem calc(0.3rem + env(safe-area-inset-bottom)); border-top: 1px solid var(--border); background: var(--surface); }
+.tabbar { position: fixed; inset: auto 0 0; z-index: 6; display: grid; grid-template-columns: repeat(4, 1fr); padding: 0.3rem 0.5rem calc(0.3rem + env(safe-area-inset-bottom)); border-top: 1px solid var(--border); background: light-dark(var(--surface), var(--bg)); } /* dark, the bar wears the ground: Android paints its navigation bar the manifest's theme_color under an installed app, and the two should read as one bar (~/.claude/patterns/android-nav-bar.md) */
 .tabbar button, .tabbar .menu summary, .rail button, .rail .menu summary { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.15rem; min-height: 3rem; border-radius: 10px; color: var(--muted); font-size: 0.7rem; }
 .tabbar button.active, .rail button.active { color: var(--text); }
 .tabbar button.active svg, .rail button.active svg { stroke-width: 2.3; }
