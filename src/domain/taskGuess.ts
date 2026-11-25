@@ -32,7 +32,7 @@ export const priorityLabels: Record<Priority, string> = { 1: 'critical', 2: 'hig
 export const guessBatch = 20
 
 const energies: readonly Energy[] = ['deep', 'shallow', 'errand']
-const stores: readonly StoreType[] = ['grocery', 'amazon', 'hardware', 'other']
+const stores: readonly StoreType[] = ['grocery', 'amazon', 'hardware', 'thrift', 'other']
 
 export function guessPrompt(domain: Domain, projects: Pick<Project, 'title'>[]): string {
   const fields = [
@@ -42,7 +42,7 @@ export function guessPrompt(domain: Domain, projects: Pick<Project, 'title'>[]):
       '"energy": "deep" for something that takes focus or a long stretch, "shallow" for something light and quick, "errand" for something done out of the house',
       '"where": the places it can be done, any of "home", "office", "out". Work on the house or yard is "home"; an appointment or pickup is "out". Empty only when it really can be done anywhere',
       '"needs": what it takes, any of "computer", "phone", "tools", "car". A call needs "phone"; a form, booking, email or anything online needs "computer"; a repair or building job needs "tools"; driving somewhere needs "car". Empty only when it takes none of these',
-      '"store": only when the task is buying something: "grocery", "amazon", "hardware" or "other". Otherwise "none"',
+      '"store": only when the task is buying something: "grocery", "amazon", "hardware", "thrift" for something to find second-hand, or "other". Otherwise "none"',
     ] : []),
     ...(projects.length ? [`"project": the number of the project it belongs to, or 0 when none clearly fits. Projects: ${projects.map((project, index) => `${index + 1} ${JSON.stringify(project.title)}`).join(', ')}`] : []),
   ]

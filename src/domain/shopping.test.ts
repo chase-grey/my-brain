@@ -8,7 +8,7 @@ describe('shopping lists', () => {
     expect(visibleStoreItems([milk], 'grocery')).toEqual([milk])
   })
 
-  it.each(['amazon', 'hardware', 'other'] as const)('removes bought %s items from the active list', (storeType) => {
+  it.each(['amazon', 'hardware', 'thrift', 'other'] as const)('removes bought %s items from the active list', (storeType) => {
     const item = task({ id: storeType, storeType, completed: true })
     expect(visibleStoreItems([item], storeType)).toEqual([])
   })

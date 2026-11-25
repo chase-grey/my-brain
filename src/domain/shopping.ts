@@ -4,6 +4,7 @@ export const storeOptions: { value: StoreType; label: string; shortLabel: string
   { value: 'grocery', label: 'Grocery store', shortLabel: 'Grocery' },
   { value: 'amazon', label: 'Amazon', shortLabel: 'Amazon' },
   { value: 'hardware', label: 'Hardware store', shortLabel: 'Hardware' },
+  { value: 'thrift', label: 'Thrift store', shortLabel: 'Thrift' },
   { value: 'other', label: 'Other', shortLabel: 'Other' },
 ]
 
