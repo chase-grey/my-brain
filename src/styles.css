@@ -212,11 +212,23 @@ button.row-main { min-height: 3rem; }
 .action-card-foot { display: flex; gap: 0.5rem; padding: 0.6rem 1rem; border-top: 1px solid var(--border); border-radius: 0 0 var(--radius) var(--radius); background: var(--surface-2); }
 .primary.small, .secondary.small { min-height: 2.25rem; padding: 0 0.9rem; font-size: 0.9rem; }
 
-.composer { display: grid; grid-template-columns: 1fr auto; gap: 0.5rem; align-items: end; padding: 0.5rem 0 0.25rem; background: var(--bg); }
+.composer { display: grid; grid-template-columns: auto 1fr auto; gap: 0.5rem; align-items: end; padding: 0.5rem 0 0.25rem; background: var(--bg); }
 .composer-input { resize: none; max-height: 10rem; }
 .composer-send { display: grid; place-items: center; width: 2.75rem; height: 2.75rem; border-radius: 50%; background: var(--accent); color: var(--on-accent); }
-.composer.has-mic { grid-template-columns: 1fr auto auto; }
-.composer-mic { display: grid; place-items: center; width: 2.75rem; height: 2.75rem; border: 1px solid var(--border); border-radius: 50%; color: var(--muted); background: var(--surface-2); }
+.composer.has-mic { grid-template-columns: auto 1fr auto auto; }
+.composer-send:disabled, .composer-attach:disabled { opacity: 0.5; }
+/* picked for the next message: a photo as a thumbnail, anything else by name */
+.attached { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0; padding: 0.5rem 0 0; list-style: none; }
+.attached li { position: relative; display: flex; align-items: center; max-width: 100%; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); }
+.attached img { display: block; width: 3.5rem; height: 3.5rem; border-radius: 9px; object-fit: cover; }
+.attached span { padding: 0.45rem 2rem 0.45rem 0.7rem; overflow: hidden; font-size: 0.85rem; text-overflow: ellipsis; white-space: nowrap; }
+.attached button { position: absolute; top: 50%; right: 0.3rem; display: grid; place-items: center; width: 1.4rem; height: 1.4rem; border-radius: 50%; background: var(--surface); color: var(--muted); transform: translateY(-50%); }
+.attached img + button { top: -0.4rem; right: -0.4rem; border: 1px solid var(--border); transform: none; }
+.turn-image { display: block; max-width: 100%; max-height: 14rem; border-radius: 10px; }
+.turn-file { display: block; width: fit-content; max-width: 100%; padding: 0.2rem 0.6rem; border: 1px solid var(--border); border-radius: 999px; color: var(--muted); font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.turn-image + .turn-image, .turn-file + .turn-file, .turn-image + .turn-file, .turn-file + .turn-image { margin-top: 0.35rem; }
+.turn.user :is(.turn-image, .turn-file):not(:last-child) { margin-bottom: 0.35rem; }
+.composer-mic, .composer-attach { display: grid; place-items: center; width: 2.75rem; height: 2.75rem; border: 1px solid var(--border); border-radius: 50%; color: var(--muted); background: var(--surface-2); }
 .composer-mic[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--surface)); }
 .composer-mic.is-listening { border-color: var(--accent); color: var(--accent); animation: listening 1.4s ease-in-out infinite; }
 .composer-mic.is-speaking { background: var(--accent); color: var(--on-accent); }

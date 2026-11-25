@@ -10,6 +10,7 @@ import { Empty } from '../ui'
 import { useVoice } from '../voice/useVoice'
 import type { CompanionAction, ActionStatus } from './actions'
 import { ActionHandlersContext, ActionPart, type ActionHandlers } from './ActionParts'
+import { attachmentAccept, readAttachment, type Attachment } from './attachments'
 import { activeModel, baseUrlFor, modelChoices, modelField, providerOf, usesAnthropic } from './aiProvider'
 import { AnthropicClient } from './anthropicClient'
 import { BridgeCompanionClient } from './bridgeCompanion'
@@ -57,7 +58,13 @@ function actionPart(action: CompanionAction): MessagePart {
 
 export function toMessage(turn: CompanionTurn, index: number): ThreadMessageLike {
   const content: MessagePart[] = []
-  if (turn.text.trim() || !turn.actions?.length) content.push({ type: 'text', text: turn.text })
+  // A photo still in memory shows as itself; anything else, or a photo from a stored thread, shows by name.
+  for (const item of turn.attachments ?? []) {
+    content.push(item.kind === 'image' && item.data
+      ? { type: 'image', image: `data:${item.mediaType};base64,${item.data}`, filename: item.name }
+      : { type: 'file', filename: item.name, data: '', mimeType: item.mediaType })
+  }
+  if (turn.text.trim() || (!turn.actions?.length && !turn.attachments?.length)) content.push({ type: 'text', text: turn.text })
   for (const action of turn.actions ?? []) content.push(actionPart(action))
   return {
     id: `${turn.at}-${index}`,
@@ -72,8 +79,16 @@ function textOf(message: AppendMessage): string {
   return message.content.map((part) => part.type === 'text' ? part.text : '').join('').trim()
 }
 
+function AttachedImage({ image, filename }: { image: string; filename?: string }) {
+  return <img className="turn-image" src={image} alt={filename ?? ''} />
+}
+
+function AttachedFile({ filename }: { filename?: string }) {
+  return <span className="turn-file">{filename}</span>
+}
+
 export function UserMessage() {
-  return <MessagePrimitive.Root className="turn user"><MessagePrimitive.Content /></MessagePrimitive.Root>
+  return <MessagePrimitive.Root className="turn user"><MessagePrimitive.Content components={{ Image: AttachedImage, File: AttachedFile }} /></MessagePrimitive.Root>
 }
 
 function MarkdownText() {
@@ -123,6 +138,14 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
   })
   const [history, setHistory] = useState<CompanionConversation[]>()
   const [sending, setSending] = useState(false)
+  // Picked for the next message and not sent yet.
+  const [attached, setAttached] = useState<Attachment[]>([])
+  const attachedRef = useRef(attached)
+  attachedRef.current = attached
+  const [reading, setReading] = useState(false)
+  const fileInput = useRef<HTMLInputElement>(null)
+  // A reload would drop them.
+  useEffect(() => (attached.length ? holdUpdates() : undefined), [attached.length > 0])
   // A reload would cut off an answer that is still arriving.
   useEffect(() => (sending ? holdUpdates() : undefined), [sending])
   const [openedId, setOpenedId] = useState<string>()
@@ -259,11 +282,39 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
     await sendText(textOf(message))
   }
 
+  function pickFiles() {
+    fileInput.current?.click()
+  }
+
+  async function attach(files: File[]) {
+    setReading(true)
+    for (const file of files) {
+      try {
+        const item = await readAttachment(file)
+        setAttached((items) => [...items, item])
+      } catch (error) {
+        appendTurn({ role: 'assistant', text: error instanceof Error ? error.message : `can't attach ${file.name}`, at: new Date().toISOString(), error: true })
+      }
+    }
+    setReading(false)
+  }
+
+  // The send button while files are attached: they can go with no words at all.
+  function sendAttached() {
+    const composer = runtime.thread.composer
+    const text = composer.getState().text.trim()
+    composer.setText('')
+    void sendText(text)
+  }
+
   async function sendText(text: string) {
-    if (!text || sending || !companion) return
+    const attachments = attachedRef.current
+    if ((!text && !attachments.length) || sending || !companion) return
+    attachedRef.current = []
+    setAttached([])
     expirePending()
     const before = conversationRef.current
-    const turn: CompanionTurn = { role: 'user', text, at: new Date().toISOString() }
+    const turn: CompanionTurn = { role: 'user', text, at: new Date().toISOString(), ...(attachments.length ? { attachments } : {}) }
     const pinned = pinnedRef.current
     pinnedRef.current = false
     // Settled once per message: it carries on the thread, or the thread stays in the history and the message starts a new one.
@@ -285,7 +336,7 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
     if (domain === 'work') settle()
     setSending(true)
     try {
-      const reply = await companion.send(text)
+      const reply = await companion.send(text, attachments)
       settle()
       absorb(reply)
     } catch (error) {
@@ -436,12 +487,22 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
               </select>}
               <span className="chat-tools-gap" />
               <button className="icon-button" type="button" aria-label="history" aria-pressed={Boolean(history)} onClick={() => setHistory(history ? undefined : loadHistory(domain))}><Icon name="history" size={18} /></button>
-              <button className="icon-button" type="button" aria-label="new chat" disabled={!conversation.turns.length} onClick={startNew}><Icon name="plus" size={18} /></button>
+              <button className="icon-button" type="button" aria-label="new chat" disabled={!conversation.turns.length} onClick={startNew}><Icon name="compose" size={18} /></button>
             </div>
+            <input ref={fileInput} type="file" hidden multiple accept={attachmentAccept} onChange={(event) => { const files = Array.from(event.target.files ?? []); event.target.value = ''; void attach(files) }} />
+            {attached.length > 0 && <ul className="attached" aria-label="attached">
+              {attached.map((item, index) => <li key={`${item.name}-${index}`}>
+                {item.kind === 'image' && item.data ? <img src={`data:${item.mediaType};base64,${item.data}`} alt={item.name} /> : <span>{item.name}</span>}
+                <button type="button" aria-label={`remove ${item.name}`} onClick={() => setAttached((items) => items.filter((_, at) => at !== index))}><Icon name="close" size={14} /></button>
+              </li>)}
+            </ul>}
             <ComposerPrimitive.Root className={`composer${voice.supported ? ' has-mic' : ''}`}>
+              <button className="composer-attach" type="button" aria-label="attach" disabled={reading} onClick={pickFiles}><Icon name="plus" size={18} /></button>
               <ComposerPrimitive.Input className="composer-input" aria-label="message" placeholder={bridge === 'checking' ? 'checking work pc' : voice.state === 'listening' ? 'listening' : 'message'} rows={1} maxRows={6} />
               {voice.supported && <button className={`composer-mic${voice.state !== 'idle' ? ` is-${voice.state}` : ''}`} type="button" aria-pressed={voice.on} aria-label={voice.on ? 'stop' : 'talk'} disabled={sending && !voice.on} onClick={voice.toggle}><Icon name="mic" size={18} /></button>}
-              <ComposerPrimitive.Send className="composer-send" aria-label="send"><Icon name="send" size={18} /></ComposerPrimitive.Send>
+              {attached.length
+                ? <button className="composer-send" type="button" aria-label="send" disabled={sending || reading} onClick={sendAttached}><Icon name="send" size={18} /></button>
+                : <ComposerPrimitive.Send className="composer-send" aria-label="send"><Icon name="send" size={18} /></ComposerPrimitive.Send>}
             </ComposerPrimitive.Root>
           </ThreadPrimitive.Root>
         </ActionHandlersContext.Provider>

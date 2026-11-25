@@ -1,4 +1,4 @@
-export type BridgeChatRequest = { text: string; sessionId?: string; systemPrompt?: string; model?: string; effort?: string }
+export type BridgeChatRequest = { text: string; /** Ids from `upload`. */ files?: string[]; sessionId?: string; systemPrompt?: string; model?: string; effort?: string }
 export type BridgeChatResponse = { text: string; sessionId: string; isError: boolean }
 export type BridgeChatStatus = { claude: boolean; claudePath?: string; vault: boolean; vaultPath: string }
 
@@ -18,6 +18,12 @@ export class BridgeCompanionClient {
   async chat(request: BridgeChatRequest): Promise<BridgeChatResponse> {
     const response = await this.request<Partial<BridgeChatResponse>>('/chat', { method: 'POST', body: JSON.stringify(request) })
     return { text: response.text ?? '', sessionId: response.sessionId ?? request.sessionId ?? '', isError: response.isError === true }
+  }
+
+  /** Leaves a file on the work pc for the next chat message to name. */
+  async upload(name: string, bytes: Uint8Array): Promise<string> {
+    const body = new Blob([bytes as BlobPart])
+    return (await this.request<{ id: string }>(`/chat/file?name=${encodeURIComponent(name)}`, { method: 'POST', body, headers: { 'Content-Type': 'application/octet-stream' } })).id
   }
 
   /** Continues the thread in a Session Runner terminal: the same Claude Code session, resumed in the vault. */

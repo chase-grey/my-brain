@@ -8,6 +8,7 @@ const paths = {
   goals: 'M6 21V4M6 4h11l-2.5 4L17 12H6',
   settings: 'M5 7h7M16 7h3M5 12h1M10 12h9M5 17h9M18 17h1M14 5v4M8 10v4M16 15v4',
   plus: 'M12 5v14M5 12h14',
+  compose: 'M11 5H6a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-5M17.6 4.4a1.4 1.4 0 0 1 2 2L12 14l-3 1 1-3z',
   back: 'M15 5l-7 7 7 7',
   check: 'M5 12.5l4.5 4.5L19 7',
   send: 'M12 19V5M5 12l7-7 7 7',

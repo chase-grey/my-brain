@@ -1,8 +1,9 @@
 import type { Domain } from '../domain/types'
 import { newId } from '../format'
 import type { CompanionAction } from './actions'
+import { withoutData, type Attachment } from './attachments'
 
-export type CompanionTurn = { role: 'user' | 'assistant'; text: string; at: string; error?: boolean; actions?: CompanionAction[] }
+export type CompanionTurn = { role: 'user' | 'assistant'; text: string; at: string; error?: boolean; actions?: CompanionAction[]; attachments?: Attachment[] }
 export type CompanionConversation = { version: 1; id: string; turns: CompanionTurn[]; sessionId?: string }
 type History = { version: 1; conversations: CompanionConversation[] }
 
@@ -15,6 +16,14 @@ export const maxStoredTurns = 40
 export const maxStoredConversations = 50
 
 export const newConversation = (): CompanionConversation => ({ version: 1, id: newId('chat'), turns: [] })
+
+// A photo or pdf is far too big for storage, so a stored turn keeps what was attached by name only.
+function storedTurn(turn: CompanionTurn): CompanionTurn {
+  if (!Array.isArray(turn.attachments)) return turn
+  const attachments = turn.attachments.filter((item) => item && typeof item.name === 'string').map(withoutData)
+  const { attachments: _dropped, ...rest } = turn
+  return attachments.length ? { ...rest, attachments } : rest
+}
 
 // A card still waiting when the page closed cannot be resumed: the model's half of the turn lived only in memory.
 function settleAction(action: CompanionAction): CompanionAction {
@@ -35,6 +44,7 @@ function parseConversation(raw: unknown): CompanionConversation | undefined {
   const turns = parsed.turns
     .filter((turn) => (turn.role === 'user' || turn.role === 'assistant') && typeof turn.text === 'string')
     .map((turn) => Array.isArray(turn.actions) ? { ...turn, actions: turn.actions.map(settleAction) } : turn)
+    .map(storedTurn)
   if (!turns.length) return undefined
   return {
     version: 1,
@@ -88,7 +98,7 @@ export function saveConversation(domain: Domain, conversation: CompanionConversa
     writeHistory(domain, rest, store)
     return
   }
-  writeHistory(domain, [{ ...conversation, turns: conversation.turns.slice(-maxStoredTurns) }, ...rest], store)
+  writeHistory(domain, [{ ...conversation, turns: conversation.turns.slice(-maxStoredTurns).map(storedTurn) }, ...rest], store)
 }
 
 export function deleteConversation(domain: Domain, id: string, store: StorageLike | undefined = storage()): void {
@@ -104,10 +114,11 @@ export function clearHistory(domain: Domain, store: StorageLike | undefined = st
   }
 }
 
-/** The first thing the user said, for the history list. */
+/** The first thing the user said, or the first thing they attached, for the history list. */
 export function conversationTitle(conversation: CompanionConversation): string {
   const first = conversation.turns.find((turn) => turn.role === 'user' && turn.text.trim())
-  return (first?.text.trim() ?? 'untitled').replace(/\s+/g, ' ')
+  const attached = conversation.turns.find((turn) => turn.role === 'user' && turn.attachments?.length)?.attachments?.[0].name
+  return (first?.text.trim() ?? attached ?? 'untitled').replace(/\s+/g, ' ')
 }
 
 export function conversationUpdatedAt(conversation: CompanionConversation): string {

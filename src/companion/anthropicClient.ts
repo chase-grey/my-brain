@@ -1,7 +1,10 @@
 export type TextBlock = { type: 'text'; text: string }
 export type ToolUseBlock = { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> }
 export type ToolResultBlock = { type: 'tool_result'; tool_use_id: string; content: string; is_error?: boolean }
-export type ContentBlock = TextBlock | ToolUseBlock | ToolResultBlock
+type Base64Source = { type: 'base64'; media_type: string; data: string }
+export type ImageBlock = { type: 'image'; source: Base64Source }
+export type DocumentBlock = { type: 'document'; source: Base64Source; title?: string }
+export type ContentBlock = TextBlock | ToolUseBlock | ToolResultBlock | ImageBlock | DocumentBlock
 export type AnthropicMessage = { role: 'user' | 'assistant'; content: string | ContentBlock[] }
 export type AnthropicTool = {
   name: string

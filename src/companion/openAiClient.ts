@@ -2,9 +2,13 @@ import { AnthropicError, type AnthropicMessage, type ChatClient, type ContentBlo
 
 type ToolCall = { id: string; type: 'function'; function: { name: string; arguments: string } }
 type OpenAiMessage =
-  | { role: 'system' | 'user'; content: string }
+  | { role: 'system' | 'user'; content: string | UserPart[] }
   | { role: 'assistant'; content: string | null; tool_calls?: ToolCall[] }
   | { role: 'tool'; tool_call_id: string; content: string }
+type UserPart =
+  | { type: 'text'; text: string }
+  | { type: 'image_url'; image_url: { url: string } }
+  | { type: 'file'; file: { filename: string; file_data: string } }
 type CompletionResponse = { id?: string; choices?: { finish_reason?: string; message?: { content?: string | null; tool_calls?: ToolCall[] } }[] }
 
 function fromAnthropic(message: AnthropicMessage): OpenAiMessage[] {
@@ -16,6 +20,12 @@ function fromAnthropic(message: AnthropicMessage): OpenAiMessage[] {
   }
   // Tool results answer the assistant's calls, so they go first; any words the user added follow.
   const results = message.content.filter((block) => block.type === 'tool_result').map((block): OpenAiMessage => ({ role: 'tool', tool_call_id: block.tool_use_id, content: block.content }))
+  const files = message.content.flatMap((block): UserPart[] => {
+    if (block.type === 'image') return [{ type: 'image_url', image_url: { url: `data:${block.source.media_type};base64,${block.source.data}` } }]
+    if (block.type === 'document') return [{ type: 'file', file: { filename: block.title ?? 'file.pdf', file_data: `data:${block.source.media_type};base64,${block.source.data}` } }]
+    return []
+  })
+  if (files.length) return [...results, { role: 'user', content: [...files, ...(text ? [{ type: 'text', text } satisfies UserPart] : [])] }]
   return text ? [...results, { role: 'user', content: text }] : results
 }
 

@@ -1,5 +1,6 @@
 import { actionLine, describeAction, type CompanionAction } from './actions'
 import { AnthropicError, textOf, toolUses, type AnthropicMessage, type ChatClient, type ContentBlock, type ToolUseBlock } from './anthropicClient'
+import { fileText, fromBase64, userContent, type Attachment } from './attachments'
 import { BridgeUnreachableError, type BridgeCompanionClient } from './bridgeCompanion'
 import { autoModel } from '../settings'
 import { companionTools, executeTool, toolGroups, type CompanionActions, type ToolContext, type Undo } from './companionTools'
@@ -29,7 +30,7 @@ export type AssistantReply = {
 }
 
 export interface Companion {
-  send(text: string): Promise<AssistantReply>
+  send(text: string, attachments?: Attachment[]): Promise<AssistantReply>
 }
 
 export const maxModelCalls = 6
@@ -45,16 +46,20 @@ function turnText(turn: CompanionTurn): string {
   return [turn.text.trim(), ...lines].filter(Boolean).join('\n')
 }
 
+const asBlocks = (content: AnthropicMessage['content']): ContentBlock[] => typeof content === 'string' ? [{ type: 'text', text: content }] : content
+
 function historyMessages(turns: CompanionTurn[]): AnthropicMessage[] {
   const messages: AnthropicMessage[] = []
   for (const turn of turns) {
     const text = turn.error ? '' : turnText(turn)
-    if (!text) continue
+    const attachments = turn.error ? [] : turn.attachments ?? []
+    if (!text && !attachments.length) continue
+    const content = userContent(text, attachments)
     const last = messages[messages.length - 1]
     if (last && last.role === turn.role) {
-      last.content = `${last.content as string}\n\n${text}`
+      last.content = typeof last.content === 'string' && typeof content === 'string' ? `${last.content}\n\n${content}` : [...asBlocks(last.content), ...asBlocks(content)]
     } else {
-      messages.push({ role: turn.role, content: text })
+      messages.push({ role: turn.role, content })
     }
   }
   while (messages.length && messages[0].role !== 'user') messages.shift()
@@ -184,7 +189,7 @@ export function createAnthropicCompanion(deps: {
   }
 
   return {
-    async send(text) {
+    async send(text, attachments = []) {
       const turns = deps.history()
       const available = { hasVault: Boolean(deps.vault), hasCalendar: deps.hasCalendar?.() ?? false }
       const allTools = companionTools(available)
@@ -195,11 +200,11 @@ export function createAnthropicCompanion(deps: {
       // Neither read may block the turn: a failed route starts in the middle with every tool, and a failed index read
       // leaves the prompt saying so while the tools still work.
       const [route, memoryIndex] = await Promise.all([
-        deps.route && (auto || turns.length) ? deps.route({ text, previousMessage, previousReply, groups: toolGroups(available) }).catch(() => defaultRoute) : defaultRoute,
+        deps.route && (auto || turns.length) ? deps.route({ text: text || attachments.map((item) => item.name).join(', '), previousMessage, previousReply, groups: toolGroups(available) }).catch(() => defaultRoute) : defaultRoute,
         deps.vault ? readMemoryIndex(deps.vault, memoryFolder).catch(() => undefined) : undefined,
       ])
       const kept = (deps.keep ? deps.keep(route.follows) : true) ? contextTurns(turns) : []
-      const messages = [...historyMessages(kept), { role: 'user', content: text } satisfies AnthropicMessage]
+      const messages = [...historyMessages(kept), { role: 'user', content: userContent(text, attachments) } satisfies AnthropicMessage]
       const start = auto
         ? { ...rungs[route.rung], rung: route.rung, tools: companionTools({ ...available, skip: route.skip }) }
         : { model: deps.model, effort: deps.effort, tools: allTools }
@@ -217,11 +222,19 @@ export function createBridgeCompanion(deps: {
   effort?: string
 }): Companion {
   return {
-    async send(text) {
+    async send(text, attachments = []) {
       const sessionId = deps.sessionId()
       let response
       try {
-        response = await deps.client.chat({ text, sessionId, systemPrompt: sessionId ? undefined : deps.systemPrompt(), ...(deps.model ? { model: deps.model } : {}), ...(deps.effort ? { effort: deps.effort } : {}) })
+        // Claude Code reads photos and pdfs from disk, so those are left on the pc first; a text file goes in the message itself.
+        const files: string[] = []
+        const words = [text]
+        for (const item of attachments) {
+          if (item.data === undefined) continue
+          if (item.kind === 'text') words.unshift(fileText(item))
+          else files.push(await deps.client.upload(item.name, fromBase64(item.data)))
+        }
+        response = await deps.client.chat({ text: words.filter(Boolean).join('\n\n'), ...(files.length ? { files } : {}), sessionId, systemPrompt: sessionId ? undefined : deps.systemPrompt(), ...(deps.model ? { model: deps.model } : {}), ...(deps.effort ? { effort: deps.effort } : {}) })
       } catch (error) {
         throw mapCompanionError(error)
       }
