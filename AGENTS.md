@@ -29,6 +29,7 @@ Chase, 2026-11-25, after two asks. `src/fitColumns.ts` lays out every screen mad
 - Columns are added, and the cards shrunk back, only when the cards would otherwise run past the bottom of the window.
 - Cards never go under 22rem wide, and the block of cards sits centred.
 - A new screen made of cards joins `deckViews` in `App.tsx`. Do not give one a fixed column count or a width cap of its own.
+- The side rail shows the screens from the … menu as buttons of its own while it has the height (`src/rail.ts`, `rail.test.ts`). Only what does not fit stays under …, and with nothing left under it the … is not drawn. A new screen is added to `moreViewsFor` with an icon, never to the rail or the menu alone.
 - The phone is untouched: none of this applies under 48rem.
 
 ## restarting the bridge

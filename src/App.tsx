@@ -10,6 +10,7 @@ import { WorkBridgeProvider, outlookTaskList } from './data/workBridgeProvider'
 import { mergeWorkTasks } from './data/workTaskSync'
 import { demoProviderTasks, demoTaskMetadata } from './demoData'
 import { useFitColumns } from './fitColumns'
+import { splitRail, useRailSlots } from './rail'
 import { buildNowPlan, isDoneToday, thisWeekCommitments, todayCommitments } from './domain/personalNow'
 import { projectTasks } from './domain/taskProjection'
 import { buildWeekReceipt } from './domain/receipt'
@@ -51,9 +52,15 @@ type View = 'today' | 'progress' | 'dashboard' | 'chat' | 'journal' | 'stores' |
 const taskStorageKey = (domain: Domain) => `my-brain.${domain}.tasks.v1`
 const dockedQuery = '(min-width: 87.5rem)'
 // Work reviews a dashboard where personal reviews progress; the other tab moves under more.
+/** The screens past the main ones: under … on the phone, and on the rail itself wherever a monitor has the room (src/rail.ts). */
+const moreViewsFor = (domain: Domain): { view: View; icon: IconName }[] => [
+  ...(domain === 'personal' ? [{ view: 'journal', icon: 'journal' }, { view: 'stores', icon: 'stores' }, { view: 'trips', icon: 'trips' }] as const : [{ view: 'progress', icon: 'progress' }] as const),
+  { view: 'goals', icon: 'goals' },
+  { view: 'settings', icon: 'settings' },
+]
 const primaryViewsFor = (domain: Domain): { view: View; icon: IconName }[] => [
   { view: 'today', icon: 'today' },
-  domain === 'work' ? { view: 'dashboard', icon: 'progress' } : { view: 'progress', icon: 'progress' },
+  domain === 'work' ? { view: 'dashboard', icon: 'dashboard' } : { view: 'progress', icon: 'progress' },
   { view: 'chat', icon: 'chat' },
 ]
 const JournalView = lazy(() => import('./journal/JournalView').then((module) => ({ default: module.JournalView })))
@@ -829,25 +836,30 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
   const floorToday = product.dayOverrides.some((item) => item.domain === activeDomain && item.date === currentDay && item.kind === 'floor')
   const strategicTodayMin = product.activities.filter((item) => item.domain === activeDomain && item.kind === 'strategic' && item.occurredAt.slice(0, 10) === currentDay).reduce((sum, item) => sum + (item.minutes ?? 0), 0)
   const primaryViews = primaryViewsFor(activeDomain)
+  const railSlots = useRailSlots()
   const contentRef = useRef<HTMLDivElement>(null)
   useFitColumns(contentRef, `${activeDomain} ${shownView}`)
-  const moreItems = [
+  const moreViews = moreViewsFor(activeDomain)
+  const menuFor = (shown: typeof moreViews) => [
     ...(updateReady ? [{ label: 'update ready · restart', onSelect: () => void checkForUpdate() }] : []),
-    ...(activeDomain === 'personal' ? [{ label: 'journal', onSelect: () => setView('journal') }, { label: 'stores', onSelect: () => setView('stores') }, { label: 'trips', onSelect: () => setView('trips') }] : [{ label: 'progress', onSelect: () => setView('progress') }]),
-    { label: 'goals', onSelect: () => setView('goals') },
-    { label: 'settings', onSelect: () => setView('settings') },
+    ...shown.map((item) => ({ label: item.view, onSelect: () => setView(item.view) })),
     ...(install.canPrompt ? [{ label: 'install app', onSelect: () => void install.install() }] : []),
   ]
+  const moreItems = menuFor(moreViews)
+  const railPrimary = primaryViews.filter((item) => !(docked && item.view === 'chat'))
+  const rail = splitRail(moreViews, railSlots, railPrimary.length, menuFor([]).length)
+  const railMenu = menuFor(rail.underMore)
   const chat = <Suspense fallback={<header className="view-head"><h1>chat</h1></header>}><ChatView key={activeDomain} domain={activeDomain} settings={settings} actions={companionActions} summary={companionActions.todaySummary()} hasCalendar={activeDomain === 'personal' && connectionStatus === 'connected'} onSettings={() => setView('settings')} onChangeSettings={(change) => changeSettings((current) => ({ ...current, ...change }))} notesVault={connectionStatus === 'connected' ? personalData?.notes : undefined} userName={account.name} prefill={kickoff} onPrefilled={onKickoffUsed} attach={chatAttachment} onAttached={() => setChatAttachment(undefined)} docked={docked} talk={talk} onTalkStarted={() => setTalk(false)} mail={activeDomain === 'personal' && connectionStatus === 'connected' ? personalData?.mail : undefined} mailId={activeDomain === 'personal' ? mailId : undefined} mailOff={connectionStatus !== 'connected' && (connectionStatus === 'unconfigured' || Boolean(personalData) || Boolean(syncError))} onMailTaken={() => setMailId(undefined)} /></Suspense>
 
   function navButton(item: { view: View; icon: IconName }) {
-    return <button key={item.view} className={shownView === item.view ? 'active' : ''} onClick={() => setView(item.view)} type="button" aria-current={shownView === item.view ? 'page' : undefined}><Icon name={item.icon} /><span>{item.view}</span></button>
+    return <button key={item.view} className={shownView === item.view ? 'active' : ''} onClick={() => setView(item.view)} type="button" aria-current={shownView === item.view ? 'page' : undefined}><Icon name={item.icon} /><span>{item.view}</span>{updateReady && item.view === 'settings' && <i className="nav-dot" aria-hidden="true" />}</button>
   }
 
   return <div className={`app${docked ? ' is-docked' : ''}`}>
     <nav className="rail" aria-label="primary">
-      {primaryViews.filter((item) => !(docked && item.view === 'chat')).map(navButton)}
-      <div className="rail-more"><Menu label="more" align="start" items={moreItems}><Icon name="more" /><span>more</span>{updateReady && <i className="nav-dot" aria-hidden="true" />}</Menu></div>
+      {railPrimary.map(navButton)}
+      {rail.onRail.map(navButton)}
+      {railMenu.length > 0 && <div className="rail-more"><Menu label="more" align="start" items={railMenu}><Icon name="more" /><span>more</span>{updateReady && <i className="nav-dot" aria-hidden="true" />}</Menu></div>}
     </nav>
 
     <div className="main">
