@@ -16,7 +16,7 @@ import type {
 import type { RingCommitment, RingEvidence } from './domain/lifeRing'
 import type { TrackerSummary } from './domain/bodyTracker'
 import type { LifeDomain } from './domain/types'
-import { defaultPersonalHabits } from './domain/habits'
+import { defaultPersonalHabits, retiredHabitIds } from './domain/habits'
 
 export type ProductState = {
   goals: Goal[]
@@ -77,11 +77,11 @@ export function scopeProductState(state: ProductState, domain: Domain): ProductS
   return scoped
 }
 
-/** `seedHabits` adds the owner's own habits (vitamins, whitening); everyone else starts with none. */
+/** `seedHabits` adds the owner's own habits (vitamins); everyone else starts with none. */
 export function loadProductState(domain: Domain, seedHabits = true): ProductState {
   try {
     const stored = renameBuildArea(JSON.parse(localStorage.getItem(storageKey(domain)) ?? localStorage.getItem('my-brain.product.v1') ?? '{}') as Partial<ProductState>)
-    const habits = [...(stored.habits ?? [])].filter((habit) => habit.domain === domain)
+    const habits = [...(stored.habits ?? [])].filter((habit) => habit.domain === domain && !retiredHabitIds.includes(habit.id))
     for (const habit of seedHabits ? defaultPersonalHabits.filter((item) => item.domain === domain) : []) {
       const index = habits.findIndex((item) => item.id === habit.id)
       if (index < 0) habits.push(habit)

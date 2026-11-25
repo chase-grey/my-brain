@@ -6,7 +6,7 @@ import type { buildNowPlan } from '../domain/personalNow'
 import { completedParts, dueParts } from '../domain/habits'
 import type { Domain, Energy, Habit, HabitEntry, Place, Task } from '../domain/types'
 import { duration, weekday } from '../format'
-import { Card, Empty, Menu, Segmented, TaskRow } from '../ui'
+import { Card, Empty, Menu, Segmented, TaskRow, Toggle } from '../ui'
 
 export const minuteOptions = [30, 60, 120] as const
 export const energyOptions: { value: Energy; label: string }[] = [
@@ -25,15 +25,17 @@ export function commitmentHint(task: Task, currentDay: string, place: Place): st
 }
 
 export function HabitCard({ date, entries, habits, onToggle }: { date: string; entries: HabitEntry[]; habits: Habit[]; onToggle: (habitId: string, partId: string) => void }) {
-  if (!habits.length) return null
-  return <Card title="personal care">
-    <ul className="habits">{habits.map((habit) => {
-      const completed = new Set(completedParts(entries, habit.id, date))
-      return <li key={habit.id}><div className="habit-head"><span>{habit.title}</span><small>{habit.timeWindow}</small></div><div className="chips">{dueParts(habit, date).map((part) => {
-        const done = completed.has(part.id)
-        return <button aria-pressed={done} className={done ? 'selected' : ''} key={part.id} onClick={() => onToggle(habit.id, part.id)} type="button">{part.title}</button>
-      })}</div></li>
-    })}</ul>
+  const rows = habits.flatMap((habit) => {
+    const completed = new Set(completedParts(entries, habit.id, date))
+    return dueParts(habit, date).map((part) => ({ habit, part, done: completed.has(part.id) }))
+  })
+  if (!rows.length) return null
+  return <Card title="personal care" aside={<span className="count">{rows.filter((row) => row.done).length}/{rows.length}</span>}>
+    <ul className="rows">{rows.map(({ habit, part, done }) => <li className={`row${done ? ' is-done' : ''}`} key={`${habit.id}:${part.id}`}>
+      <Toggle done={done} label={`${done ? 'undo' : 'complete'} ${part.title}`} onToggle={() => onToggle(habit.id, part.id)} />
+      <button className="row-main" type="button" onClick={() => onToggle(habit.id, part.id)}><span className="row-title">{part.title}</span></button>
+      {habit.timeWindow && <span className="row-meta">{habit.timeWindow}</span>}
+    </li>)}</ul>
   </Card>
 }
 

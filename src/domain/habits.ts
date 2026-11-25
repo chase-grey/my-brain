@@ -15,18 +15,10 @@ export const defaultPersonalHabits: Habit[] = [
       { id: 'iron', title: 'iron', intervalDays: 2 },
     ],
   },
-  {
-    id: 'teeth-whitening',
-    domain: 'personal',
-    title: 'teeth whitening',
-    cadence: { unit: 'day', interval: 1 },
-    estimateMin: 1,
-    startedOn: '2026-09-03',
-    countsTowardStreak: true,
-    timeWindow: 'evening',
-    parts: [{ id: 'strip', title: 'whitening strip', intervalDays: 1 }],
-  },
 ]
+
+/** Habits that were once seeded and are over. A device that still has one stored drops it on load. */
+export const retiredHabitIds = ['teeth-whitening']
 
 function dayNumber(date: string): number {
   return Math.floor(Date.parse(`${date}T00:00:00Z`) / 86_400_000)

@@ -1,5 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { loadProductState, saveProductState } from './productState'
+import { defaultPersonalHabits } from './domain/habits'
 
 function storage(initial: Record<string, string> = {}) {
   const values = new Map(Object.entries(initial))
@@ -27,4 +28,12 @@ it('keeps switched-off areas on personal and never on work', () => {
   saveProductState(state, 'work')
   expect(loadProductState('personal', false).ringOff).toEqual(['projects'])
   expect(loadProductState('work', false).ringOff).toEqual([])
+})
+
+it('drops a retired habit a device still has stored', () => {
+  const whitening = { ...defaultPersonalHabits[0], id: 'teeth-whitening', title: 'teeth whitening' }
+  storage({ 'my-brain.personal.product.v1': JSON.stringify({ habits: [whitening], habitEntries: [{ habitId: 'teeth-whitening', date: '2026-11-20', completedPartIds: ['strip'] }] }) })
+  const state = loadProductState('personal')
+  expect(state.habits.map((habit) => habit.id)).toEqual(['vitamins'])
+  expect(state.habitEntries).toEqual([])
 })
