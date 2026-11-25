@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { CalendarBlock } from '../data/calendarGraphProvider'
-import { bodyReading } from '../domain/bodyTracker'
+import { bodyReading, TRACKER_GOALS_LINK } from '../domain/bodyTracker'
 import { timeRange } from '../domain/calendar'
 import { goalProgress } from '../domain/goals'
 import { buildLifeRing, RING_DOMAINS, type RingArc } from '../domain/lifeRing'
@@ -144,18 +144,26 @@ function stateLabel(state: RingArc['state']): string {
   return state === 'early-signal' ? 'early signal' : state
 }
 
+const goalState = { met: 'met', onPace: 'on pace', behind: 'behind' } as const
+
 function TrackerDetail({ arc }: { arc: RingArc }) {
   const body = arc.tracker!
+  const [listed, setListed] = useState(false)
   const weeks = `${body.weeksHit} of ${body.weeksJudged}`
-  return <Card className="slice-detail" title="last 4 weeks">
+  const goalCount = body.goalsMet + body.goalsOpen
+  const goals = `${body.goalsMet + body.goalsOnPace} of ${goalCount}`
+  return <Card className="slice-detail" title="last 4 weeks" aside={<span className="count">{Math.round(body.fill * 100)}%</span>}>
     <p className="slice-stat">{body.streak
       ? <><strong>{body.streak}</strong> week streak</>
       : <><strong>{weeks}</strong> weeks hit</>}</p>
     <div className="slice-bar" style={{ '--hue': wheelHue[arc.domain] } as React.CSSProperties}><Bar fraction={body.fill} /></div>
     <ul className="slice-facts">
       {body.streak ? <li><span>weeks hit</span><small>{weeks}</small></li> : null}
-      {body.goalsOpen > 0 && <li><span>goals on pace</span><small>{body.goalsOnPace} of {body.goalsOpen}</small></li>}
-      {body.goalsMet > 0 && <li><span>goals met</span><small>{body.goalsMet}</small></li>}
+      {goalCount > 0 && <li>{body.goals.length
+        ? <button className="slice-fact-button" type="button" aria-expanded={listed} onClick={() => setListed(!listed)}><span>goals met or on pace</span><small>{goals}</small></button>
+        : <><span>goals met or on pace</span><small>{goals}</small></>}</li>}
+      {listed && body.goals.map((goal) => <li className="slice-goal" key={goal.title}><span>{goal.title}</span><small className={goal.state === 'behind' ? 'is-loud' : ''}>{goalState[goal.state]}</small></li>)}
+      <li><a className="link" href={TRACKER_GOALS_LINK}>open workout tracker</a></li>
     </ul>
   </Card>
 }

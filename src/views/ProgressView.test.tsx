@@ -38,12 +38,12 @@ it('opens the slice named in the hash with the wheel shrunk into the header', ()
 it('reads the body slice from workout-tracker when it has left a summary', () => {
   vi.stubGlobal('location', { hash: '#progress/body' })
   const weeks = ['2026-10-05', '2026-10-12', '2026-10-19', '2026-10-26'].map((week) => ({ week, result: 'hit' as const }))
-  const bodyTracker = { v: 1 as const, asOf: '2026-11-03', streak: 11, freezes: 4, weeksTracked: 16, weeks, goals: { open: 3, onPace: 3, met: 1 } }
+  const bodyTracker = { v: 1 as const, asOf: '2026-11-03', streak: 11, freezes: 4, weeksTracked: 16, weeks, goals: { open: 3, onPace: 3, met: 1, list: [{ title: 'bench 200 lbs', state: 'met' as const }] } }
   const html = renderToStaticMarkup(<ProgressView domain="personal" product={{ ...emptyProductState, bodyTracker }} currentDay="2026-11-04" heldEvents={{}} onProduct={() => {}} onGoals={() => {}} />)
   expect(html).toContain('aria-label="body · 100%"')
   expect(html).toContain('<strong>11</strong> week streak')
   expect(html).toContain('<span>weeks hit</span><small>4 of 4</small>')
-  expect(html).toContain('<span>goals on pace</span><small>3 of 3</small>')
-  expect(html).toContain('<span>goals met</span><small>1</small>')
+  expect(html).toContain('<span>goals met or on pace</span><small>4 of 4</small>')
+  expect(html).toContain('href="/workout-tracker/?tab=progress"')
   expect(html).not.toContain('of target')
 })

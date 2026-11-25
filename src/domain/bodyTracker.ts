@@ -9,6 +9,9 @@ export const TRACKER_URL = 'https://script.google.com/macros/s/AKfycbxKDeDE9cRmW
 /** The key workout-tracker writes. */
 export const TRACKER_SHARE_KEY = 'wt.share.body'
 
+/** The tracker's goals screen, where the goals the slice quotes are charted. */
+export const TRACKER_GOALS_LINK = '/workout-tracker/?tab=progress'
+
 export type TrackerWeek = { week: string; result: 'hit' | 'froze' | 'missed'; inProgress?: boolean }
 
 export type TrackerSummary = {
@@ -18,8 +21,11 @@ export type TrackerSummary = {
   freezes: number
   weeksTracked: number
   weeks: TrackerWeek[]
-  goals: { open: number; onPace: number; met: number }
+  /** `met` is every goal reached; `open` and `onPace` are the committed ones still being chased. `list` names them, reached first. */
+  goals: { open: number; onPace: number; met: number; list?: TrackerGoal[] }
 }
+
+export type TrackerGoal = { title: string; state: 'met' | 'onPace' | 'behind' }
 
 export type BodyReading = {
   /** 0 to 1: how the slice fills. */
@@ -31,10 +37,14 @@ export type BodyReading = {
   goalsOpen: number
   goalsOnPace: number
   goalsMet: number
+  /** The goals by name, when the tracker sent them. */
+  goals: TrackerGoal[]
   weeksTracked: number
 }
 
 const WINDOW = 4
+/** How much of the fill the weeks are when there are goals to read; the goals are the rest. */
+const WEEKS_WEIGHT = 0.75
 const isDay = (value: unknown): value is string => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)
 const isCount = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value) && value >= 0
 
@@ -47,11 +57,14 @@ export function parseTrackerSummary(raw: string | null | undefined): TrackerSumm
     if (weeks.length !== value.weeks.length) return undefined
     const goals = value.goals
     if (!goals || !isCount(goals.open) || !isCount(goals.onPace) || !isCount(goals.met)) return undefined
+    const list = Array.isArray(goals.list)
+      ? goals.list.filter((item): item is TrackerGoal => !!item && typeof item.title === 'string' && ['met', 'onPace', 'behind'].includes(item.state)).map((item) => ({ title: item.title, state: item.state }))
+      : undefined
     return {
       v: 1, asOf: value.asOf, streak: value.streak, freezes: value.freezes,
       weeksTracked: isCount(value.weeksTracked) ? value.weeksTracked : weeks.length,
       weeks: weeks.map((item) => ({ week: item.week, result: item.result, ...(item.inProgress ? { inProgress: true } : {}) })),
-      goals: { open: goals.open, onPace: goals.onPace, met: goals.met },
+      goals: { open: goals.open, onPace: goals.onPace, met: goals.met, ...(list ? { list } : {}) },
     }
   } catch {
     return undefined
@@ -137,7 +150,8 @@ const iso = (time: number) => new Date(time).toISOString().slice(0, 10)
  *
  * A week that ended with no word from the tracker counts as missed: logging is the only thing that opens it,
  * so a week it never reported is one that was not finished. A hit week is 1, a week saved by freezes a half.
- * With committed goals open, the weeks are half the fill and the share of goals on pace the other half.
+ * With goals to read, the weeks are three quarters of the fill and the goals the last quarter:
+ * the share of them that are met or on pace, out of every goal met or committed to.
  */
 export function bodyReading(summary: TrackerSummary, today: string): BodyReading {
   const weeks = [...summary.weeks].sort((a, b) => a.week.localeCompare(b.week))
@@ -162,7 +176,8 @@ export function bodyReading(summary: TrackerSummary, today: string): BodyReading
   }
   const weekShare = weeksJudged ? score / weeksJudged : 0
   const { open, onPace, met } = summary.goals
-  const fill = open > 0 ? (weekShare + Math.min(1, onPace / open)) / 2 : weekShare
+  const good = met + Math.min(onPace, open)
+  const fill = met + open > 0 ? WEEKS_WEIGHT * weekShare + (1 - WEEKS_WEIGHT) * (good / (met + open)) : weekShare
   return {
     fill,
     weeksHit,
@@ -171,6 +186,7 @@ export function bodyReading(summary: TrackerSummary, today: string): BodyReading
     goalsOpen: open,
     goalsOnPace: Math.min(onPace, open),
     goalsMet: met,
+    goals: summary.goals.list ?? [],
     weeksTracked: summary.weeksTracked,
   }
 }
