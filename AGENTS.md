@@ -55,6 +55,7 @@ Chase, 2026-11-25. `speech.test.ts`, `stopPhrase.test.ts`, `context.test.ts` and
 - There is no context switch. Each message either carries on the thread or starts a new one (`src/companion/context.ts`): Jev decides when there is a key, the clock (15 minutes) when there is not, and a thread reopened from the history is always carried on. What is on screen after a send is what the model was given.
 - What goes along with a message is capped in code (`contextTurns`), newest first. The model is never asked to manage its own context.
 - Work chat is never sent to Jev; its thread goes by the clock.
+- Work is typed only (Chase, 2026-11-25): the recognizers send audio to Microsoft or Google, so the work chat and the work journal have no mic and read nothing aloud (`voiceAllowed` in `src/voice/speech.ts`). Do not add a speech path for work that leaves the device.
 - A thread opened about an email (handed over from my-mail) always carries on, until a new chat is started.
 
 ## the personal chat's budget and mail
@@ -67,7 +68,7 @@ Mail in the chat is read-only (`src/companion/mailTools.ts`): search and read, n
 
 Chase, 2026-11-25. `journal.test.ts` holds these. The journal is under the more menu in both spaces (`src/journal/`).
 
-- It is a place to dump, by voice or typing. Listening there ends only on a tap or when the app is hidden; a pause or a long silence never ends it, saves, or sends.
+- It is a place to dump, by voice or typing (typing only in work, see chat voice above). Listening there ends only on a tap or when the app is hidden; a pause or a long silence never ends it, saves, or sends.
 - Words not saved yet are kept on the device, so closing the app or a failed save loses nothing.
 - `save` adds the words to that day's file under the time as a heading, exactly as said. Nothing rewrites or tidies them. Personal entries go to `journal/YYYY-MM-DD.md` in the notes vault.
 - Work entries go through the bridge into `01 Journal/` in the work vault (`workJournal.ts`, the bridge's `/journal` routes), so the work journal is there only on the work pc. Those routes only list, read and add to files. Work words are never sent to Jev, the personal key, or the personal vault, and the two spaces keep separate unsaved words.

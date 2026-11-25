@@ -25,6 +25,14 @@ function recognizerClass(): (new () => Recognizer) | undefined {
   return w.SpeechRecognition ?? w.webkitSpeechRecognition
 }
 
+/**
+ * Whether a space may be spoken to. The recognizers here (the browser's, and Android's through the shell) send the audio
+ * to Microsoft or Google to be written down, so work is typed only: no mic, and no reply read aloud.
+ */
+export function voiceAllowed(domain: 'personal' | 'work'): boolean {
+  return domain !== 'work'
+}
+
 export function recognitionSupported(): boolean {
   return isNativeApp() || recognizerClass() !== undefined
 }

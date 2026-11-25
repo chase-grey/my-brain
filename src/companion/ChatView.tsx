@@ -7,6 +7,7 @@ import { holdUpdates } from '../appUpdate'
 import { autoModel, effortOptions, modelShortName, type AppSettings } from '../settings'
 import { Icon } from '../navIcons'
 import { Empty, Menu } from '../ui'
+import { voiceAllowed } from '../voice/speech'
 import { useVoice } from '../voice/useVoice'
 import { journalAttachment, journalDays, journalPath, type JournalStore } from '../journal/journal'
 import { JournalDays } from '../journal/JournalView'
@@ -265,6 +266,7 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
   }, [borrow])
 
   const voice = useVoice({
+    allowed: voiceAllowed(domain),
     onListen: () => { typedRef.current = composerRef.current?.getState().text.trim() ?? '' },
     onText: (text) => composerRef.current?.setText([typedRef.current, text].filter(Boolean).join(' ')),
     onSend: () => {

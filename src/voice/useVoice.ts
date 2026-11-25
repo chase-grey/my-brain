@@ -17,7 +17,9 @@ export function endMessage(reason: DictationEnd): string | undefined {
  * hidden. Quiet does not end it: it keeps listening.
  * Words are handed over as they are heard, so they sit in the message box and are never lost when listening ends.
  */
-export function useVoice({ onListen, onText, onSend, onProblem }: {
+export function useVoice({ allowed = true, onListen, onText, onSend, onProblem }: {
+  /** False where nothing may be spoken or read aloud: the mic is not offered and never starts. */
+  allowed?: boolean
   /** Listening is about to start. */
   onListen: () => void
   /** Everything heard so far in this message. */
@@ -26,7 +28,7 @@ export function useVoice({ onListen, onText, onSend, onProblem }: {
   onSend: () => void
   onProblem: (message: string) => void
 }) {
-  const supported = useMemo(() => recognitionSupported(), [])
+  const supported = useMemo(() => allowed && recognitionSupported(), [allowed])
   const canSpeak = useMemo(() => synthesisSupported(), [])
   const [state, setStateValue] = useState<VoiceState>('idle')
   const [on, setOnValue] = useState(false)
@@ -82,9 +84,10 @@ export function useVoice({ onListen, onText, onSend, onProblem }: {
   listenAgain.current = listenNow
 
   const start = useCallback(() => {
+    if (!supported) return
     setOn(true)
     listenNow()
-  }, [listenNow, setOn])
+  }, [listenNow, setOn, supported])
 
   /** Reads a reply aloud while a conversation is on, then listens again, or ends the conversation after an error. */
   const say = useCallback((markdown: string, then: 'listen' | 'stop' = 'listen') => {

@@ -4,7 +4,7 @@ import type { Attachment } from '../companion/attachments'
 import type { Domain } from '../domain/types'
 import { Icon } from '../navIcons'
 import { Empty } from '../ui'
-import { dictate, recognitionSupported } from '../voice/speech'
+import { dictate, recognitionSupported, voiceAllowed } from '../voice/speech'
 import { endMessage } from '../voice/useVoice'
 import { dayLabel, entryBlock, entryParts, journalAttachment, journalDays, journalPath, loadDraft, saveDraft, type JournalStore } from './journal'
 
@@ -37,7 +37,7 @@ export function JournalView({ domain, vault, onSettings, onChat }: {
   const [saving, setSaving] = useState(false)
   const [problem, setProblem] = useState<string>()
   const cancelRef = useRef<() => void>(() => {})
-  const canListen = recognitionSupported()
+  const canListen = voiceAllowed(domain) && recognitionSupported()
 
   const setDraft = useCallback((text: string) => {
     draftRef.current = text

@@ -1,7 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
-import { chunksForSpeech, dictate, pauseMs, silenceMs, speakable, type ListenEnd, type ListenEvent, type listen } from './speech'
+import { chunksForSpeech, dictate, pauseMs, silenceMs, speakable, voiceAllowed, type ListenEnd, type ListenEvent, type listen } from './speech'
 import { nativeEndReason } from './nativeSpeech'
 import { endMessage } from './useVoice'
+
+it('keeps work off the speech services', () => {
+  expect(voiceAllowed('work')).toBe(false)
+  expect(voiceAllowed('personal')).toBe(true)
+})
 
 it('reads markdown as plain sentences', () => {
   expect(speakable('## today\n\n- **call plumber** · due *today*\n- buy [milk](https://x.y/z)\n\nsee https://example.com for more'))
