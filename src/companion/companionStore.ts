@@ -1,10 +1,11 @@
 import type { Domain } from '../domain/types'
 import { newId } from '../format'
 import type { CompanionAction } from './actions'
+import type { AttachedMail } from './mailTools'
 import { withoutData, type Attachment } from './attachments'
 
 export type CompanionTurn = { role: 'user' | 'assistant'; text: string; at: string; error?: boolean; actions?: CompanionAction[]; attachments?: Attachment[] }
-export type CompanionConversation = { version: 1; id: string; turns: CompanionTurn[]; sessionId?: string }
+export type CompanionConversation = { version: 1; id: string; turns: CompanionTurn[]; sessionId?: string; mail?: AttachedMail }
 type History = { version: 1; conversations: CompanionConversation[] }
 
 type StorageLike = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>
@@ -38,6 +39,12 @@ function storage(): StorageLike | undefined {
   }
 }
 
+function parseMail(raw: unknown): AttachedMail | undefined {
+  const mail = raw as Partial<AttachedMail> | null | undefined
+  if (!mail || typeof mail.id !== 'string' || typeof mail.text !== 'string') return undefined
+  return { id: mail.id, subject: typeof mail.subject === 'string' ? mail.subject : '', from: typeof mail.from === 'string' ? mail.from : '', text: mail.text }
+}
+
 function parseConversation(raw: unknown): CompanionConversation | undefined {
   const parsed = raw as Partial<CompanionConversation> | null
   if (!parsed || parsed.version !== 1 || !Array.isArray(parsed.turns)) return undefined
@@ -46,11 +53,13 @@ function parseConversation(raw: unknown): CompanionConversation | undefined {
     .map((turn) => Array.isArray(turn.actions) ? { ...turn, actions: turn.actions.map(settleAction) } : turn)
     .map(storedTurn)
   if (!turns.length) return undefined
+  const mail = parseMail(parsed.mail)
   return {
     version: 1,
     id: typeof parsed.id === 'string' && parsed.id ? parsed.id : newId('chat'),
     turns,
     ...(typeof parsed.sessionId === 'string' ? { sessionId: parsed.sessionId } : {}),
+    ...(mail ? { mail } : {}),
   }
 }
 

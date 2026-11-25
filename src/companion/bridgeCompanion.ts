@@ -1,6 +1,10 @@
 export type BridgeChatRequest = { text: string; /** Ids from `upload`. */ files?: string[]; sessionId?: string; systemPrompt?: string; model?: string; effort?: string }
 export type BridgeChatResponse = { text: string; sessionId: string; isError: boolean }
-export type BridgeChatStatus = { claude: boolean; claudePath?: string; vault: boolean; vaultPath: string }
+/** `model` is set by a bridge that has `/chat/model`; one started before that route existed leaves it out. */
+export type BridgeChatStatus = { claude: boolean; claudePath?: string; vault: boolean; vaultPath: string; model?: boolean }
+export type BridgeModelRequest = { system: string; prompt: string; model?: string; effort?: string }
+/** `result` is the reply as json text: `{ text, tool_calls }`. */
+export type BridgeModelResponse = { result: string; isError: boolean }
 
 export class BridgeUnreachableError extends Error {
   constructor() {
@@ -24,6 +28,12 @@ export class BridgeCompanionClient {
   async upload(name: string, bytes: Uint8Array): Promise<string> {
     const body = new Blob([bytes as BlobPart])
     return (await this.request<{ id: string }>(`/chat/file?name=${encodeURIComponent(name)}`, { method: 'POST', body, headers: { 'Content-Type': 'application/octet-stream' } })).id
+  }
+
+  /** Claude Code as a bare model, with no tools and no vault: what the personal chat borrows on the work pc. */
+  async model(request: BridgeModelRequest): Promise<BridgeModelResponse> {
+    const response = await this.request<Partial<BridgeModelResponse>>('/chat/model', { method: 'POST', body: JSON.stringify(request) })
+    return { result: response.result ?? '', isError: response.isError === true }
   }
 
   /** Continues the thread in a Session Runner terminal: the same Claude Code session, resumed in the vault. */

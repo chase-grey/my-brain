@@ -54,6 +54,14 @@ const groupQuestions: Record<ToolGroup, JevQuestion> = {
     instructions: `${preamble} Does answering it need the person's calendar?`,
     criteria: yesNo('It asks about events, meetings, free time, or holding time on a day.', 'The calendar does not matter to it.'),
   },
+  mail: {
+    type: 'choice',
+    instructions: `${preamble} Does answering it need the person's email?`,
+    criteria: yesNo(
+      'It asks to find, read, or summarize an email, or about something that would have arrived by email: an order, a receipt, a booking, a bill, or what someone wrote to them.',
+      'Email does not matter to it.',
+    ),
+  },
 }
 
 const threadQuestion: JevQuestion = {
@@ -94,6 +102,6 @@ export async function routeWithJev(client: JevClient, ask: RouteAsk): Promise<Ro
 /** Offered while a stronger model or a fuller tool list is still available. */
 export const handOffTool: AnthropicTool = {
   name: 'hand_off',
-  description: 'Pass this request to a stronger model that has every tool. Call it first, without answering, when the request needs more careful thinking than a quick reply, or needs a notes, memory, trips, or calendar tool that is not listed here. Do not use it for requests you can finish well yourself.',
+  description: 'Pass this request to a stronger model that has every tool. Call it first, without answering, when the request needs more careful thinking than a quick reply, or needs a notes, memory, trips, calendar, or email tool that is not listed here. Do not use it for requests you can finish well yourself.',
   input_schema: { type: 'object', properties: { reason: { type: 'string' } } },
 }

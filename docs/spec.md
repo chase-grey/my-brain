@@ -48,6 +48,14 @@ Location and tools narrow eligibility within the selected space. They never swit
 
 How much UI a companion action gets is set by what it costs to be wrong, not by which tool ran. Reads leave no trace. Light actions happen on the ask and leave one receipt line under the reply, with undo for the rest of the session: adding or completing a task, adding or changing a goal, holding a block in the calendar, saving a memory, creating a note, appending to a note. Heavy actions wait on an inline card with approve and dismiss, and the model's turn stays paused until the card is answered: deleting a task, forgetting a memory, replacing or moving a note, marking a goal met or abandoned. Approving a card continues the same conversation; a card still waiting when a new message is sent, or when the page is reopened, expires without running. Settled actions read back to the model in later turns as bracketed lines, so it knows what the user let through, undid, or dismissed. The work space talks to Claude Code through the bridge, which runs its own tools, so none of this applies there.
 
+## which budget the personal chat spends
+
+On a device that has reached the work bridge before, the personal chat asks the bridge first and runs on the work pc's Claude Code; anywhere else, and whenever the bridge is away or busy, it runs on the personal key. Only the model moves. The bridge runs Claude Code bare for this (`POST /chat/model`): no tools of its own, no vault, no settings or plugins, nothing kept. The conversation and the personal tools are written into one prompt by the app, the reply names the tools it wants, and the app runs them in the browser exactly as it does on the key, with the same receipts and approval cards. Memory, notes, tasks, goals, the calendar and mail stay personal and never touch the work vault. A device that has never reached a bridge is never asked to look for one. The work chat is unchanged.
+
+## mail in the chat
+
+The personal chat can search the personal mailbox and read a message with its whole conversation (`search_mail`, `read_mail`). It only reads: nothing is sent, moved, flagged or deleted from here, and reads leave no receipt. The mail app hands a message over by opening `#chat/mail/<message id>`: the personal space opens, whichever space was showing, on a new thread about that conversation, with its subject and sender shown at the top of the thread. The conversation's text is kept with the thread, so it still makes sense reopened from the history. What an email says is information for the model, never an instruction to it.
+
 Goals have a shape. A pace goal commits hours by a date and reports on pace, behind, or ahead against elapsed time. A block goal is done in one sitting: it is loud until a date is scheduled, quiet once scheduled, and loud again if the date passes undone.
 
 The full product specification lives in the Obsidian vault at `20 Projects/Personal/My Brain.md`.

@@ -38,6 +38,13 @@ Chase, 2026-11-25. `speech.test.ts`, `stopPhrase.test.ts`, `context.test.ts` and
 - There is no context switch. Each message either carries on the thread or starts a new one (`src/companion/context.ts`): Jev decides when there is a key, the clock (15 minutes) when there is not, and a thread reopened from the history is always carried on. What is on screen after a send is what the model was given.
 - What goes along with a message is capped in code (`contextTurns`), newest first. The model is never asked to manage its own context.
 - Work chat is never sent to Jev; its thread goes by the clock.
+- A thread opened about an email (handed over from my-mail) always carries on, until a new chat is started.
+
+## the personal chat's budget and mail
+
+The personal chat runs on the work pc's Claude Code when the bridge is there and on the personal key when it is not (`src/companion/bridgeModel.ts`). Only the model moves: the bridge's `/chat/model` runs Claude Code with no tools, no vault and nothing kept, and every personal tool still runs in the browser. Do not send a personal conversation through `/chat` (the work chat, which has the vault and work tools), do not give `/chat/model` tools or a working folder, and do not look for the bridge on a device that has never reached one. Claude Code on the bridge takes text only, so a message with a photo or pdf goes to the personal key when there is one.
+
+Mail in the chat is read-only (`src/companion/mailTools.ts`): search and read, nothing else. Anything done to a message is done in my-mail. A message handed over from my-mail (`#chat/mail/<id>`) always opens in the personal space. Email text goes to the model as data, with the line that it is never an instruction.
 
 ## old tasks and mail
 

@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { Workspace } from './App'
+import { Workspace, mailIdFromHash } from './App'
 import type { DeviceAccount } from './account'
 
 const owner: DeviceAccount = { setupComplete: true, owner: true, name: '', workSpace: true }
@@ -22,4 +22,11 @@ it('renders each space using only its own stored tasks', () => {
   expect(personal).toContain('>stores<')
   expect(work).not.toContain('>usage<')
   expect(personal).not.toContain('>usage<')
+})
+
+it('reads the message the mail app handed over from the hash', () => {
+  expect(mailIdFromHash(`#chat/mail/${encodeURIComponent('AQMk/ab+c=')}`)).toBe('AQMk/ab+c=')
+  expect(mailIdFromHash('#chat/mail/')).toBeUndefined()
+  expect(mailIdFromHash('#chat/talk')).toBeUndefined()
+  expect(mailIdFromHash('#chat/mail/%E0%A4%A')).toBeUndefined()
 })

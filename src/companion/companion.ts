@@ -4,6 +4,7 @@ import { fileText, fromBase64, userContent, type Attachment } from './attachment
 import { BridgeUnreachableError, type BridgeCompanionClient } from './bridgeCompanion'
 import { autoModel } from '../settings'
 import { companionTools, executeTool, toolGroups, type CompanionActions, type ToolContext, type Undo } from './companionTools'
+import type { MailReader } from './mailTools'
 import type { CompanionTurn } from './companionStore'
 import { contextTurns } from './context'
 import { GitHubError, type VaultStore } from './githubVault'
@@ -87,9 +88,11 @@ export function createAnthropicCompanion(deps: {
   vault?: VaultStore
   memoryFolder?: string
   hasCalendar?: () => boolean
+  /** The personal mailbox, read-only, while the account is connected. */
+  mail?: () => MailReader | undefined
 }): Companion {
   const memoryFolder = deps.memoryFolder ?? 'memory'
-  const toolContext = (): ToolContext => ({ actions: deps.actions(), vault: deps.vault, memoryFolder })
+  const toolContext = (): ToolContext => ({ actions: deps.actions(), vault: deps.vault, memoryFolder, mail: deps.mail?.() })
 
   type Gate = { use: ToolUseBlock; action: CompanionAction }
   type Tools = ReturnType<typeof companionTools>
@@ -191,7 +194,7 @@ export function createAnthropicCompanion(deps: {
   return {
     async send(text, attachments = []) {
       const turns = deps.history()
-      const available = { hasVault: Boolean(deps.vault), hasCalendar: deps.hasCalendar?.() ?? false }
+      const available = { hasVault: Boolean(deps.vault), hasCalendar: deps.hasCalendar?.() ?? false, hasMail: Boolean(deps.mail?.()) }
       const allTools = companionTools(available)
       const auto = deps.model === autoModel
       const before = [...turns].reverse()

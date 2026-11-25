@@ -5,6 +5,7 @@ import type { VaultStore } from './githubVault'
 import { GitHubError } from './githubVault'
 import { today } from '../format'
 import { isTripTool, runTripTool, tripTools } from '../trips/tripTools'
+import { isMailTool, mailTools, runMailTool, type MailReader } from './mailTools'
 import { forgetMemory, memoryFilePath, memoryIndexPath, memoryTypes, readMemoryIndex, saveMemory, validateMemoryName } from './memory'
 
 export type TaskSummary = Pick<Task, 'id' | 'title' | 'dueDate' | 'completed' | 'estimateMin' | 'priority' | 'projectId' | 'notes'>
@@ -50,7 +51,7 @@ export interface CompanionActions {
   todaySummary(): PlanSummary
 }
 
-export type ToolContext = { actions: CompanionActions; vault?: VaultStore; memoryFolder?: string }
+export type ToolContext = { actions: CompanionActions; vault?: VaultStore; memoryFolder?: string; mail?: MailReader }
 export type Undo = () => Promise<void>
 /** A successful change carries the way back; reads and failures do not. */
 export type ToolOutcome = { ok: true; content: string; undo?: Undo } | { ok: false; error: string }
@@ -88,20 +89,21 @@ const calendarTools: AnthropicTool[] = [
 ]
 
 /** The tools a message can do without. Tasks and goals always go along. */
-export type ToolGroup = 'notes' | 'trips' | 'calendar'
+export type ToolGroup = 'notes' | 'trips' | 'calendar' | 'mail'
 
 /** The groups this space has at all, which is what a router may leave out. */
-export function toolGroups(options: { hasVault: boolean; hasCalendar?: boolean }): ToolGroup[] {
-  return [...(options.hasVault ? ['notes', 'trips'] as const : []), ...(options.hasCalendar ? ['calendar'] as const : [])]
+export function toolGroups(options: { hasVault: boolean; hasCalendar?: boolean; hasMail?: boolean }): ToolGroup[] {
+  return [...(options.hasVault ? ['notes', 'trips'] as const : []), ...(options.hasCalendar ? ['calendar'] as const : []), ...(options.hasMail ? ['mail'] as const : [])]
 }
 
-export function companionTools(options: { hasVault: boolean; hasCalendar?: boolean; skip?: ToolGroup[] }): AnthropicTool[] {
+export function companionTools(options: { hasVault: boolean; hasCalendar?: boolean; hasMail?: boolean; skip?: ToolGroup[] }): AnthropicTool[] {
   const has = (group: ToolGroup) => toolGroups(options).includes(group) && !options.skip?.includes(group)
   return [
     ...(has('notes') ? [...noteTools, ...memoryTools] : []),
     ...(has('trips') ? tripTools : []),
     ...taskTools,
     ...(has('calendar') ? calendarTools : []),
+    ...(has('mail') ? mailTools : []),
   ]
 }
 
@@ -170,8 +172,12 @@ function requireVault(vault: VaultStore | undefined): VaultStore {
   return vault
 }
 
-async function run(name: string, input: Args, { actions, vault, memoryFolder = 'memory' }: ToolContext): Promise<RunResult> {
+async function run(name: string, input: Args, { actions, vault, memoryFolder = 'memory', mail }: ToolContext): Promise<RunResult> {
   if (isTripTool(name)) return runTripTool(name, input, requireVault(vault), today())
+  if (isMailTool(name)) {
+    if (!mail) throw new Error('email is not connected')
+    return done(await runMailTool(name, input, mail))
+  }
   switch (name) {
     case 'save_memory': {
       const store = requireVault(vault)

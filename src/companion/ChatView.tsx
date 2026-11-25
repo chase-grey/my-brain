@@ -14,9 +14,11 @@ import { attachmentAccept, readAttachment, type Attachment } from './attachments
 import { activeModel, baseUrlFor, modelChoices, modelField, providerOf, usesAnthropic } from './aiProvider'
 import { AnthropicClient } from './anthropicClient'
 import { BridgeCompanionClient } from './bridgeCompanion'
+import { BridgeModelClient, bridgeModelReady, bridgeReachedBefore, rememberBridge } from './bridgeModel'
 import { CompanionError, createAnthropicCompanion, createBridgeCompanion, type AssistantReply, type Companion, type PendingApprovals, type Undo } from './companion'
 import { buildSystemPrompt, pastePrompt } from './companionPrompt'
 import { continuesThread } from './context'
+import { attachMail, type MailReader } from './mailTools'
 import { memoryFolders } from './memory'
 import { clearHistory, conversationTitle, conversationUpdatedAt, deleteConversation, loadHistory, newConversation, saveConversation, type CompanionConversation, type CompanionTurn } from './companionStore'
 import type { CompanionActions, PlanSummary } from './companionTools'
@@ -26,6 +28,8 @@ import { OpenAiCompatClient } from './openAiClient'
 import { routeWithJev } from './route'
 
 type BridgeState = 'checking' | 'ready' | 'offline'
+/** The personal chat on the work pc's Claude Code: being looked for, in use, or not here. */
+type Borrow = 'checking' | 'ready' | 'off'
 
 // Keys and tokens never contain whitespace; pasting on a phone often adds some.
 function compact(value: string): string {
@@ -118,7 +122,7 @@ function withStatusForAll(turns: CompanionTurn[], from: ActionStatus[], to: Acti
     : turn)
 }
 
-export function ChatView({ domain, settings, actions, summary, hasCalendar = false, onSettings, onChangeSettings, docked = false, talk = false, onTalkStarted, notesVault, userName, prefill, onPrefilled }: {
+export function ChatView({ domain, settings, actions, summary, hasCalendar = false, onSettings, onChangeSettings, docked = false, talk = false, onTalkStarted, notesVault, userName, prefill, onPrefilled, mail, mailId, mailOff = false, onMailTaken }: {
   domain: Domain
   settings: AppSettings
   /** Notes in the account's OneDrive, used when no github vault is set up. */
@@ -137,6 +141,13 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
   /** Typed into the composer once, unsent: a new account's first request. */
   prefill?: string
   onPrefilled?: () => void
+  /** The personal mailbox, read-only, while the account is connected. */
+  mail?: MailReader
+  /** A message the mail app handed over: a new thread opens about its conversation. */
+  mailId?: string
+  /** There is no connected account to read that message with. */
+  mailOff?: boolean
+  onMailTaken?: () => void
 }) {
   // The chat unmounts on every view change. A thread still warm comes back; an older one waits in the history.
   const [conversation, setConversation] = useState<CompanionConversation>(() => {
@@ -159,6 +170,11 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
   // Under auto, the model that answered last, shown beside the choice.
   const [answeredBy, setAnsweredBy] = useState<string>()
   const [bridge, setBridge] = useState<BridgeState>(domain === 'work' ? 'checking' : 'ready')
+  // On a device that has reached the work bridge before, the personal chat asks it first and spends the personal key only when it is away.
+  const [borrow, setBorrow] = useState<Borrow>(() => domain === 'personal' && settings.aiMode !== 'off' && bridgeReachedBefore() ? 'checking' : 'off')
+  const [openingMail, setOpeningMail] = useState(false)
+  const mailRef = useRef(mail)
+  mailRef.current = mail
   const conversationRef = useRef(conversation)
   // A thread reopened from the history is carried on by the next message, whatever its age or topic.
   const pinnedRef = useRef(false)
@@ -178,24 +194,30 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
   const apiKey = compact(settings.anthropicApiKey)
   const jevKey = compact(settings.jevApiKey)
   const provider = providerOf(settings.aiProvider)
-  const anthropic = usesAnthropic(domain, settings)
+  const viaBridge = domain === 'personal' && borrow === 'ready'
+  // Claude Code only runs anthropic's models, whatever service the key is for.
+  const modelSettings = viaBridge ? { ...settings, aiProvider: 'anthropic' } : settings
+  const anthropic = usesAnthropic(domain, modelSettings)
   const baseUrl = baseUrlFor(settings)
-  const model = activeModel(domain, settings)
+  const model = activeModel(domain, modelSettings)
   const [copied, setCopied] = useState(false)
   const vaultConfig = { repo: normalizeRepo(settings.githubRepo), token: compact(settings.githubToken), branch: normalizeBranch(settings.vaultBranch) }
   const hasGitHubVault = domain === 'personal' && vaultConfigured(vaultConfig)
   const fallbackVault = domain === 'personal' && !hasGitHubVault ? notesVault : undefined
   const hasVault = hasGitHubVault || Boolean(fallbackVault)
-  const hasKey = domain === 'work' || (settings.aiMode === 'key' && apiKey.length > 0 && baseUrl.length > 0 && model.length > 0)
+  const keyReady = settings.aiMode === 'key' && apiKey.length > 0 && baseUrl.length > 0 && activeModel(domain, settings).length > 0
+  const hasKey = domain === 'work' || viaBridge || keyReady
 
   const companion = useMemo<Companion | undefined>(() => {
-    const systemPrompt = (memoryIndex?: string) => buildSystemPrompt({ domain, summary: summaryRef.current, vaultAvailable: domain === 'work' ? true : hasVault, memoryIndex, notes: fallbackVault ? 'onedrive' : 'homebase', userName })
+    const systemPrompt = (memoryIndex?: string) => buildSystemPrompt({ domain, summary: summaryRef.current, vaultAvailable: domain === 'work' ? true : hasVault, memoryIndex, notes: fallbackVault ? 'onedrive' : 'homebase', userName, mailAvailable: domain === 'personal' && Boolean(mailRef.current), mail: conversationRef.current.mail })
     if (domain === 'work') {
       return createBridgeCompanion({ client: new BridgeCompanionClient(), sessionId: () => conversationRef.current.sessionId, systemPrompt, model: modelShortName(model), effort: settings.chatEffort })
     }
     if (!hasKey) return undefined
+    const keyClient = () => usesAnthropic(domain, settings) ? new AnthropicClient(apiKey) : new OpenAiCompatClient(apiKey, baseUrl, provider.id === 'custom' ? 'the ai service' : provider.label)
     return createAnthropicCompanion({
-      client: anthropic ? new AnthropicClient(apiKey) : new OpenAiCompatClient(apiKey, baseUrl, provider.id === 'custom' ? 'the ai service' : provider.label),
+      // If the bridge goes away mid-conversation an anthropic key carries on with the same models; another service's key waits for the next message.
+      client: viaBridge ? new BridgeModelClient(new BridgeCompanionClient(), keyReady && usesAnthropic(domain, settings) ? keyClient() : undefined, () => setBorrow('off')) : keyClient(),
       model,
       effort: anthropic ? settings.chatEffort : undefined,
       route: anthropic && jevKey ? (ask) => routeWithJev(new JevClient(jevKey), ask) : undefined,
@@ -206,14 +228,15 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
       vault: hasGitHubVault ? new GitHubVault(vaultConfig) : fallbackVault,
       memoryFolder: memoryFolders[domain],
       hasCalendar: () => hasCalendarRef.current,
+      mail: () => domain === 'personal' ? mailRef.current : undefined,
     })
-  }, [domain, hasKey, hasGitHubVault, fallbackVault, userName, settings.aiMode, settings.aiProvider, baseUrl, model, settings.anthropicApiKey, settings.jevApiKey, settings.chatEffort, vaultConfig.repo, vaultConfig.token, vaultConfig.branch])
+  }, [domain, hasKey, viaBridge, keyReady, hasGitHubVault, fallbackVault, userName, settings.aiMode, settings.aiProvider, baseUrl, model, settings.anthropicApiKey, settings.jevApiKey, settings.chatEffort, vaultConfig.repo, vaultConfig.token, vaultConfig.branch])
 
   useEffect(() => {
     if (domain !== 'work') return
     let cancelled = false
     new BridgeCompanionClient().status()
-      .then((status) => { if (!cancelled) setBridge(status.claude && status.vault ? 'ready' : 'offline') })
+      .then((status) => { rememberBridge(); if (!cancelled) setBridge(status.claude && status.vault ? 'ready' : 'offline') })
       .catch(() => { if (!cancelled) setBridge('offline') })
     return () => { cancelled = true }
   }, [domain])
@@ -221,6 +244,13 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
   // Spoken words land in the message box as they are heard, after whatever was already typed there.
   const composerRef = useRef<{ getState(): { text: string }; setText(text: string): void } | undefined>(undefined)
   const typedRef = useRef('')
+  useEffect(() => {
+    if (borrow !== 'checking') return
+    let cancelled = false
+    void bridgeModelReady().then((ready) => { if (!cancelled) setBorrow(ready ? 'ready' : 'off') })
+    return () => { cancelled = true }
+  }, [borrow])
+
   const voice = useVoice({
     onListen: () => { typedRef.current = composerRef.current?.getState().text.trim() ?? '' },
     onText: (text) => composerRef.current?.setText([typedRef.current, text].filter(Boolean).join(' ')),
@@ -238,11 +268,11 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
   // Opened from the "talk" shortcut or the widget: start listening once the chat can take a message.
   const talkStarted = useRef(false)
   useEffect(() => {
-    if (!talk || talkStarted.current || !companion || bridge === 'checking') return
+    if (!talk || talkStarted.current || !companion || bridge === 'checking' || borrow === 'checking') return
     talkStarted.current = true
     voiceRef.current.start()
     onTalkStarted?.()
-  }, [talk, companion, bridge, onTalkStarted])
+  }, [talk, companion, bridge, borrow, onTalkStarted])
 
   function update(next: CompanionConversation) {
     conversationRef.current = next
@@ -329,7 +359,8 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
     let kept: boolean | undefined
     const settle = (follows?: number) => {
       if (kept !== undefined) return kept
-      kept = continuesThread({ turns: before.turns, follows, pinned, now: Date.now() })
+      // A thread opened about an email is about that email until a new chat is started, however long it sits and whatever the message says.
+      kept = before.mail ? true : continuesThread({ turns: before.turns, follows, pinned, now: Date.now() })
       if (!kept) undosRef.current.clear()
       update({ ...(kept ? before : newConversation()), turns: [...(kept ? before.turns : []), turn] })
       return kept
@@ -440,7 +471,39 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
     if (conversationRef.current.turns.length) remove(conversationRef.current.id)
   }
 
-  const unavailable = domain === 'personal' ? !hasKey : bridge === 'offline'
+  // The mail app handed a message over: a fresh thread opens about its whole conversation, and every message after stays on it.
+  useEffect(() => {
+    if (!mailId || domain !== 'personal') return
+    const failed = (reason: string) => {
+      show(newConversation())
+      appendTurn({ role: 'assistant', text: reason, at: new Date().toISOString(), error: true })
+    }
+    if (!mail) {
+      if (!mailOff) return
+      failed('connect microsoft in settings to open that email')
+      onMailTaken?.()
+      return
+    }
+    let cancelled = false
+    setOpeningMail(true)
+    expirePending()
+    mail.thread(mailId)
+      .then((messages) => {
+        if (cancelled) return
+        show({ ...newConversation(), mail: attachMail(mailId, messages) })
+      }, (error: unknown) => {
+        if (!cancelled) failed(`could not open that email: ${error instanceof Error ? error.message.toLowerCase() : 'something went wrong'}`)
+      })
+      .finally(() => {
+        if (cancelled) return
+        setOpeningMail(false)
+        onMailTaken?.()
+      })
+    return () => { cancelled = true }
+  }, [mailId, mail, mailOff, domain])
+
+  // While the bridge is still being looked for, a missing key is not yet the answer.
+  const unavailable = domain === 'personal' ? !hasKey && borrow !== 'checking' : bridge === 'offline'
 
   async function copyPlan() {
     if (!await copyText(pastePrompt({ summary: summaryRef.current, userName }))) return
@@ -451,7 +514,7 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
     messages: conversation.turns,
     convertMessage: toMessage,
     isRunning: sending,
-    isDisabled: unavailable || bridge === 'checking',
+    isDisabled: unavailable || bridge === 'checking' || borrow === 'checking' || openingMail,
     onNew,
     onRespondToToolApproval,
   })
@@ -477,15 +540,15 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
       {!unavailable && domain === 'work' && conversation.sessionId && <button className="pill" type="button" disabled={sending || openedId === conversation.id} onClick={() => { void openInSessionRunner() }}>{openedId === conversation.id ? 'opened in session runner' : 'open in session runner'}</button>}
       {!unavailable && <Menu
         controls={<>
-          <label className="menu-field">model<select className="picker" aria-label="model" value={model} onChange={(event) => onChangeSettings?.({ [modelField(domain, settings)]: event.target.value })}>
-            {modelChoices(domain, settings).map((option) => <option key={option} value={option}>{option === autoModel && answeredBy ? `auto · ${modelShortName(answeredBy)}` : anthropic ? modelShortName(option) : option}</option>)}
+          <label className="menu-field">model<select className="picker" aria-label="model" value={model} onChange={(event) => onChangeSettings?.({ [modelField(domain, modelSettings)]: event.target.value })}>
+            {modelChoices(domain, modelSettings).map((option) => <option key={option} value={option}>{option === autoModel && answeredBy ? `auto · ${modelShortName(answeredBy)}` : anthropic ? modelShortName(option) : option}</option>)}
           </select></label>
           {anthropic && model !== autoModel && <label className="menu-field">effort<select className="picker" aria-label="effort" value={settings.chatEffort} onChange={(event) => onChangeSettings?.({ chatEffort: event.target.value as AppSettings['chatEffort'] })}>
             {effortOptions.map((level) => <option key={level} value={level}>{level}</option>)}
           </select></label>}
         </>}
         items={[
-          { label: 'new chat', onSelect: startNew, disabled: !conversation.turns.length },
+          { label: 'new chat', onSelect: startNew, disabled: !conversation.turns.length && !conversation.mail },
           { label: history ? 'back to chat' : 'past chats', onSelect: () => setHistory(history ? undefined : loadHistory(domain)) },
           { label: 'upload', onSelect: pickFiles, disabled: reading },
         ]}
@@ -505,6 +568,7 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
             {history
               ? <HistoryList items={history} currentId={conversation.id} onOpen={reopen} onDelete={remove} onDeleteAll={removeAll} />
               : <ThreadPrimitive.Viewport className="thread-viewport">
+                {conversation.mail && <p className="chat-about"><Icon name="mail" size={16} /><span>{conversation.mail.subject}</span>{conversation.mail.from && <small>{conversation.mail.from}</small>}</p>}
                 <ThreadPrimitive.Messages components={{ UserMessage, AssistantMessage }} />
                 <ThreadPrimitive.If running><div className="turn assistant is-pending" aria-live="polite">…</div></ThreadPrimitive.If>
               </ThreadPrimitive.Viewport>}
@@ -516,7 +580,7 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
               </li>)}
             </ul>}
             <ComposerPrimitive.Root className="composer">
-              <ComposerPrimitive.Input className="composer-input" aria-label="message" placeholder={bridge === 'checking' ? 'checking work pc' : voice.state === 'listening' ? 'listening' : 'message'} rows={1} maxRows={6} />
+              <ComposerPrimitive.Input className="composer-input" aria-label="message" placeholder={bridge === 'checking' || borrow === 'checking' ? 'checking work pc' : openingMail ? 'opening email' : voice.state === 'listening' ? 'listening' : 'message'} rows={1} maxRows={6} />
               {button === 'voice'
                 ? <button className={`composer-mic${voice.state !== 'idle' ? ` is-${voice.state}` : ''}`} type="button" aria-pressed={voice.on} aria-label={voice.on ? 'stop' : 'talk'} disabled={sending && !voice.on} onClick={voice.toggle}><Icon name="waveform" size={20} /></button>
                 : attached.length

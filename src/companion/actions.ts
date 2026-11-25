@@ -3,6 +3,7 @@ import { GitHubError } from './githubVault'
 import { memoryFilePath, readMemoryIndex } from './memory'
 import type { CompanionActions } from './companionTools'
 import { describeTripAction, isTripTool, tripReadTools } from '../trips/tripTools'
+import { mailToolNames } from './mailTools'
 
 // How much UI an action gets is set by what it costs to be wrong, not by which tool ran.
 //   read:  nothing is shown; lists and reads leave no trace.
@@ -29,7 +30,7 @@ export type ActionDescription = Pick<CompanionAction, 'weight' | 'title' | 'done
 
 export type DescribeContext = { actions: CompanionActions; vault?: VaultStore; memoryFolder?: string }
 
-const readTools = new Set(['list_notes', 'read_note', 'list_tasks', 'list_goals', 'list_calendar', 'today_summary', ...tripReadTools])
+const readTools = new Set(['list_notes', 'read_note', 'list_tasks', 'list_goals', 'list_calendar', 'today_summary', ...tripReadTools, ...mailToolNames])
 
 function text(input: Record<string, unknown>, key: string): string {
   const value = input[key]

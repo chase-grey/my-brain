@@ -248,6 +248,10 @@ button.row-main { min-height: 3rem; }
 .history-main small { color: var(--muted); font-size: 0.8rem; }
 .history-delete { display: grid; place-items: center; flex: none; width: 2.5rem; height: 2.5rem; border-radius: 50%; color: var(--muted); }
 .history-delete:hover { background: var(--surface-2); color: var(--danger); }
+.chat-about { display: flex; align-items: center; gap: 0.5rem; margin: 0; padding: 0.5rem 0.75rem; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); font-size: 0.9rem; }
+.chat-about svg { flex: none; color: var(--muted); }
+.chat-about span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chat-about small { flex: none; max-width: 40%; margin-left: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
 @keyframes listening { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 40%, transparent); } 50% { box-shadow: 0 0 0 6px transparent; } }
 @media (prefers-reduced-motion: reduce) { .composer-mic.is-listening { animation: none; } }
 /* the chat view is the one screen that does not scroll as a page: the thread scrolls inside it and the composer stays put at the bottom.

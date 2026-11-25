@@ -63,6 +63,17 @@ function parseHash(): { view: View; taskId?: string } {
 }
 
 const talkHash = '#chat/talk'
+// #chat/mail/<message id> is how the mail app hands a message over to talk about.
+const mailHash = '#chat/mail/'
+
+export function mailIdFromHash(hash: string): string | undefined {
+  if (!hash.startsWith(mailHash)) return undefined
+  try {
+    return decodeURIComponent(hash.slice(mailHash.length)) || undefined
+  } catch {
+    return undefined
+  }
+}
 
 function hashFor(view: View, taskId?: string): string {
   return view === 'task' && taskId ? `#task/${taskId}` : `#${view}`
@@ -189,6 +200,8 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
   const [sharing, setSharing] = useState(() => typeof location !== 'undefined' && location.hash === '#share')
   // #chat/talk opens the chat already listening: the app shortcut and the android widget use it.
   const [talk, setTalk] = useState(() => typeof location !== 'undefined' && location.hash === talkHash)
+  // Captured before the hash effect normalizes it, like the two above. Mail is personal, so the chat it opens is too.
+  const [mailId, setMailId] = useState(() => typeof location === 'undefined' ? undefined : mailIdFromHash(location.hash))
   const [editingTaskId, setEditingTaskId] = useState<string | undefined>(() => parseHash().taskId)
   const [personalData, setPersonalData] = useState<PersonalGraphData>()
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>(
@@ -306,6 +319,12 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
   // A task being written is lost by a reload, so the app does not update itself under it.
   useEffect(() => (view === 'task' ? holdUpdates() : undefined), [view])
 
+  // Once the handed-over message is in hand its link leaves the address, so a reload or the back button does not open it a second time.
+  // This runs before the hash is brought in line with the view below, which would otherwise leave the link one step back.
+  useEffect(() => {
+    if (activeDomain === 'personal' && mailId && mailIdFromHash(location.hash)) history.replaceState(null, '', `${location.pathname}${location.search}#chat`)
+  }, [mailId, activeDomain])
+
   useEffect(() => {
     const desired = hashFor(view, editingTaskId)
     if (location.hash !== desired) history.pushState(null, '', desired)
@@ -314,12 +333,22 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
   useEffect(() => {
     const onPop = () => {
       if (location.hash === talkHash) setTalk(true)
+      const handed = mailIdFromHash(location.hash)
+      if (handed) {
+        setMailId(handed)
+        // From the work space the personal one opens instead, and reads the message off the hash as it starts.
+        if (activeDomain !== 'personal') onDomain('personal')
+      }
       const parsed = parseHash()
       setEditingTaskId(parsed.taskId)
       setView(parsed.view)
     }
     window.addEventListener('popstate', onPop)
-    return () => window.removeEventListener('popstate', onPop)
+    window.addEventListener('hashchange', onPop)
+    return () => {
+      window.removeEventListener('popstate', onPop)
+      window.removeEventListener('hashchange', onPop)
+    }
   }, [])
 
   useEffect(() => {
@@ -770,7 +799,7 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
     { label: 'settings', onSelect: () => setView('settings') },
     ...(install.canPrompt ? [{ label: 'install app', onSelect: () => void install.install() }] : []),
   ]
-  const chat = <Suspense fallback={<header className="view-head"><h1>chat</h1></header>}><ChatView key={activeDomain} domain={activeDomain} settings={settings} actions={companionActions} summary={companionActions.todaySummary()} hasCalendar={activeDomain === 'personal' && connectionStatus === 'connected'} onSettings={() => setView('settings')} onChangeSettings={(change) => changeSettings((current) => ({ ...current, ...change }))} notesVault={connectionStatus === 'connected' ? personalData?.notes : undefined} userName={account.name} prefill={kickoff} onPrefilled={onKickoffUsed} docked={docked} talk={talk} onTalkStarted={() => setTalk(false)} /></Suspense>
+  const chat = <Suspense fallback={<header className="view-head"><h1>chat</h1></header>}><ChatView key={activeDomain} domain={activeDomain} settings={settings} actions={companionActions} summary={companionActions.todaySummary()} hasCalendar={activeDomain === 'personal' && connectionStatus === 'connected'} onSettings={() => setView('settings')} onChangeSettings={(change) => changeSettings((current) => ({ ...current, ...change }))} notesVault={connectionStatus === 'connected' ? personalData?.notes : undefined} userName={account.name} prefill={kickoff} onPrefilled={onKickoffUsed} docked={docked} talk={talk} onTalkStarted={() => setTalk(false)} mail={activeDomain === 'personal' && connectionStatus === 'connected' ? personalData?.mail : undefined} mailId={activeDomain === 'personal' ? mailId : undefined} mailOff={connectionStatus !== 'connected' && (connectionStatus === 'unconfigured' || Boolean(personalData) || Boolean(syncError))} onMailTaken={() => setMailId(undefined)} /></Suspense>
 
   function navButton(item: { view: View; icon: IconName }) {
     return <button key={item.view} className={shownView === item.view ? 'active' : ''} onClick={() => setView(item.view)} type="button" aria-current={shownView === item.view ? 'page' : undefined}><Icon name={item.icon} /><span>{item.view}</span></button>
