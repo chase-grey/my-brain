@@ -11,6 +11,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(HealthPlugin.class);
         registerPlugin(ReturnPlugin.class);
         registerPlugin(UpdatePlugin.class);
+        registerPlugin(WifiPlugin.class);
         super.onCreate(savedInstanceState);
     }
 }

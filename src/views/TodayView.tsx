@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { CalendarBlock } from '../data/calendarGraphProvider'
 import type { InboxCounts } from '../data/mailGraphProvider'
 import { timeRange } from '../domain/calendar'
@@ -11,6 +12,8 @@ import type { Domain, Energy, Habit, HabitEntry, Place, Project, Task } from '..
 import { duration, weekday } from '../format'
 import { Card, Done, TaskRow, Toggle } from '../ui'
 import { ExtraTimeCard } from './ExtraTime'
+import { elsewhereHint } from '../domain/whereabouts'
+import { GoneCard, WherePicker } from './Whereabouts'
 
 export const energyOptions: { value: Energy; label: string }[] = [
   { value: 'shallow', label: 'light' },
@@ -35,7 +38,7 @@ export function guessLine(guess: TaskGuess, domain: Domain, projects: Pick<Proje
 export function commitmentHint(task: Task, currentDay: string, place: Place): string | undefined {
   if (isDoneToday(task, currentDay)) return undefined
   if (remindedBy(task, currentDay)) return remindHint(task.remindAt!, currentDay)
-  if (task.place?.length && !task.place.includes(place)) return task.place.includes('home') ? 'when you’re home' : 'when you’re at work'
+  if (task.place?.length && !task.place.includes(place)) return elsewhereHint(task.place)
   if (task.dueDate && task.dueDate < currentDay) return 'overdue'
   if (task.timeWindow === 'morning') return new Date().getHours() >= 17 ? 'missed this morning' : 'this morning'
   if (task.timeWindow === 'evening') return 'this evening'
@@ -82,12 +85,15 @@ export function CalendarCard({ events }: { events: CalendarBlock[] }) {
   </Card>
 }
 
-export function TodayView({ domain, currentDay, place, placeOverride, onPlaceOverride, commitments, weeklyCommitments, habits, habitEntries, onHabitPart, plan, pickedMin, energy, onMinutes, onEnergy, weekPaid, floorToday, strategicTodayMin, onFloorNight, onStrategic, untriaged, guesses, projects, onConfirm, openCount, openMin, onToggle, onOpen, doneTasks, calendar, inbox, mailAppUrl }: {
+export function TodayView({ domain, currentDay, place, placeOverride, onPlaceOverride, gone, onGone, commitments, weeklyCommitments, habits, habitEntries, onHabitPart, plan, pickedMin, energy, onMinutes, onEnergy, weekPaid, floorToday, strategicTodayMin, onFloorNight, onStrategic, untriaged, guesses, projects, onConfirm, openCount, openMin, onToggle, onOpen, doneTasks, calendar, inbox, mailAppUrl }: {
   domain: Domain
   currentDay: string
   place: Place
   placeOverride?: Place
   onPlaceOverride: (place?: Place) => void
+  /** The day he is back, while he is gone. Until then today holds what is due and nothing else to do. */
+  gone?: string
+  onGone: (backOn: string) => void
   commitments: Task[]
   weeklyCommitments: Task[]
   habits: Habit[]
@@ -122,17 +128,15 @@ export function TodayView({ domain, currentDay, place, placeOverride, onPlaceOve
   const done = commitments.length - open.length
   const mailLine = domain === 'personal' && mailAppUrl ? inboxLine(inbox) : undefined
   const personalHabits = domain === 'personal' ? habits.filter((habit) => habit.domain === 'personal') : []
-  const placeLabel = place === 'office' ? 'at work' : 'at home'
+  const [askingGone, setAskingGone] = useState(false)
 
   return <>
     <header className="view-head">
       <h1>today</h1>
-      <select className="quiet-select" aria-label="where you are" value={placeOverride ?? 'auto'} onChange={(event) => onPlaceOverride(event.target.value === 'auto' ? undefined : event.target.value as Place)}>
-        <option value="auto">{placeOverride ? 'automatic' : `${placeLabel} · auto`}</option>
-        <option value="home">at home</option>
-        <option value="office">at work</option>
-      </select>
+      <WherePicker place={place} picked={placeOverride} gone={gone} asking={askingGone} onPick={onPlaceOverride} onAsk={setAskingGone} onGone={onGone} currentDay={currentDay} />
     </header>
+
+    <GoneCard gone={gone} asking={askingGone} currentDay={currentDay} onGone={onGone} onCancel={() => setAskingGone(false)} />
 
     <Card title="today" aside={commitments.length > 0 && <span className="count" key={done}>{done}/{commitments.length}</span>}>
       {open.length
@@ -150,11 +154,11 @@ export function TodayView({ domain, currentDay, place, placeOverride, onPlaceOve
         : <Done label="nothing else due this week" />}
     </Card>
 
-    <ExtraTimeCard plan={plan} pickedMin={pickedMin} energy={energy} energyOptions={energyOptions} onMinutes={onMinutes} onEnergy={onEnergy} weekPaid={weekPaid} floorToday={floorToday} strategicTodayMin={strategicTodayMin} onFloorNight={onFloorNight} onStrategic={onStrategic} onToggle={onToggle} onOpen={onOpen} />
+    {!gone && <ExtraTimeCard plan={plan} pickedMin={pickedMin} energy={energy} energyOptions={energyOptions} onMinutes={onMinutes} onEnergy={onEnergy} weekPaid={weekPaid} floorToday={floorToday} strategicTodayMin={strategicTodayMin} onFloorNight={onFloorNight} onStrategic={onStrategic} onToggle={onToggle} onOpen={onOpen} />}
 
-    {mailLine && <a className="card linkcard" href={mailAppUrl} target="_blank" rel="noreferrer"><span className="row-title">email</span><small>{mailLine}</small></a>}
+    {mailLine && !gone && <a className="card linkcard" href={mailAppUrl} target="_blank" rel="noreferrer"><span className="row-title">email</span><small>{mailLine}</small></a>}
 
-    {untriaged.length > 0 && <details className="card sort">
+    {untriaged.length > 0 && !gone && <details className="card sort">
       <summary>{untriaged.length} new to sort</summary>
       <ul className="rows">{untriaged.map((task) => <li className="row" key={task.id}>
         <button className="row-main" type="button" onClick={() => onOpen(task.id)}><span className="row-title">{task.title}</span>{guesses[task.id] && <small>{guessLine(guesses[task.id], domain, projects)}</small>}</button>
@@ -164,6 +168,6 @@ export function TodayView({ domain, currentDay, place, placeOverride, onPlaceOve
 
     <DoneTodayCard tasks={doneTasks} onToggle={onToggle} onOpen={onOpen} />
 
-    <p className="ledger">{openCount} open · {duration(openMin)}</p>
+    {!gone && <p className="ledger">{openCount} open · {duration(openMin)}</p>}
   </>
 }

@@ -11,6 +11,7 @@ import { Card, Field, Segmented } from '../ui'
 import { AccentPicker } from './AccentPicker'
 import { IssuesCard } from './IssuesCard'
 import { ShareCard } from './ShareCard'
+import { WifiCard } from './Whereabouts'
 
 /** Where each account that chat bills shows its spend. The key pages break it down per key. */
 export const usageLinks = {
@@ -92,6 +93,8 @@ export function SettingsView({ domain, accountName, connectionStatus, settings, 
         <div className="links"><a href={usageLinks.claudeCode} target="_blank" rel="noreferrer">claude code usage</a></div>
       </>}
     </Card>
+
+    {domain === 'personal' && <WifiCard settings={settings} onSettings={onSettings} />}
 
     {domain === 'personal' && <Card title="notes">
       <NotesExport settings={settings} />

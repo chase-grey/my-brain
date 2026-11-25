@@ -58,6 +58,9 @@ The chat drafts a text only when asked, and never sends one. The draft card's `o
 link, which the shell hands to the phone's messaging app with the words filled in. Nothing reads messages, so
 the shell asks for no SMS permission.
 
+The shell holds the location permission for one thing: android will not give an app the name of the wifi network
+without it, and the name is how the app tells home from work from out (`WifiPlugin.java`). It never reads a position.
+
 ## building
 
 GitHub builds the app on every push to main (`.github/workflows/android.yml`) and replaces the apk on the

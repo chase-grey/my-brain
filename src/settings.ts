@@ -51,6 +51,11 @@ export type AppSettings = {
   trackerToken: string
   /** A GitHub token that can only file and answer issues on the apps' repos; chat reports problems with it. */
   issueToken: string
+  /** The names of the wifi at home and at work, so the phone can tell where it is. Several are split by commas. */
+  homeWifi: string
+  workWifi: string
+  /** The day back from being gone, 2026-12-03. Until then today holds no tasks but the ones due. */
+  backOn: string
 }
 
 export const defaultSettings: AppSettings = {
@@ -71,10 +76,13 @@ export const defaultSettings: AppSettings = {
   mailAppUrl: 'https://chase-grey.github.io/my-mail/',
   trackerToken: '',
   issueToken: '',
+  homeWifi: '',
+  workWifi: '',
+  backOn: '',
 }
 
 const settingsStorageKey = (domain: Domain) => `my-brain.${domain}.settings.v1`
-const companionFields = ['aiProvider', 'aiBaseUrl', 'aiModel', 'anthropicApiKey', 'jevApiKey', 'githubRepo', 'githubToken', 'vaultBranch', 'mailAppUrl', 'trackerToken', 'issueToken'] as const
+const companionFields = ['aiProvider', 'aiBaseUrl', 'aiModel', 'anthropicApiKey', 'jevApiKey', 'githubRepo', 'githubToken', 'vaultBranch', 'mailAppUrl', 'trackerToken', 'issueToken', 'homeWifi', 'workWifi', 'backOn'] as const
 // Model and effort are per space: the work chat picks them for Claude Code, the personal one for the api.
 const chatFields = ['anthropicModel', 'chatEffort'] as const
 

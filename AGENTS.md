@@ -129,6 +129,15 @@ Chase, 2026-11-25. `notes.test.ts` and `journal.test.ts` hold these. Notes is un
 - A work dump is spoken on the phone into the Transcribe app, which writes it down on the phone itself. A recording titled `journal` (alone, or followed by a dash, colon or number) sent with `send transcript` is added by the bridge to that day's work journal under the time it was recorded, words only, instead of to the meeting transcripts (`work/bridge/transcript-inbox.ps1`). This is the only way speech reaches the work journal.
 - A note reaches the chat only when Chase adds it to a message by hand, as an attachment: `add to chat` in the note's menu, or `add journal entry` in the chat menu.
 
+## where i am, and gone
+
+Chase, 2026-11-25. `whereabouts.test.ts` and `Whereabouts.test.tsx` hold these.
+
+- Where he is comes from the phone's wifi, never from a position (`src/domain/whereabouts.ts`, `WifiPlugin.java`): on the network named for home or work in settings he is there, on no wifi or any other network he is out. Android gives a network's name only with the location permission, so the app holds it, and reads the name and nothing else. Do not read a position, scan for networks, or add any other location tracking.
+- A place picked by hand on today comes first. Where the wifi says nothing (a browser, the name not allowed, neither network named) the clock decides as before: weekday office hours are work, the rest home.
+- Gone is a note to himself with a day back, set from the same picker. Until that day today keeps the calendar, the habits and what is due today and this week, and puts away new to sort, extra time, the email card and the open count. It ends on the day back, on `i'm back`, or when a place is picked. It rides in settings.json to every device, and the work space goes by it too.
+- Coming back writes today's date as the day back, never a blank, so the other devices hear it.
+
 ## old tasks and mail
 
 An unsorted To Do task created more than 30 days ago (`oldAfterDays` in `src/domain/age.ts`) is left in To Do and never brought into the app, and the email card on today reads the last 30 days of mail only. Tasks Chase has sorted stay whatever their age. Anything new that pulls items in from Microsoft on its own applies the same check.

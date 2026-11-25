@@ -22,6 +22,8 @@ import type { Domain, Energy, Goal, Place, Priority, StoreType, Task } from './d
 import { loadProductState, saveProductState, withMoneyReading, type ProductState } from './productState'
 import { fetchTrackerSummary, newerSummary, readTrackerSummary, readTrackerToken, type TrackerSummary } from './domain/bodyTracker'
 import { loadSettings, saveSettings, type AppSettings } from './settings'
+import { currentPlace as placeNow, isGone } from './domain/whereabouts'
+import { useWifi } from './native/wifi'
 import { applyDeviceSetup, loadAccount, saveAccount, setupFromHash, showsWork, takesSetupLink, type DeviceAccount } from './account'
 import { accountFile, accountFileFrom, mergeAccountFile, type AccountFile } from './settingsSync'
 import { GitHubVault, normalizeBranch, normalizeRepo, vaultConfigured } from './companion/githubVault'
@@ -110,12 +112,6 @@ function toSort(task: Task): boolean {
 
 function hashFor(view: View, taskId?: string): string {
   return view === 'task' && taskId ? `#task/${taskId}` : `#${view}`
-}
-
-function inferredPlace(now = new Date()): Place {
-  const weekday = now.getDay()
-  const hour = now.getHours()
-  return weekday >= 1 && weekday <= 5 && hour >= 9 && hour < 17 ? 'office' : 'home'
 }
 
 function errorMessage(error: unknown): string {
@@ -280,7 +276,12 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
     const config = { repo: normalizeRepo(settings.githubRepo), token: settings.githubToken.replace(/\s+/g, ''), branch: normalizeBranch(settings.vaultBranch) }
     return activeDomain === 'personal' && vaultConfigured(config) ? new GitHubVault(config) : undefined
   }, [activeDomain, settings.githubRepo, settings.githubToken, settings.vaultBranch])
-  const currentPlace = placeOverride ?? inferredPlace()
+  // Where he is and whether he is gone are kept with the personal settings, and the work space goes by them too.
+  const wifi = useWifi()
+  const [whereChanged, setWhereChanged] = useState(0)
+  const where = useMemo(() => activeDomain === 'personal' ? settings : loadSettings('personal'), [activeDomain, settings, whereChanged])
+  const currentPlace = placeNow(placeOverride, wifi, where.homeWifi, where.workWifi)
+  const gone = isGone(where.backOn, currentDay) ? where.backOn : undefined
   const openTasks = useMemo(() => tasks.filter((task) => task.domain === activeDomain && !isDoneToday(task, currentDay) && !task.storeType), [activeDomain, currentDay, tasks])
   const commitments = useMemo(() => todayCommitments(tasks, currentDay, activeDomain), [activeDomain, currentDay, tasks])
   const weeklyCommitments = useMemo(() => thisWeekCommitments(tasks, currentDay, activeDomain), [activeDomain, currentDay, tasks])
@@ -502,6 +503,14 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
       return next
     })
     if (activeDomain === 'personal') markAccountChanged()
+  }
+
+  /** Sets the day back from being gone; today's date ends it. */
+  function setBackOn(backOn: string): void {
+    if (activeDomain === 'personal') return changeSettings((current) => ({ ...current, backOn }))
+    saveSettings({ ...loadSettings('personal'), backOn }, 'personal')
+    setWhereChanged((value) => value + 1)
+    markAccountChanged()
   }
 
   /** `reconnect` is for a sync the user asked for: an expired sign-in opens microsoft again instead of failing. */
@@ -970,7 +979,7 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
           <button className="icon-button" type="button" aria-label="dismiss" onClick={install.dismiss}>×</button>
         </div>}
         {sharing && <Suspense fallback={null}><ShareLanding onClose={() => setSharing(false)} /></Suspense>}
-        {shownView === 'today' && <TodayView domain={activeDomain} currentDay={currentDay} place={currentPlace} placeOverride={placeOverride} onPlaceOverride={setPlaceOverride}
+        {shownView === 'today' && <TodayView domain={activeDomain} currentDay={currentDay} place={currentPlace} placeOverride={placeOverride} onPlaceOverride={setPlaceOverride} gone={gone} onGone={setBackOn}
           commitments={commitments} weeklyCommitments={weeklyCommitments} habits={product.habits} habitEntries={product.habitEntries}
           onHabitPart={(habitId, partId) => setProduct((current) => ({ ...current, habitEntries: toggleHabitPart(current.habitEntries, habitId, partId, currentDay) }))}
           plan={plan} pickedMin={pickedMin} energy={energy} onMinutes={(min) => setPick(min ? { min, at: Date.now() } : undefined)} onEnergy={setEnergy}

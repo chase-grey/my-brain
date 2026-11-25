@@ -90,4 +90,10 @@
     <!-- a reminder shows at the minute it was set for. this one is granted without asking; the notifications
          plugin brings its own for android 12, the notification permission, and the one that sets them again after a restart -->
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <!-- home, work or out is told from the wifi network's name. android gives a name only with the location
+         permission, so it is asked for; the app reads the name and never asks where the phone is (WifiPlugin) -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 </manifest>
