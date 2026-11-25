@@ -20,6 +20,6 @@ it('renders each space using only its own stored tasks', () => {
   expect(personal).toContain('>chat<')
   expect(work).not.toContain('>stores<')
   expect(personal).toContain('>stores<')
-  expect(work).toContain('>usage<')
-  expect(personal).toContain('>usage<')
+  expect(work).not.toContain('>usage<')
+  expect(personal).not.toContain('>usage<')
 })

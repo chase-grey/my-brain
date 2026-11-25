@@ -37,13 +37,12 @@ import { UpdateToast } from './views/UpdateToast'
 import { checkForUpdate, holdUpdates, useAppUpdate } from './appUpdate'
 import { TaskPage } from './views/TaskPage'
 import { TripsView } from './views/TripsView'
-import { UsageView } from './views/UsageView'
 import { WorkScreens } from './views/WorkScreens'
 import { WelcomeView } from './views/WelcomeView'
 import { SetupLanding, landsOnInstall } from './views/SetupLanding'
 import { openInChrome, useInstallPrompt } from './installPrompt'
 
-type View = 'today' | 'progress' | 'dashboard' | 'chat' | 'stores' | 'trips' | 'goals' | 'usage' | 'settings' | 'task'
+type View = 'today' | 'progress' | 'dashboard' | 'chat' | 'stores' | 'trips' | 'goals' | 'settings' | 'task'
 const taskStorageKey = (domain: Domain) => `my-brain.${domain}.tasks.v1`
 const dockedQuery = '(min-width: 87.5rem)'
 // Work reviews a dashboard where personal reviews progress; the other tab moves under more.
@@ -54,7 +53,7 @@ const primaryViewsFor = (domain: Domain): { view: View; icon: IconName }[] => [
 ]
 const ChatView = lazy(() => import('./companion/ChatView').then((module) => ({ default: module.ChatView })))
 const ShareLanding = lazy(() => import('./transcripts/ShareLanding'))
-const views: View[] = ['today', 'progress', 'dashboard', 'chat', 'stores', 'trips', 'goals', 'usage', 'settings', 'task']
+const views: View[] = ['today', 'progress', 'dashboard', 'chat', 'stores', 'trips', 'goals', 'settings', 'task']
 
 function parseHash(): { view: View; taskId?: string } {
   if (typeof location === 'undefined') return { view: 'today' }
@@ -759,7 +758,6 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
     ...(updateReady ? [{ label: 'update ready · restart', onSelect: () => void checkForUpdate() }] : []),
     ...(activeDomain === 'personal' ? [{ label: 'stores', onSelect: () => setView('stores') }, { label: 'trips', onSelect: () => setView('trips') }] : [{ label: 'progress', onSelect: () => setView('progress') }]),
     { label: 'goals', onSelect: () => setView('goals') },
-    { label: 'usage', onSelect: () => setView('usage') },
     { label: 'settings', onSelect: () => setView('settings') },
     ...(install.canPrompt ? [{ label: 'install app', onSelect: () => void install.install() }] : []),
   ]
@@ -809,7 +807,6 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
         {shownView === 'goals' && <GoalsView domain={activeDomain} product={product} tasks={tasks} currentDay={currentDay} heldEvents={heldEvents} canHold={activeDomain === 'personal' && connectionStatus === 'connected'} holdError={syncError} onProduct={setProduct} onEditGoal={(id, changes) => { updateGoal(id, changes) }} onHold={(id) => holdAction(() => holdGoal(id))} onRelease={(id) => holdAction(() => releaseGoal(id))} />}
         {shownView === 'stores' && <StoresView activeStore={activeStore} tasks={tasks} onStore={setActiveStore} onToggle={toggleComplete} onAdd={addTask} />}
         {shownView === 'trips' && <TripsView vault={tripVault} currentDay={currentDay} onSettings={() => setView('settings')} />}
-        {shownView === 'usage' && <UsageView domain={activeDomain} />}
         {shownView === 'settings' && <SettingsView domain={activeDomain} accountName={accountName} connectionStatus={connectionStatus} settings={settings} syncing={syncing} syncError={syncError} canInstall={install.canPrompt} onInstall={() => void install.install()} onConnect={connectPersonal} onDisconnect={disconnectPersonal} onSync={() => { void (activeDomain === 'work' ? syncWork() : syncPersonal(personalData, true)) }} onSettings={changeSettings} account={account} onAccount={markAccountChanged} />}
         {shownView === 'task' && <TaskPage key={editingTaskId ?? 'new'} domain={activeDomain} existingTask={tasks.find((task) => task.id === editingTaskId)} projects={product.projects.filter((project) => project.domain === activeDomain && project.status === 'active')} onAdd={addTask} onUpdate={updateTask} onDelete={deleteTask} onNotMine={delegateTask} onCancel={() => { setEditingTaskId(undefined); setView('today') }} />}
       </div>

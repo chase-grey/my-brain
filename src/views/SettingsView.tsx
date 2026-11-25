@@ -9,6 +9,13 @@ import type { AiMode, AppSettings } from '../settings'
 import { Card, Field, Segmented } from '../ui'
 import { ShareCard } from './ShareCard'
 
+/** Where each account that chat bills shows its spend. The key pages break it down per key. */
+export const usageLinks = {
+  anthropic: 'https://platform.claude.com/settings/keys',
+  typesafe: 'https://console.typesafe.ai/keys',
+  claudeCode: 'https://claude.ai/settings/usage',
+}
+
 export type ConnectionStatus = 'unconfigured' | 'disconnected' | 'connected'
 
 export function SettingsView({ domain, accountName, connectionStatus, settings, syncing, syncError, canInstall, onInstall, onConnect, onDisconnect, onSync, onSettings, account, onAccount }: {
@@ -62,6 +69,10 @@ export function SettingsView({ domain, accountName, connectionStatus, settings, 
           {provider.wire === 'anthropic'
             ? <Field label="jev api key"><input type="password" autoComplete="off" value={settings.jevApiKey} onChange={set('jevApiKey')} /></Field>
             : <Field label="model"><input autoComplete="off" autoCapitalize="off" spellCheck={false} list="ai-models" value={settings.aiModel} onChange={set('aiModel')} placeholder={provider.defaultModel} /><datalist id="ai-models">{provider.models.map((model) => <option key={model} value={model} />)}</datalist></Field>}
+          {provider.id === 'anthropic' && <div className="links">
+            <a href={usageLinks.anthropic} target="_blank" rel="noreferrer">anthropic keys</a>
+            <a href={usageLinks.typesafe} target="_blank" rel="noreferrer">typesafe keys</a>
+          </div>}
         </>}
         <div className="grid-2">
           <Field label="github repo"><input autoComplete="off" value={settings.githubRepo} onChange={set('githubRepo')} placeholder="owner/name" /></Field>
@@ -69,7 +80,10 @@ export function SettingsView({ domain, accountName, connectionStatus, settings, 
         </div>
         <Field label="github token"><input type="password" autoComplete="off" value={settings.githubToken} onChange={set('githubToken')} /></Field>
         <VaultCheck settings={settings} />
-      </div> : <p className="note">claude code on this pc, through the work bridge</p>}
+      </div> : <>
+        <p className="note">claude code on this pc, through the work bridge</p>
+        <div className="links"><a href={usageLinks.claudeCode} target="_blank" rel="noreferrer">claude code usage</a></div>
+      </>}
     </Card>
 
     {domain === 'personal' && <Card title="notes">

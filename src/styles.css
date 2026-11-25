@@ -168,6 +168,8 @@ button.row-main { min-height: 3rem; }
 .plain { min-height: 2.75rem; padding: 0 0.75rem; color: var(--muted); }
 .task-form { padding-bottom: 1.5rem; }
 .row-actions { padding-top: 0; }
+.links { display: flex; flex-wrap: wrap; gap: 0 1.25rem; }
+.links a { display: inline-flex; align-items: center; min-height: 2.75rem; color: var(--accent); }
 
 /* sheet */
 .sheet { width: 100%; max-width: 100%; margin: auto 0 var(--keyboard); padding: 0; border: 1px solid var(--border); border-bottom: 0; border-radius: 16px 16px 0 0; background: var(--surface); color: var(--text); }
@@ -260,7 +262,7 @@ button.row-main { min-height: 3rem; }
   .view-chat { height: calc(100dvh - 6.75rem - var(--keyboard)); }
   /* cards flow into as many columns as the window fits; single-column screens keep a readable measure */
   .main { max-width: 120rem; }
-  .view-chat, .view-task, .view-stores, .view-usage { align-self: center; width: 100%; max-width: 44rem; }
+  .view-chat, .view-task, .view-stores { align-self: center; width: 100%; max-width: 44rem; }
   .view-today, .view-progress, .view-goals, .view-settings, .view-trips { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr)); align-items: start; align-content: start; }
   :is(.view-today, .view-progress, .view-goals, .view-settings, .view-trips) > :not(.card) { grid-column: 1 / -1; }
   :is(.view-today, .view-progress, .view-goals, .view-settings, .view-trips) > .card { min-width: 0; }
