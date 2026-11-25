@@ -13,6 +13,8 @@ export type NoteEditorProps = {
   onDone?: () => void
   /** A wikilink or a relative link to a `.md` file was tapped; `target` is what the link names, without `.md`. */
   onOpenNote?: (target: string) => void
+  /** The editor once it exists, for whoever puts spoken words into the note. */
+  onEditor?: (editor: Editor) => void
 }
 
 /** The note a relative markdown link points at, or undefined for a link that leaves the vault. */
@@ -97,11 +99,11 @@ function Toolbar({ editor, onDone }: { editor: Editor; onDone?: () => void }) {
   </div>
 }
 
-export function NoteEditor({ source, startAtEnd, onChange, onDone, onOpenNote }: NoteEditorProps) {
+export function NoteEditor({ source, startAtEnd, onChange, onDone, onOpenNote, onEditor }: NoteEditorProps) {
   const [note] = useState(() => loadNote(source))
   // the editor is created once, so its handlers read the latest callbacks through a ref
-  const callbacks = useRef({ onChange, onOpenNote })
-  callbacks.current = { onChange, onOpenNote }
+  const callbacks = useRef({ onChange, onOpenNote, onEditor })
+  callbacks.current = { onChange, onOpenNote, onEditor }
 
   const editor = useEditor({
     extensions: noteExtensions,
@@ -118,6 +120,13 @@ export function NoteEditor({ source, startAtEnd, onChange, onDone, onOpenNote }:
         else if (href) window.open(href, '_blank', 'noopener')
         return true
       },
+    },
+    onCreate: ({ editor: current }) => {
+      // A note that ends on a heading (a journal entry just started) gets a line under it to write on. It is not an edit: an empty line is never saved.
+      if (startAtEnd && current.state.doc.lastChild?.type.name !== 'paragraph') {
+        current.chain().setMeta('preventUpdate', true).insertContentAt(current.state.doc.content.size, { type: 'paragraph' }).focus('end').run()
+      }
+      callbacks.current.onEditor?.(current)
     },
     onUpdate: ({ editor: current }) => callbacks.current.onChange(note.save(current.getJSON())),
   })

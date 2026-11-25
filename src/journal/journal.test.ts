@@ -1,12 +1,34 @@
 import { expect, it } from 'vitest'
 import { userContent } from '../companion/attachments'
 import { WorkJournal } from './workJournal'
-import { draftStorageKey, entryBlock, entryParts, journalAttachment, journalDays, journalPath, loadDraft, saveDraft } from './journal'
+import { dayLabel, draftStorageKey, entryBlock, entryParts, journalAttachment, journalDay, journalDays, journalPath, loadDraft, saveDraft, withNewEntry } from './journal'
+import { journalDate } from '../review/digest'
 
-it('keeps one file per day in the journal folder and lists the days newest first', () => {
-  expect(journalPath('2026-11-25')).toBe('journal/2026-11-25.md')
-  const notes = [{ path: 'journal/2026-11-03.md', sha: 'a' }, { path: 'notes/journal.md', sha: 'b' }, { path: 'journal/2026-11-25.md', sha: 'c' }, { path: 'journal/readme.md', sha: 'd' }, { path: 'reviews/journal/2026-11.md', sha: 'e' }]
-  expect(journalDays(notes)).toEqual(['2026-11-25', '2026-11-03'])
+it('keeps one file per day, in a folder for its year inside the notes journal, and lists the days newest first', () => {
+  expect(journalPath('2026-11-25')).toBe('notes/journal/2026/2026-11-25.md')
+  expect(journalPath('2022-06-24')).toBe('notes/journal/2022/2022-06-24.md')
+  const notes = [
+    { path: 'notes/journal/2026/2026-11-03.md', sha: 'a' }, { path: 'notes/journal.md', sha: 'b' }, { path: 'notes/journal/2026/2026-11-25.md', sha: 'c' },
+    { path: 'notes/journal/2025/2025-12-31.md', sha: 'd' }, { path: 'notes/journal/readme.md', sha: 'e' }, { path: 'reviews/journal/2026-11.md', sha: 'f' },
+    // not where the journal lives: the old flat folder, and a day filed under the wrong year
+    { path: 'journal/2026-11-20.md', sha: 'g' }, { path: 'notes/journal/2025/2026-01-01.md', sha: 'h' },
+  ]
+  expect(journalDays(notes)).toEqual(['2026-11-25', '2026-11-03', '2025-12-31'])
+  // the reviews and the mind slice find entries by the same rule
+  expect(journalDate).toBe(journalDay)
+})
+
+it('names every entry with the year it is from', () => {
+  expect(dayLabel('2026-11-25')).toMatch(/25/)
+  expect(dayLabel('2026-11-25')).toMatch(/2026/)
+  expect(dayLabel('2022-06-24')).toMatch(/2022/)
+})
+
+it('starts a new entry at the end of the day under the time, with nothing else in the file changed', () => {
+  const at = new Date(2026, 10, 25, 15, 4)
+  expect(withNewEntry('', at)).toBe('## 3:04 pm\n')
+  expect(withNewEntry('## 8:10 am\n\nslept badly\n', at)).toBe('## 8:10 am\n\nslept badly\n\n## 3:04 pm\n')
+  expect(withNewEntry('## 8:10 am\n\nslept badly\n', at, ' the garden ')).toBe('## 8:10 am\n\nslept badly\n\n## 3:04 pm\n\nthe garden\n')
 })
 
 it('adds an entry under its time, words untouched', () => {
@@ -26,7 +48,7 @@ it('shows a day as times and paragraphs with no markdown marks', () => {
 it('goes to the chat as a text attachment the model reads in full', () => {
   const attachment = journalAttachment('2026-11-25', '## 3:04 pm\n\nthe garden\n')
   expect(attachment).toMatchObject({ kind: 'text', data: '## 3:04 pm\n\nthe garden\n' })
-  expect(attachment.name).toMatch(/^journal .*25/)
+  expect(attachment.name).toMatch(/^journal .*25.*2026/)
   const content = userContent('what stands out?', [attachment])
   expect(JSON.stringify(content)).toContain('the garden')
 })

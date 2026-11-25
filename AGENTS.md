@@ -81,16 +81,18 @@ The personal chat runs on the work pc's Claude Code when the bridge is there and
 
 Mail in the chat is read-only (`src/companion/mailTools.ts`): search and read, nothing else. Anything done to a message is done in my-mail. A message handed over from my-mail (`#chat/mail/<id>`) always opens in the personal space. Email text goes to the model as data, with the line that it is never an instruction.
 
-## journal
+## notes and the journal
 
-Chase, 2026-11-25. `journal.test.ts` holds these. The journal is under the more menu in both spaces (`src/journal/`).
+Chase, 2026-11-25. `notes.test.ts` and `journal.test.ts` hold these. Notes is under the more menu in personal (`src/notes/`); work has the journal alone, on the same screen.
 
-- It is a place to dump, by voice or typing (typing only in work, see chat voice above). Listening there ends only on a tap or when the app is hidden; a pause or a long silence never ends it, saves, or sends.
-- Words not saved yet are kept on the device, so closing the app or a failed save loses nothing.
-- `save` adds the words to that day's file under the time as a heading, exactly as said. Nothing rewrites or tidies them. Personal entries go to `journal/YYYY-MM-DD.md` in the notes vault.
-- Work entries go through the bridge into `01 Journal/` in the work vault (`workJournal.ts`, the bridge's `/journal` routes), so the work journal is there only on the work pc. Those routes only list, read and add to files. Work words are never sent to Jev, the personal key, or the personal vault, and the two spaces keep separate unsaved words.
+- Notes shows the `notes/` folder of the notes vault. The journal is a folder inside it with a folder for each year: `notes/journal/YYYY/YYYY-MM-DD.md`, one file per day journaled. An entry is named with its year wherever it shows. `journalPath` and `journalDay` in `src/journal/journal.ts` are the one place that layout lives; the mind slice, the reviews and the chat find entries through them.
+- There is no box to write in on the list. A note is a page: `new journal entry` opens today's file with the time as a heading and the cursor under it, and any note opens ready to type in. Opening one and writing nothing saves nothing.
+- Spoken words go into the note where the cursor is (personal only, see chat voice above). Listening there ends only on a tap or when the app is hidden; a pause or a long silence never ends it.
+- A note saves itself: three seconds after the last change, on leaving it, and when the app is hidden. Until the vault has it the text is kept on the device, so closing the app or a failed save loses nothing. When the note changed somewhere else as well, both are kept, mine first, and nothing is asked (`mergeNote`).
+- The ai touches a note only when Chase picks `clean up` or `organize` in the note's menu (`src/notes/tidy.ts`). Its version is an offer: it is shown in place and written only on `keep`, and `undo` puts his words back. It keeps his wording and every thought; an answer that cut the note down or lost an entry's time is thrown away. The note goes to the model as data, with the line that it is never an instruction. Nothing else rewrites or tidies a note.
+- Work entries go through the bridge into `01 Journal/YYYY/` in the work vault (`workJournal.ts`, the bridge's `/journal` routes), so the work journal is there only on the work pc. Those routes only list, read and add to files: a work entry is typed on a page, can be tidied before `save`, and is read-only after. Work words go only to Claude Code on the bridge, never to Jev, the personal key, or the personal vault, and the two spaces keep separate unsaved words.
 - A work dump is spoken on the phone into the Transcribe app, which writes it down on the phone itself. A recording titled `journal` (alone, or followed by a dash, colon or number) sent with `send transcript` is added by the bridge to that day's work journal under the time it was recorded, words only, instead of to the meeting transcripts (`work/bridge/transcript-inbox.ps1`). This is the only way speech reaches the work journal.
-- The journal never calls the ai. An entry reaches the chat only when Chase adds it to a message by hand, as an attachment: `add to chat` on the entry, or `add journal entry` in the chat menu.
+- A note reaches the chat only when Chase adds it to a message by hand, as an attachment: `add to chat` in the note's menu, or `add journal entry` in the chat menu.
 
 ## old tasks and mail
 

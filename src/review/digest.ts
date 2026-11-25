@@ -1,5 +1,6 @@
 import { textOf, type ChatClient } from '../companion/anthropicClient'
 import { GitHubError, type VaultStore } from '../companion/githubVault'
+import { journalDay } from '../journal/journal'
 import { inPeriod, type Period } from './period'
 
 /**
@@ -27,9 +28,8 @@ export function digestPath(month: string): string {
   return `reviews/journal/${month}.md`
 }
 
-export function journalDate(path: string): string | undefined {
-  return /^journal\/(\d{4}-\d{2}-\d{2})\.md$/.exec(path)?.[1]
-}
+/** The day a path is the journal entry for. One rule for where the journal lives, in src/journal/journal.ts. */
+export const journalDate = journalDay
 
 export function renderDigest(entries: DigestEntry[]): string {
   return [...entries].sort((a, b) => a.date.localeCompare(b.date)).map((entry) => `## ${entry.date} · ${entry.sha}\n> ${entry.line}\n\n${entry.summary}\n`).join('\n')

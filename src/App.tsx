@@ -54,13 +54,14 @@ import { WelcomeView } from './views/WelcomeView'
 import { SetupLanding, landsOnInstall } from './views/SetupLanding'
 import { openInChrome, useInstallPrompt } from './installPrompt'
 
-type View = 'today' | 'progress' | 'dashboard' | 'chat' | 'journal' | 'stores' | 'trips' | 'goals' | 'settings' | 'task'
+type View = 'today' | 'progress' | 'dashboard' | 'chat' | 'notes' | 'journal' | 'stores' | 'trips' | 'goals' | 'settings' | 'task'
 const taskStorageKey = (domain: Domain) => `my-brain.${domain}.tasks.v1`
 const dockedQuery = '(min-width: 87.5rem)'
 // Work reviews a dashboard where personal reviews progress; the other tab moves under more.
 /** The screens past the main ones: under … on the phone, and on the rail itself wherever a monitor has the room (src/rail.ts). */
 const moreViewsFor = (domain: Domain): { view: View; icon: IconName }[] => [
-  { view: 'journal', icon: 'journal' },
+  // Personal has notes, with the journal a folder inside them. Work has the journal alone, kept on the work pc.
+  { view: domain === 'personal' ? 'notes' : 'journal', icon: 'journal' },
   ...(domain === 'personal' ? [{ view: 'stores', icon: 'stores' }, { view: 'trips', icon: 'trips' }] as const : [{ view: 'progress', icon: 'progress' }] as const),
   { view: 'goals', icon: 'goals' },
   { view: 'settings', icon: 'settings' },
@@ -72,12 +73,12 @@ const primaryViewsFor = (domain: Domain): { view: View; icon: IconName }[] => [
 ]
 // The work journal lives in the work vault, behind the bridge.
 const workJournal = new WorkJournal()
-const JournalView = lazy(() => import('./journal/JournalView').then((module) => ({ default: module.JournalView })))
+const NotesView = lazy(() => import('./notes/NotesView').then((module) => ({ default: module.NotesView })))
 const ChatView = lazy(() => import('./companion/ChatView').then((module) => ({ default: module.ChatView })))
 const ShareLanding = lazy(() => import('./transcripts/ShareLanding'))
 /** The screens made of cards, which src/fitColumns.ts lays out to fit a monitor. */
 const deckViews: View[] = ['today', 'progress', 'goals', 'settings', 'trips']
-const views: View[] = ['today', 'progress', 'dashboard', 'chat', 'journal', 'stores', 'trips', 'goals', 'settings', 'task']
+const views: View[] = ['today', 'progress', 'dashboard', 'chat', 'notes', 'journal', 'stores', 'trips', 'goals', 'settings', 'task']
 
 function parseHash(): { view: View; taskId?: string } {
   if (typeof location === 'undefined') return { view: 'today' }
@@ -899,7 +900,9 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
     }
   }
 
-  const shownView: View = docked && view === 'chat' ? 'today' : view
+  // An old link to the journal lands on notes in personal, and notes on the journal in work.
+  const spaceView: View = view === 'journal' && activeDomain === 'personal' ? 'notes' : view === 'notes' && activeDomain === 'work' ? 'journal' : view
+  const shownView: View = docked && spaceView === 'chat' ? 'today' : spaceView
   const reviews = useReviews({ domain: activeDomain, currentDay, tasks, product, onProduct: setProduct, settings, notesVault: connectionStatus === 'connected' ? personalData?.notes : undefined, userName: account.name })
   const untriaged = tasks.filter((task) => task.domain === activeDomain && toSort(task))
   const activeProjects = product.projects.filter((project) => project.domain === activeDomain && project.status === 'active')
@@ -971,7 +974,7 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
         {shownView === 'chat' && chat}
         {shownView === 'goals' && <GoalsView domain={activeDomain} product={product} tasks={tasks} currentDay={currentDay} heldEvents={heldEvents} canHold={activeDomain === 'personal' && connectionStatus === 'connected'} holdError={syncError} onProduct={setProduct} onEditGoal={(id, changes) => { updateGoal(id, changes) }} onHold={(id) => holdAction(() => holdGoal(id))} onRelease={(id) => holdAction(() => releaseGoal(id))} />}
         {shownView === 'stores' && <StoresView activeStore={activeStore} tasks={tasks} onStore={setActiveStore} onToggle={toggleComplete} onAdd={addTask} />}
-        {shownView === 'journal' && <Suspense fallback={<header className="view-head"><h1>journal</h1></header>}><JournalView key={activeDomain} domain={activeDomain} vault={activeDomain === 'personal' ? tripVault ?? (connectionStatus === 'connected' ? personalData?.notes : undefined) : workJournal} onSettings={() => setView('settings')} onChat={(attachment) => { setChatAttachment(attachment); setView('chat') }} /></Suspense>}
+        {(shownView === 'notes' || shownView === 'journal') && <Suspense fallback={<header className="view-head"><h1>{shownView}</h1></header>}><NotesView key={activeDomain} domain={activeDomain} settings={settings} vault={activeDomain === 'personal' ? tripVault ?? (connectionStatus === 'connected' ? personalData?.notes : undefined) : workJournal} onSettings={() => setView('settings')} onChat={(attachment) => { setChatAttachment(attachment); setView('chat') }} /></Suspense>}
         {shownView === 'trips' && <TripsView vault={tripVault} currentDay={currentDay} onSettings={() => setView('settings')} />}
         {shownView === 'settings' && <SettingsView domain={activeDomain} accountName={accountName} connectionStatus={connectionStatus} settings={settings} syncing={syncing} syncError={syncError} canInstall={install.canPrompt} onInstall={() => void install.install()} onConnect={connectPersonal} onDisconnect={disconnectPersonal} onSync={() => { void (activeDomain === 'work' ? syncWork() : syncPersonal(personalData, true)) }} onSettings={changeSettings} account={account} onAccount={markAccountChanged} />}
         {shownView === 'task' && <TaskPage key={editingTaskId ?? 'new'} domain={activeDomain} existingTask={tasks.find((task) => task.id === editingTaskId)} guess={editingTaskId ? guesses[editingTaskId] : undefined} projects={activeProjects} onAdd={addTask} onUpdate={updateTask} onDelete={deleteTask} onDone={finishTask} onNotMine={delegateTask} onChat={(attachment) => { setChatAttachment(attachment); if (!docked) setView('chat') }} onCancel={() => { setEditingTaskId(undefined); setView('today') }} />}

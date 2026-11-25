@@ -39,7 +39,7 @@ migration is a separate effort and is covered here only by the assumptions it mu
 | **Transport** | **GitHub Contents and Git Data APIs with the existing fine-grained token.** Change detection by branch head sha, conditional requests with ETags. | Already in use by the companion. A 304 on the branch check costs nothing against the rate limit, so polling is cheap. Cloning the repo in the browser (isomorphic-git) would need a CORS proxy for GitHub, which is a server. |
 | **Save** | **A save is a commit.** Local write on every keystroke; push after three seconds idle, on leaving the note, on hiding the app, or on `done`. One commit per changed note. | Commits are the vault's history and what Obsidian pulls. Idle batching keeps a journaling session to a handful of commits rather than one per word. |
 | **Merge** | **Three-way, line based (diff3). Non-overlapping changes merge silently. Overlapping changes keep both, mine first, then the other side's, as ordinary paragraphs. No markers.** The note shows `merged` in the list until opened and the merge is listed in settings. *Resolved 2026-11-04: keep both, never require resolution.* | The common conflict is both sides appending to the same note, where keeping both in order is exactly the right answer. Duplicate paragraphs in prose are obvious on reading. Markers would need cleaning up, which rule 3 forbids. |
-| **Journal** | **`journal/YYYY-MM-DD.md`, one file per day I journal.** The `journal` button opens today's file, creating it when missing; later taps the same day place the cursor at the end under a time heading. | Ad hoc, not daily. One file per day keeps entries findable without a naming decision at the moment of writing. |
+| **Journal** | **`notes/journal/YYYY/YYYY-MM-DD.md`, one file per day I journal, in a folder for its year inside notes (moved 2026-11-25).** The `journal` button opens today's file, creating it when missing; later taps the same day place the cursor at the end under a time heading. | Ad hoc, not daily. One file per day keeps entries findable without a naming decision at the moment of writing. |
 | **Navigation** | **Fourth tab: today · progress · notes · chat.** In the work space the bar has three tabs. | Journaling and reading will be daily. The `…` menu is for things done every few months. |
 | **Search** | **Client-side over the mirror: title matches, then body matches with a snippet.** | The whole vault is local. GitHub code search does not index private repos reliably for fine-grained tokens and is rate limited to ten calls a minute. |
 | **Images** | **Existing images in the repo render when online. No camera or upload yet.** | Markdown prose first. Binary sync and size limits come with a later phase. |
@@ -72,7 +72,7 @@ export. For moving from the phone or into an app that is not Obsidian:
 HomeBase today: `00 Daily Plan/`, `00 Weekly Plans/`, `20 Projects/`, `50 Someday-Maybe/`,
 `70 Goals/`, `lessons/`, `memory/`, and `CLAUDE.md`. Notes adds two folders:
 
-- `journal/` for journal entries, one file per day.
+- `notes/journal/` for journal entries, one file per day in a folder for its year.
 - `notes/` for new notes created from the top level of the notes tab. Notes created inside a
   folder land in that folder.
 

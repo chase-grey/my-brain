@@ -2,14 +2,21 @@ import type { Attachment } from '../companion/attachments'
 import type { VaultNote, VaultStore } from '../companion/githubVault'
 import type { Domain } from '../domain/types'
 
-/** What the journal needs from wherever it is kept: the notes vault for personal, the bridge for work. */
-export type JournalStore = Pick<VaultStore, 'listNotes' | 'readNote' | 'appendNote'>
+/**
+ * What the journal needs from wherever it is kept: the notes vault for personal, the bridge for work.
+ * The bridge only lists, reads and adds, so a store without `writeNote` is one whose entries cannot be edited.
+ */
+export type JournalStore = Pick<VaultStore, 'listNotes' | 'readNote' | 'appendNote'> & Partial<Pick<VaultStore, 'writeNote'>>
 
-/** One file per day journaled, in the vault's `journal/` folder. */
-export const journalPath = (day: string) => `journal/${day}.md`
+/** The journal is a folder inside notes, with a folder for each year. */
+export const journalFolder = 'notes/journal'
+
+/** One file per day journaled, in its year's folder. */
+export const journalPath = (day: string) => `${journalFolder}/${day.slice(0, 4)}/${day}.md`
 
 export function journalDay(path: string): string | undefined {
-  return /^journal\/(\d{4}-\d{2}-\d{2})\.md$/.exec(path)?.[1]
+  const match = /^notes\/journal\/(\d{4})\/(\d{4}-\d{2}-\d{2})\.md$/.exec(path)
+  return match && match[2].startsWith(match[1]) ? match[2] : undefined
 }
 
 /** The days that have an entry, newest first. */
@@ -23,9 +30,15 @@ export function entryBlock(text: string, at: Date): string {
   return `## ${time}\n\n${text.trim()}\n`
 }
 
-/** "wed, nov 25", the way a day is named everywhere it shows. */
+/** "wed, nov 25, 2026", the way a day is named everywhere it shows. The year is always there. */
 export function dayLabel(day: string): string {
-  return new Date(`${day}T12:00:00`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }).toLowerCase()
+  return new Date(`${day}T12:00:00`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }).toLowerCase()
+}
+
+/** A day's file with a new entry started at the end: the time as a heading, then any words already waiting. */
+export function withNewEntry(content: string, at: Date, words = ''): string {
+  const before = content.trim() ? `${content.replace(/\s+$/, '')}\n\n` : ''
+  return `${before}${entryBlock(words, at).replace(/\n+$/, '\n')}`
 }
 
 /** A day's entry as something a chat message can carry. */

@@ -176,7 +176,7 @@ describe('journal digest', () => {
   const reply = (line: string): MessagesResponse['content'] => [{ type: 'text', text: `LINE: ${line}\nSUMMARY: longer, with "a quote".` }]
 
   it('reads each entry once, in two sizes, and never again until it changes', async () => {
-    const vault = fakeVault({ 'journal/2026-11-17.md': long('I will start the deck monday.'), 'journal/2026-11-19.md': 'short one', 'journal/2026-11-05.md': long('before the week.'), 'notes/other.md': 'x' })
+    const vault = fakeVault({ 'notes/journal/2026/2026-11-17.md': long('I will start the deck monday.'), 'notes/journal/2026/2026-11-19.md': 'short one', 'notes/journal/2026/2026-11-05.md': long('before the week.'), 'notes/other.md': 'x' })
     const client = scripted([reply('said the deck starts monday')])
     const first = await loadDigest({ vault, client, model: 'claude-haiku-5-5', range: { start: '2026-10-26', end: '2026-11-23' }, fresh: week })
     expect(first).toEqual([
@@ -193,7 +193,7 @@ describe('journal digest', () => {
   })
 
   it('stops paying after a fixed number of entries in one run', async () => {
-    const notes = Object.fromEntries(Array.from({ length: maxDigestsPerRun + 5 }, (_, index) => [`journal/2026-${String(1 + Math.floor(index / 28)).padStart(2, '0')}-${String(1 + index % 28).padStart(2, '0')}.md`, long('entry')]))
+    const notes = Object.fromEntries(Array.from({ length: maxDigestsPerRun + 5 }, (_, index) => [`notes/journal/2026/2026-${String(1 + Math.floor(index / 28)).padStart(2, '0')}-${String(1 + index % 28).padStart(2, '0')}.md`, long('entry')]))
     const client = scripted(Array.from({ length: maxDigestsPerRun + 5 }, () => reply('line')))
     const year = periodOf('year', '2026')
     expect(await loadDigest({ vault: fakeVault(notes), client, model: 'm', range: year, fresh: year })).toHaveLength(maxDigestsPerRun)
