@@ -474,3 +474,25 @@ button.row-main { min-height: 3rem; }
 .text-draft-body { padding: 0.25rem 1rem 0.75rem; white-space: pre-wrap; overflow-wrap: anywhere; }
 .text-draft a.primary { display: inline-flex; align-items: center; text-decoration: none; }
 .issue-question { white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* the accent, worn the way workout-tracker wears it: on what is chosen, what is mine, what is done and what needs me (see "color" in AGENTS.md) */
+::selection { background: color-mix(in srgb, var(--accent) 30%, transparent); }
+input, textarea, [contenteditable="true"] { caret-color: var(--accent); }
+.tabbar button.active, .rail button.active, .rail button.active:hover { color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.switch button.selected { background: color-mix(in srgb, var(--accent) 16%, var(--surface)); color: var(--accent); }
+.topbar .icon-button, .topbar .icon-button:hover { border-color: var(--accent); background: var(--accent); color: var(--on-accent); }
+.segmented button.selected { background: color-mix(in srgb, var(--accent) 16%, var(--surface)); color: var(--accent); }
+.pill[aria-pressed="true"], .chips button.selected, .icon-button[aria-pressed="true"], .note-toolbar button.active { color: var(--accent); }
+.note-toolbar button.active { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.toggle span { border-color: color-mix(in srgb, var(--accent) 60%, var(--muted)); }
+.toggle:hover span { border-color: var(--accent); }
+.secondary { border-color: color-mix(in srgb, var(--accent) 40%, var(--border)); color: var(--accent); }
+.composer-mic { border-color: color-mix(in srgb, var(--accent) 40%, var(--border)); background: color-mix(in srgb, var(--accent) 12%, var(--surface)); color: var(--accent); }
+.turn.user { background: color-mix(in srgb, var(--accent) 18%, var(--surface)); }
+.history-list li.is-current { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.menu-list button:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 12%, var(--surface)); }
+.count.is-loud, .goals li.is-loud small, .goals li.challenge.is-loud small, .slice-facts small.is-loud, .review-question small.is-loud, .note.is-good { color: var(--accent); }
+.review-stats strong { color: var(--accent); }
+.sort summary::after { color: var(--accent); }
+.note-body blockquote, .md blockquote { border-left-color: var(--accent); }
+.dash-card.is-attention { box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent), 0 0 14px color-mix(in srgb, var(--accent) 22%, transparent); }

@@ -15,6 +15,8 @@
 
 The only colors are the theme tokens at the top of `src/styles.css`: the neutrals and the one accent. No red, yellow, amber or green for errors, warnings, delete, behind or success, and no new color tokens. Where something needs emphasis, use the accent, the text color or weight. The life wheel's eight area hues (`wheelHue`) name the areas and are the one exception. `src/styles.test.ts` fails on any other color.
 
+The accent is worn, not saved for emphasis alone (Chase, 2026-11-25: use it more, the way workout-tracker does): on the screen you are on in the tab bar and rail, the chosen space and the chosen option of any picker, the new task button, the ring of an open task, what I said in the chat, the chat's one button, secondary buttons, and anything that reads as loud, earned or needing me. Tints are mixed from `--accent` in place, never a new token. A new control of one of these kinds wears it the same way; titles, body text and card grounds stay neutral.
+
 The accent itself can be changed: settings has a swatch for the app's color and one for a color of my own, mixed on three sliders or typed as hex, kept on the device (`src/accent.ts`, `AccentPicker`; the pattern is `~/.claude/patterns/custom-accent.md`). Style against `--accent` and `--on-accent` only, never the default's hex, so everything follows it. The picker's own swatches and slider tracks are written in the component, the one place a color sits outside the tokens.
 
 ## updates
