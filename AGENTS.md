@@ -135,6 +135,7 @@ Chase, 2026-11-25. A task can carry a moment to be reminded (`remindAt`, `src/do
 - Reminders are personal only: the work space has no phone to give one. A routine takes none.
 - From the day of its reminder the task sits on today, and stays until it is done or the reminder is changed or taken off, so one that was swiped away is still seen.
 - The ai's guess for a task new to sort can carry a reminder, under the same rule as every other guess: an offer on the row and in the form, nothing set until confirmed. Most tasks get none. It is asked for against the day and time it is, and a guessed moment that has gone by is dropped, never set.
+- The chat sets one only on a task it makes when Chase asks to be reminded, and gives the task no due date for it.
 - Opening the work space never clears the phone's reminders.
 
 ## reviews

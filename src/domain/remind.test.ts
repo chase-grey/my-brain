@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { createElement } from 'react'
+import { companionTask } from '../companion/companionTools'
 import { taskMetadata } from '../data/personalTaskSync'
 import { setReminders, type ReminderPhone } from '../native/reminders'
 import { widgetSnapshot } from '../native/widget'
@@ -94,6 +95,14 @@ describe('guessing a reminder', () => {
 
   it('never takes the place of a reminder the task already has', () => {
     expect(sortedTask({ ...unsorted, remindAt: '2026-12-01T09:00' }, { estimateMin: 5, priority: 3, energy: 'shallow', remindAt: monday }, '2026-11-25', now).remindAt).toBe('2026-12-01T09:00')
+  })
+})
+
+describe('a reminder asked for in the chat', () => {
+  it('is set on the task it makes, with no due date, in the personal space only', () => {
+    expect(companionTask('personal', { title: 'bring mittens to work', remindAt: monday }, '2026-11-25', 'x')).toMatchObject({ remindAt: monday, metadataComplete: true })
+    expect(companionTask('personal', { title: 'bring mittens to work', remindAt: monday }, '2026-11-25', 'x').dueDate).toBeUndefined()
+    expect(companionTask('work', { title: 'bring mittens to work', remindAt: monday }, '2026-11-25', 'x').remindAt).toBeUndefined()
   })
 })
 

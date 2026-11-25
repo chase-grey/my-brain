@@ -1,4 +1,5 @@
 import type { CalendarBlock } from '../data/calendarGraphProvider'
+import { localMoment, upcoming, validMoment } from '../domain/remind'
 import type { FreeNow } from '../domain/calendar'
 import { MONEY_FIGURES, type MoneyAccount, type MoneyFigure } from '../domain/money'
 import type { Domain, Goal, Horizon, Plan, Priority, Project, Task } from '../domain/types'
@@ -11,7 +12,7 @@ import { isMailTool, mailTools, runMailTool, type MailReader } from './mailTools
 import { isIssueApp, issueApps, issueBodyLimit, issueTitleLimit, type IssueStore } from '../issues/issues'
 import { forgetMemory, memoryFilePath, memoryIndexPath, memoryTypes, readMemoryIndex, saveMemory, validateMemoryName } from './memory'
 
-export type TaskSummary = Pick<Task, 'id' | 'title' | 'dueDate' | 'completed' | 'estimateMin' | 'priority' | 'projectId' | 'notes'>
+export type TaskSummary = Pick<Task, 'id' | 'title' | 'dueDate' | 'completed' | 'estimateMin' | 'priority' | 'projectId' | 'notes' | 'remindAt'>
 export type GoalSummary = Pick<Goal, 'id' | 'title' | 'horizon' | 'status' | 'targetDate' | 'hoursCommitted' | 'shape' | 'scheduledOn'> & { funded?: boolean; held?: boolean }
 export type ProjectSummary = Pick<Project, 'id' | 'title' | 'status' | 'mode' | 'goalId'>
 export type PlanSummary = {
@@ -33,7 +34,7 @@ export type PlanSummary = {
 }
 export type CalendarSummary = Pick<CalendarBlock, 'subject' | 'start' | 'end' | 'isAllDay'>
 
-export type NewTaskInput = { title: string; dueDate?: string; estimateMin?: number; priority?: Priority; notes?: string; projectId?: string }
+export type NewTaskInput = { title: string; dueDate?: string; remindAt?: string; estimateMin?: number; priority?: Priority; notes?: string; projectId?: string }
 export type NewGoalInput = { title: string; horizon?: Horizon; targetDate?: string }
 export type GoalChanges = Partial<Pick<Goal, 'title' | 'status' | 'targetDate' | 'hoursCommitted' | 'funded' | 'shape' | 'scheduledOn'>>
 
@@ -84,7 +85,7 @@ const memoryTools: AnthropicTool[] = [
 
 const taskTools: AnthropicTool[] = [
   { name: 'list_tasks', description: 'List the tasks in this space with their ids.', input_schema: { type: 'object', properties: { include_completed: { type: 'boolean' } } } },
-  { name: 'create_task', description: 'Create a task in this space.', input_schema: { type: 'object', properties: { title: { type: 'string' }, due_date: dateSchema, estimate_min: { type: 'integer', description: 'how long it takes, in minutes' }, priority: { type: 'integer', minimum: 1, maximum: 4, description: '1 is most urgent' }, notes: { type: 'string' }, project_id: { type: 'string', description: 'the project it belongs to, when there is one' } }, required: ['title'] } },
+  { name: 'create_task', description: 'Create a task in this space.', input_schema: { type: 'object', properties: { title: { type: 'string' }, due_date: dateSchema, remind_at: { type: 'string', description: 'only when the user asks to be reminded, and only in the personal space: the moment their phone should remind them, on their own clock, as YYYY-MM-DDTHH:MM. A reminder is not a due date: leave due_date out unless they gave one' }, estimate_min: { type: 'integer', description: 'how long it takes, in minutes' }, priority: { type: 'integer', minimum: 1, maximum: 4, description: '1 is most urgent' }, notes: { type: 'string' }, project_id: { type: 'string', description: 'the project it belongs to, when there is one' } }, required: ['title'] } },
   { name: 'complete_task', description: 'Mark a task complete by id.', input_schema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] } },
   { name: 'delete_task', description: 'Delete a task by id. The user approves this in the app before it runs; completing is usually the better choice.', input_schema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] } },
   { name: 'list_goals', description: 'List active goals and projects with their ids.', input_schema: { type: 'object', properties: {} } },
@@ -155,6 +156,16 @@ function optionalDate(input: Args, key: string): string | undefined {
   const value = optionalString(input, key)
   if (value !== undefined && !datePattern.test(value)) throw new Error(`${key} must be YYYY-MM-DD`)
   return value
+}
+
+/** A reminder asked for in the chat has to be a real moment still to come. */
+function optionalMoment(input: Args, key: string): string | undefined {
+  const value = optionalString(input, key)
+  if (value === undefined) return undefined
+  const moment = validMoment(value)
+  if (!moment) throw new Error(`${key} must be YYYY-MM-DDTHH:MM`)
+  if (!upcoming(moment, localMoment())) throw new Error(`${key} has already passed`)
+  return moment
 }
 
 function optionalNumber(input: Args, key: string): number | undefined {
@@ -273,6 +284,7 @@ async function run(name: string, input: Args, { actions, vault, memoryFolder = '
       const task = actions.createTask({
         title: requireString(input, 'title').trim(),
         dueDate: optionalDate(input, 'due_date'),
+        remindAt: optionalMoment(input, 'remind_at'),
         estimateMin: optionalNumber(input, 'estimate_min'),
         priority: optionalNumber(input, 'priority') as Priority | undefined,
         notes: optionalString(input, 'notes'),
@@ -379,8 +391,8 @@ export async function executeTool(name: string, input: unknown, context: ToolCon
 }
 
 export function summarizeTask(task: Task): TaskSummary {
-  const { id, title, dueDate, completed, estimateMin, priority, projectId, notes } = task
-  return { id, title, dueDate, completed, estimateMin, priority, projectId, notes }
+  const { id, title, dueDate, completed, estimateMin, priority, projectId, notes, remindAt } = task
+  return { id, title, dueDate, completed, estimateMin, priority, projectId, notes, remindAt }
 }
 
 export function summarizeGoal(goal: Goal): GoalSummary {
@@ -405,6 +417,7 @@ export function companionTask(domain: Domain, input: NewTaskInput, today: string
     id, taskId: id, domain, title: input.title, notes: input.notes, dueDate: input.dueDate, projectId: input.projectId, completed: false,
     estimateMin, originalEstimateMin: estimateMin, priority, planDate: today, energy: 'shallow',
     place: domain === 'work' ? ['office'] : undefined,
+    remindAt: domain === 'personal' ? input.remindAt : undefined,
     pinned: false, carries: 0, metadataComplete: true,
   }
 }
