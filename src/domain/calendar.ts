@@ -78,13 +78,15 @@ export function keptPick(pick: { min: number; at: number } | undefined, now: Dat
   return dayOver(now) && !dayOver(pickedAt) ? undefined : pick.min
 }
 
-/** The time-available choice to start on: the longest one that fits before the next event, the shortest during one, none once the day is over. */
-export function fittingMinutes(free: FreeNow | undefined, options: readonly number[], fallback: number): number {
-  if (!free) return fallback
-  if ('dayOver' in free) return 0
-  if ('busyUntil' in free) return options[0]
-  return [...options].reverse().find((minutes) => minutes <= free.freeMin) ?? options[0]
-}
+/**
+ * The lengths the extra time slider stops at, from none to a full day: every 15 minutes to 2 hours,
+ * every half hour to 6, every hour after. The slider starts on none, and that is never a picked length.
+ */
+export const timeStops: readonly number[] = [
+  ...Array.from({ length: 9 }, (_, index) => index * 15),
+  ...Array.from({ length: 8 }, (_, index) => 150 + index * 30),
+  ...Array.from({ length: 18 }, (_, index) => 420 + index * 60),
+]
 
 export function clockTime(dateTime: string): string {
   const value = new Date(dateTime)

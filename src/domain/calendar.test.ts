@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { CalendarBlock } from '../data/calendarGraphProvider'
 import type { Goal } from './types'
-import { addDays, blockWindow, busyMinutes, eventsOn, fittingMinutes, freeNow, keptPick, reconcileHeldGoal, timeNow, timeRange } from './calendar'
+import { addDays, blockWindow, busyMinutes, eventsOn, freeNow, keptPick, reconcileHeldGoal, timeNow, timeRange, timeStops } from './calendar'
 
 const block = (id: string, start: string, end: string, isAllDay = false): CalendarBlock => ({ id, subject: id, start, end, isAllDay })
 const goal: Goal = { id: 'g', domain: 'personal', horizon: 'season', title: 'paint the bedroom', funded: true, status: 'active', revisions: [], shape: 'block', scheduledOn: '2026-11-07', calendarEventId: 'e' }
@@ -52,10 +52,8 @@ describe('calendar', () => {
 
   it('ends time for tasks at 9pm unless a length is picked after that', () => {
     const at = (time: string, day = '02') => new Date(`2026-11-${day}T${time}:00`)
-    const options = [30, 60, 120] as const
     expect(freeNow([], at('20:59'))).toEqual({ freeMin: 1, nextStart: undefined })
     expect(freeNow([], at('21:00'))).toEqual({ dayOver: true })
-    expect(fittingMinutes({ dayOver: true }, options, 60)).toBe(0)
     // With no calendar, as at work, the day still ends.
     expect(timeNow(undefined, at('14:00'))).toBeUndefined()
     expect(timeNow(undefined, at('21:05'))).toEqual({ dayOver: true })
@@ -68,15 +66,13 @@ describe('calendar', () => {
     expect(keptPick(undefined, at('08:00'))).toBeUndefined()
   })
 
-  it('starts the time picker on the longest choice that fits', () => {
-    const options = [30, 60, 120] as const
-    expect(fittingMinutes(undefined, options, 60)).toBe(60)
-    expect(fittingMinutes({ busyUntil: '2026-11-02T10:15:00' }, options, 60)).toBe(30)
-    expect(fittingMinutes({ freeMin: 12 }, options, 60)).toBe(30)
-    expect(fittingMinutes({ freeMin: 47 }, options, 60)).toBe(30)
-    expect(fittingMinutes({ freeMin: 60 }, options, 60)).toBe(60)
-    expect(fittingMinutes({ freeMin: 119 }, options, 60)).toBe(60)
-    expect(fittingMinutes({ freeMin: 465 }, options, 60)).toBe(120)
+  it('lets the extra time slider reach any length up to a full day', () => {
+    expect(timeStops[0]).toBe(0)
+    expect(timeStops.at(-1)).toBe(24 * 60)
+    expect(timeStops.slice(0, 5)).toEqual([0, 15, 30, 45, 60])
+    expect(timeStops).toContain(330)
+    expect(timeStops).toContain(13 * 60)
+    expect([...timeStops].sort((a, b) => a - b)).toEqual([...new Set(timeStops)])
   })
 
   it('formats time ranges without padding', () => {

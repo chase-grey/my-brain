@@ -206,11 +206,13 @@ The rest slice reads the phone (Chase, 2026-11-25): sleep from Health Connect an
 
 ## time available
 
-Chat is told how much time there is right now only when it is known: a length picked on today, or what the calendar shows (clear until the next event, in one until it ends, nothing else today). A default is never passed along as a fact. Until a length is picked, the picker starts on the longest choice that fits before the next event, and on the shortest during one (`freeNow` and `fittingMinutes` in `src/domain/calendar.ts`). With no calendar read it starts on 1h and chat hears no number. An event shown as free holds no time.
+Chat is told how much time there is right now only when it is known: a length picked on today, or what the calendar shows (clear until the next event, in one until it ends, nothing else today). A default is never passed along as a fact, and with no length picked and no calendar read chat hears no number (`freeNow` in `src/domain/calendar.ts`). An event shown as free holds no time.
 
-The work calendar comes from classic Outlook through the bridge (`GET /calendar`). The work space shows it on today and uses it for the picker and the time line; the events themselves are never given to chat.
+Extra time is asked for, never offered (Chase, 2026-11-25). Today shows only `i have extra time` until he taps it; the card then holds a slider that starts on nothing, and tasks are suggested only once he has moved it. The slider reaches any length up to a full day (`timeStops`). The length stands for the day, the card with it, and `hide` in the card's menu puts both away. Do not start the slider on a length of the app's choosing or bring back a fixed list of lengths. `ExtraTime.test.tsx` holds these.
 
-Time for tasks ends at 9pm (`dayEndHour`; Chase, 2026-11-25). A clear stretch runs to 9pm, not midnight. Past 9pm the picker starts with nothing chosen, no tasks are suggested, and chat is told the day is over, in both spaces, until a length is picked after 9pm. A length picked earlier does not carry past 9pm or into the next day. Anything new that offers work to do applies the same end. `calendar.test.ts` and `companion.test.ts` hold these.
+The work calendar comes from classic Outlook through the bridge (`GET /calendar`). The work space shows it on today and uses it for the time line; the events themselves are never given to chat.
+
+Time for tasks ends at 9pm (`dayEndHour`; Chase, 2026-11-25). A clear stretch runs to 9pm, not midnight. Past 9pm no tasks are suggested and chat is told the day is over, in both spaces, until a length is picked after 9pm. A length picked earlier does not carry past 9pm or into the next day. Anything new that offers work to do applies the same end. `calendar.test.ts` and `companion.test.ts` hold these.
 
 ## keeping things in
 

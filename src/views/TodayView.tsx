@@ -8,9 +8,9 @@ import { placeOptions, priorityLabels, type TaskGuess } from '../domain/taskGues
 import { storeOptions } from '../domain/shopping'
 import type { Domain, Energy, Habit, HabitEntry, Place, Project, Task } from '../domain/types'
 import { duration, weekday } from '../format'
-import { Card, Empty, Menu, Segmented, TaskRow, Toggle } from '../ui'
+import { Card, Empty, TaskRow, Toggle } from '../ui'
+import { ExtraTimeCard } from './ExtraTime'
 
-export const minuteOptions = [30, 60, 120] as const
 export const energyOptions: { value: Energy; label: string }[] = [
   { value: 'shallow', label: 'light' },
   { value: 'deep', label: 'focused' },
@@ -71,7 +71,7 @@ export function CalendarCard({ events }: { events: CalendarBlock[] }) {
   </Card>
 }
 
-export function TodayView({ domain, currentDay, place, placeOverride, onPlaceOverride, commitments, weeklyCommitments, habits, habitEntries, onHabitPart, plan, availableMin, energy, onMinutes, onEnergy, weekPaid, floorToday, strategicTodayMin, onFloorNight, onStrategic, untriaged, guesses, projects, onConfirm, openCount, openMin, onToggle, onOpen, calendar, inbox, mailAppUrl }: {
+export function TodayView({ domain, currentDay, place, placeOverride, onPlaceOverride, commitments, weeklyCommitments, habits, habitEntries, onHabitPart, plan, pickedMin, energy, onMinutes, onEnergy, weekPaid, floorToday, strategicTodayMin, onFloorNight, onStrategic, untriaged, guesses, projects, onConfirm, openCount, openMin, onToggle, onOpen, calendar, inbox, mailAppUrl }: {
   domain: Domain
   currentDay: string
   place: Place
@@ -83,9 +83,9 @@ export function TodayView({ domain, currentDay, place, placeOverride, onPlaceOve
   habitEntries: HabitEntry[]
   onHabitPart: (habitId: string, partId: string) => void
   plan: ReturnType<typeof buildNowPlan>
-  availableMin: number
+  pickedMin?: number
   energy: Energy
-  onMinutes: (minutes: number) => void
+  onMinutes: (minutes?: number) => void
   onEnergy: (energy: Energy) => void
   weekPaid: boolean
   floorToday: boolean
@@ -135,22 +135,7 @@ export function TodayView({ domain, currentDay, place, placeOverride, onPlaceOve
         : <Empty>nothing else due this week</Empty>}
     </Card>
 
-    {weekPaid
-      ? <Card title="extra time"><Empty>the week is paid</Empty></Card>
-      : <Card title="extra time" aside={<Menu items={[
-        { label: floorToday ? 'floor night logged' : 'floor night', onSelect: onFloorNight, disabled: floorToday },
-        ...[30, 60, 90].map((minutes) => ({ label: `strategic ${duration(minutes)}`, onSelect: () => onStrategic(minutes) })),
-      ]} />}>
-        <div className="pickers">
-          <Segmented label="time available" options={minuteOptions.map((minutes) => ({ value: minutes, label: duration(minutes) }))} value={availableMin} onChange={onMinutes} />
-          <Segmented label="energy" options={energyOptions} value={energy} onChange={onEnergy} />
-        </div>
-        {(floorToday || strategicTodayMin > 0) && <p className="note">{[floorToday && 'floor night', strategicTodayMin > 0 && `strategic ${duration(strategicTodayMin)}`].filter(Boolean).join(' · ')}</p>}
-        {plan.tasks.length
-          ? <ul className="rows">{plan.tasks.map((task) => <TaskRow key={task.id} task={task} done={false} onToggle={() => onToggle(task.id)} onOpen={() => onOpen(task.id)} />)}</ul>
-          : <Empty>nothing fits this window</Empty>}
-        {plan.tasks.length > 0 && <p className="fit">{duration(plan.totalMin)} planned · {duration(Math.max(0, plan.availableMin - plan.totalMin))} open</p>}
-      </Card>}
+    <ExtraTimeCard plan={plan} pickedMin={pickedMin} energy={energy} energyOptions={energyOptions} onMinutes={onMinutes} onEnergy={onEnergy} weekPaid={weekPaid} floorToday={floorToday} strategicTodayMin={strategicTodayMin} onFloorNight={onFloorNight} onStrategic={onStrategic} onToggle={onToggle} onOpen={onOpen} />
 
     {mailLine && <a className="card linkcard" href={mailAppUrl} target="_blank" rel="noreferrer"><span className="row-title">email</span><small>{mailLine}</small></a>}
 

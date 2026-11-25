@@ -2,7 +2,7 @@ import { Suspense, lazy, useEffect, useMemo, useRef, useState, type SetStateActi
 import { InteractionRequiredAuthError } from '@azure/msal-browser'
 import type { CalendarBlock } from './data/calendarGraphProvider'
 import type { InboxCounts } from './data/mailGraphProvider'
-import { addDays, blockWindow, eventsOn, fittingMinutes, keptPick, reconcileHeldGoal, timeNow } from './domain/calendar'
+import { addDays, blockWindow, eventsOn, keptPick, reconcileHeldGoal, timeNow } from './domain/calendar'
 import { configuredPersonalClientId, createPersonalGraphData, type PersonalGraphData } from './data/personalGraphData'
 import { mergePersonalTasks, personalTaskMetaFile, taskMetadata } from './data/personalTaskSync'
 import type { TaskProvider } from './data/taskProvider'
@@ -37,7 +37,7 @@ import { moneyBriefing } from './domain/money'
 import { moneyReader } from './companion/moneyRead'
 import { useTaskGuesses } from './companion/taskGuesses'
 import { nextToSort, sortedTask } from './domain/taskGuess'
-import { minuteOptions, TodayView } from './views/TodayView'
+import { TodayView } from './views/TodayView'
 import { ProgressView } from './views/ProgressView'
 import { bumpsBetween, recordBumps } from './review/bumpLog'
 import { useReviews } from './review/useReviews'
@@ -270,7 +270,8 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
     return () => clearInterval(timer)
   }, [])
   const pickedMin = keptPick(pick)
-  const availableMin = pickedMin ?? fittingMinutes(timeNow(calendarRead ? calendarEvents : undefined), minuteOptions, 60)
+  // Nothing is suggested for extra time until a length is set on today's slider.
+  const availableMin = pickedMin ?? 0
   // Trips read and write the HomeBase vault directly, with the same repo settings the chat uses.
   const tripVault = useMemo(() => {
     const config = { repo: normalizeRepo(settings.githubRepo), token: settings.githubToken.replace(/\s+/g, ''), branch: normalizeBranch(settings.vaultBranch) }
@@ -963,7 +964,7 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
         {shownView === 'today' && <TodayView domain={activeDomain} currentDay={currentDay} place={currentPlace} placeOverride={placeOverride} onPlaceOverride={setPlaceOverride}
           commitments={commitments} weeklyCommitments={weeklyCommitments} habits={product.habits} habitEntries={product.habitEntries}
           onHabitPart={(habitId, partId) => setProduct((current) => ({ ...current, habitEntries: toggleHabitPart(current.habitEntries, habitId, partId, currentDay) }))}
-          plan={plan} availableMin={availableMin} energy={energy} onMinutes={(min) => setPick({ min, at: Date.now() })} onEnergy={setEnergy}
+          plan={plan} pickedMin={pickedMin} energy={energy} onMinutes={(min) => setPick(min ? { min, at: Date.now() } : undefined)} onEnergy={setEnergy}
           weekPaid={weekPaid} floorToday={floorToday} strategicTodayMin={strategicTodayMin}
           onFloorNight={() => setProduct((current) => ({ ...current, dayOverrides: [...current.dayOverrides, { date: currentDay, domain: activeDomain, kind: 'floor' }] }))}
           onStrategic={(minutes) => setProduct((current) => ({ ...current, activities: [...current.activities, { id: newId('activity'), domain: activeDomain, kind: 'strategic', occurredAt: new Date().toISOString(), minutes }] }))}
