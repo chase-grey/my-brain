@@ -32,7 +32,7 @@ export type PlanSummary = {
 }
 export type CalendarSummary = Pick<CalendarBlock, 'subject' | 'start' | 'end' | 'isAllDay'>
 
-export type NewTaskInput = { title: string; dueDate?: string; estimateMin?: number; priority?: Priority; notes?: string }
+export type NewTaskInput = { title: string; dueDate?: string; estimateMin?: number; priority?: Priority; notes?: string; projectId?: string }
 export type NewGoalInput = { title: string; horizon?: Horizon; targetDate?: string }
 export type GoalChanges = Partial<Pick<Goal, 'title' | 'status' | 'targetDate' | 'hoursCommitted' | 'funded' | 'shape' | 'scheduledOn'>>
 
@@ -83,7 +83,7 @@ const memoryTools: AnthropicTool[] = [
 
 const taskTools: AnthropicTool[] = [
   { name: 'list_tasks', description: 'List the tasks in this space with their ids.', input_schema: { type: 'object', properties: { include_completed: { type: 'boolean' } } } },
-  { name: 'create_task', description: 'Create a task in this space.', input_schema: { type: 'object', properties: { title: { type: 'string' }, due_date: dateSchema, estimate_min: { type: 'integer' }, priority: { type: 'integer', minimum: 1, maximum: 4, description: '1 is most urgent' }, notes: { type: 'string' } }, required: ['title'] } },
+  { name: 'create_task', description: 'Create a task in this space.', input_schema: { type: 'object', properties: { title: { type: 'string' }, due_date: dateSchema, estimate_min: { type: 'integer', description: 'how long it takes, in minutes' }, priority: { type: 'integer', minimum: 1, maximum: 4, description: '1 is most urgent' }, notes: { type: 'string' }, project_id: { type: 'string', description: 'the project it belongs to, when there is one' } }, required: ['title'] } },
   { name: 'complete_task', description: 'Mark a task complete by id.', input_schema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] } },
   { name: 'delete_task', description: 'Delete a task by id. The user approves this in the app before it runs; completing is usually the better choice.', input_schema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] } },
   { name: 'list_goals', description: 'List active goals and projects with their ids.', input_schema: { type: 'object', properties: {} } },
@@ -270,6 +270,7 @@ async function run(name: string, input: Args, { actions, vault, memoryFolder = '
         estimateMin: optionalNumber(input, 'estimate_min'),
         priority: optionalNumber(input, 'priority') as Priority | undefined,
         notes: optionalString(input, 'notes'),
+        projectId: optionalString(input, 'project_id'),
       })
       return done(task, async () => { actions.removeTask(task.id) })
     }
@@ -383,7 +384,7 @@ export function companionTask(domain: Domain, input: NewTaskInput, today: string
   const estimateMin = input.estimateMin && input.estimateMin > 0 ? Math.round(input.estimateMin) : 30
   const priority: Priority = input.priority && [1, 2, 3, 4].includes(input.priority) ? input.priority : 3
   return {
-    id, taskId: id, domain, title: input.title, notes: input.notes, dueDate: input.dueDate, completed: false,
+    id, taskId: id, domain, title: input.title, notes: input.notes, dueDate: input.dueDate, projectId: input.projectId, completed: false,
     estimateMin, originalEstimateMin: estimateMin, priority, planDate: today, energy: 'shallow',
     place: domain === 'work' ? ['office'] : undefined, needs: domain === 'work' ? ['computer'] : undefined,
     pinned: false, carries: 0, metadataComplete: true,

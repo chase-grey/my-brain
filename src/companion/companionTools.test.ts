@@ -61,7 +61,7 @@ describe('companion tools', () => {
     const actions = fakeActions()
     const created = await executeTool('create_task', { title: ' call plumber ', due_date: '2026-11-06', estimate_min: 15, priority: 2 }, { actions })
     expect(created).toMatchObject({ ok: true, content: expect.stringContaining('"id":"new"') })
-    expect(actions.createTask).toHaveBeenCalledWith({ title: 'call plumber', dueDate: '2026-11-06', estimateMin: 15, priority: 2, notes: undefined })
+    expect(actions.createTask).toHaveBeenCalledWith({ title: 'call plumber', dueDate: '2026-11-06', estimateMin: 15, priority: 2, notes: undefined, projectId: undefined })
 
     await executeTool('update_goal', { id: 'g1', status: 'met', hours_committed: 4 }, { actions })
     expect(actions.updateGoal).toHaveBeenCalledWith('g1', { status: 'met', hoursCommitted: 4 })
@@ -164,6 +164,7 @@ describe('companion tools', () => {
     const task = companionTask('personal', { title: 'call plumber', dueDate: '2026-11-06' }, '2026-10-30', 'id1')
     expect(task).toMatchObject({ id: 'id1', taskId: 'id1', domain: 'personal', estimateMin: 30, originalEstimateMin: 30, priority: 3, energy: 'shallow', planDate: '2026-10-30', metadataComplete: true, completed: false })
     expect(companionTask('work', { title: 'x', estimateMin: 45, priority: 1 }, '2026-10-30', 'id2')).toMatchObject({ place: ['office'], needs: ['computer'], estimateMin: 45, priority: 1 })
+    expect(companionTask('personal', { title: 'sand the rails', projectId: 'p-deck' }, '2026-10-30', 'id3').projectId).toBe('p-deck')
 
     const overdue: Task = { ...task, id: 'late', dueDate: '2026-10-01' }
     const summary = buildPlanSummary({ today: '2026-10-30', domain: 'personal', tasks: [task, overdue], commitments: [], weeklyCommitments: [task], plan: { tasks: [task], totalMin: 30, availableMin: 60 }, goals: [], projects: [] })

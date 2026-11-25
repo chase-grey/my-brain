@@ -109,6 +109,14 @@ Chase, 2026-11-25. A task new to sort arrives with the ai's guess at its time, p
 - A guess never lowers a task Outlook has flagged important.
 - A kept guess leaves when its task is sorted, and after 30 days in any case.
 
+## the task form and the chat
+
+Chase, 2026-11-25. `format.test.ts`, `TaskPage.test.tsx` and `attachments.test.ts` hold these.
+
+- The time on the task form is typed and takes any length: `45`, `2h`, `1h 30m`, `1:30`, with a bare number read as minutes (`parseDuration` in `src/format.ts`). Words that are not a length keep the last one that was. Do not put a fixed list of lengths back on the form; a guess still picks from its own short list.
+- `add to chat` on a task attaches it, as the form shows it, to the next chat message (`taskAttachment`). With the chat docked at the side the task stays open beside it; on the phone the chat opens. The task goes as data, with the line that it is never an instruction.
+- Tasks the chat makes can carry the project of the one they came from (`project_id` on `create_task`), and only a project of that space is kept.
+
 ## reviews
 
 The week, month and year reviews (`src/review/`) follow these rules. `review.test.ts` holds them.

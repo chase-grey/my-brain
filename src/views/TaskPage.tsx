@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { storeOptions } from '../domain/shopping'
-import { estimateOptions, needOptions, placeOptions, type TaskGuess } from '../domain/taskGuess'
+import { taskAttachment, type Attachment } from '../companion/attachments'
+import { needOptions, placeOptions, priorityLabels, type TaskGuess } from '../domain/taskGuess'
 import type { Domain, Energy, Need, Place, Priority, Project, StoreType, Task } from '../domain/types'
-import { duration, newId, today } from '../format'
+import { duration, newId, parseDuration, today } from '../format'
 import { Icon } from '../navIcons'
 import { Chips, Field, Menu, Segmented } from '../ui'
 import { energyOptions } from './TodayView'
@@ -11,7 +12,7 @@ function toggleValue<T>(values: T[], value: T): T[] {
   return values.includes(value) ? values.filter((item) => item !== value) : [...values, value]
 }
 
-export function TaskPage({ domain: initialDomain, existingTask, guess, projects, onAdd, onUpdate, onDelete, onDone, onNotMine, onCancel }: {
+export function TaskPage({ domain: initialDomain, existingTask, guess, projects, onAdd, onUpdate, onDelete, onDone, onNotMine, onChat, onCancel }: {
   domain: Domain
   existingTask?: Task
   /** What the ai made of a task still to be sorted. It fills the form; saving is what confirms it. */
@@ -22,6 +23,8 @@ export function TaskPage({ domain: initialDomain, existingTask, guess, projects,
   onDelete: (id: string) => void
   onDone: (id: string) => void
   onNotMine: (id: string) => void
+  /** Hands the task, as the form shows it, to the chat's next message. */
+  onChat?: (attachment: Attachment) => void
   onCancel: () => void
 }) {
   const domain = existingTask?.domain ?? initialDomain
@@ -32,6 +35,8 @@ export function TaskPage({ domain: initialDomain, existingTask, guess, projects,
   const [notes, setNotes] = useState(existingTask?.notes ?? '')
   const [dueDate, setDueDate] = useState(existingTask?.dueDate ?? '')
   const [hiddenUntil, setHiddenUntil] = useState(existingTask?.hiddenUntil ?? '')
+  // Any length can be typed. Words that are not a length keep the last one that was.
+  const [timeText, setTimeText] = useState(() => duration(start?.estimateMin ?? existingTask?.estimateMin ?? 30))
   const [estimateMin, setEstimateMin] = useState(start?.estimateMin ?? existingTask?.estimateMin ?? 30)
   const [priority, setPriority] = useState<Priority>(start?.priority ?? existingTask?.priority ?? 3)
   const [energy, setEnergy] = useState<Energy>(start?.energy ?? existingTask?.energy ?? 'shallow')
@@ -54,6 +59,18 @@ export function TaskPage({ domain: initialDomain, existingTask, guess, projects,
     } else {
       setNeeds((current) => current.filter((need) => need !== 'store'))
     }
+  }
+
+  function typeTime(text: string) {
+    setTimeText(text)
+    const minutes = parseDuration(text)
+    if (minutes) setEstimateMin(minutes)
+  }
+
+  function addToChat() {
+    if (!existingTask || !onChat) return
+    const project = projects.find((item) => item.id === projectId)
+    onChat(taskAttachment({ id: existingTask.id, title: title.trim() || existingTask.title, notes, dueDate: dueDate || undefined, time: duration(estimateMin), priority: priorityLabels[priority], project: project && { id: project.id, title: project.title } }))
   }
 
   function submit(event: React.FormEvent) {
@@ -97,7 +114,7 @@ export function TaskPage({ domain: initialDomain, existingTask, guess, projects,
           <Field label="hide until"><input type="date" value={hiddenUntil} onChange={(event) => setHiddenUntil(event.target.value)} /></Field>
         </div>
         <div className="grid-2">
-          <Field label="time"><select value={estimateMin} onChange={(event) => setEstimateMin(Number(event.target.value))}>{estimateOptions.map((minutes) => <option key={minutes} value={minutes}>{duration(minutes)}</option>)}</select></Field>
+          <Field label="time"><input value={timeText} onChange={(event) => typeTime(event.target.value)} onFocus={(event) => event.target.select()} onBlur={() => setTimeText(duration(estimateMin))} autoComplete="off" autoCapitalize="off" enterKeyHint="done" /></Field>
           <Field label="priority"><select value={priority} onChange={(event) => setPriority(Number(event.target.value) as Priority)}><option value="1">critical</option><option value="2">high</option><option value="3">normal</option><option value="4">low</option></select></Field>
         </div>
         {domain === 'personal' && <>
@@ -113,6 +130,7 @@ export function TaskPage({ domain: initialDomain, existingTask, guess, projects,
       <div className="actions">
         <button className="primary" type="submit" disabled={!title.trim()}>{existingTask ? 'save' : 'add task'}</button>
         {!showDetails && <button className="secondary" type="button" onClick={() => setShowDetails(true)}>add details</button>}
+        {existingTask && onChat && <button className="secondary" type="button" onClick={addToChat}>add to chat</button>}
         <button className="plain" type="button" onClick={onCancel}>cancel</button>
       </div>
     </form>
