@@ -1,31 +1,21 @@
 import { useState } from 'react'
 import { storeOptions } from '../domain/shopping'
+import { estimateOptions, needOptions, placeOptions, type TaskGuess } from '../domain/taskGuess'
 import type { Domain, Energy, Need, Place, Priority, Project, StoreType, Task } from '../domain/types'
 import { duration, newId, today } from '../format'
 import { Icon } from '../navIcons'
 import { Chips, Field, Menu, Segmented } from '../ui'
 import { energyOptions } from './TodayView'
 
-const placeOptions: { value: Place; label: string }[] = [
-  { value: 'home', label: 'at home' },
-  { value: 'office', label: 'at work' },
-  { value: 'out', label: 'out' },
-]
-const needOptions: { value: Need; label: string }[] = [
-  { value: 'computer', label: 'laptop' },
-  { value: 'phone', label: 'phone' },
-  { value: 'tools', label: 'tools' },
-  { value: 'car', label: 'car' },
-]
-const estimateOptions = [5, 15, 30, 45, 60, 90, 120]
-
 function toggleValue<T>(values: T[], value: T): T[] {
   return values.includes(value) ? values.filter((item) => item !== value) : [...values, value]
 }
 
-export function TaskPage({ domain: initialDomain, existingTask, projects, onAdd, onUpdate, onDelete, onNotMine, onCancel }: {
+export function TaskPage({ domain: initialDomain, existingTask, guess, projects, onAdd, onUpdate, onDelete, onNotMine, onCancel }: {
   domain: Domain
   existingTask?: Task
+  /** What the ai made of a task still to be sorted. It fills the form; saving is what confirms it. */
+  guess?: TaskGuess
   projects: Project[]
   onAdd: (task: Task) => void
   onUpdate: (task: Task) => void
@@ -34,19 +24,20 @@ export function TaskPage({ domain: initialDomain, existingTask, projects, onAdd,
   onCancel: () => void
 }) {
   const domain = existingTask?.domain ?? initialDomain
+  const untriaged = existingTask?.metadataComplete === false
+  const start = untriaged ? guess : undefined
   const [title, setTitle] = useState(existingTask?.title ?? '')
   const [notes, setNotes] = useState(existingTask?.notes ?? '')
   const [dueDate, setDueDate] = useState(existingTask?.dueDate ?? '')
   const [hiddenUntil, setHiddenUntil] = useState(existingTask?.hiddenUntil ?? '')
-  const [estimateMin, setEstimateMin] = useState(existingTask?.estimateMin ?? 30)
-  const [priority, setPriority] = useState<Priority>(existingTask?.priority ?? 3)
-  const [energy, setEnergy] = useState<Energy>(existingTask?.energy ?? 'shallow')
-  const [places, setPlaces] = useState<Place[]>(existingTask?.place ?? (domain === 'work' ? ['office'] : []))
-  const [needs, setNeeds] = useState<Need[]>(existingTask?.needs ?? (domain === 'work' ? ['computer'] : []))
-  const [storeType, setStoreType] = useState<StoreType | ''>(existingTask?.storeType ?? '')
-  const [projectId, setProjectId] = useState(existingTask?.projectId ?? '')
+  const [estimateMin, setEstimateMin] = useState(start?.estimateMin ?? existingTask?.estimateMin ?? 30)
+  const [priority, setPriority] = useState<Priority>(start?.priority ?? existingTask?.priority ?? 3)
+  const [energy, setEnergy] = useState<Energy>(start?.energy ?? existingTask?.energy ?? 'shallow')
+  const [places, setPlaces] = useState<Place[]>(start?.place ?? existingTask?.place ?? (domain === 'work' ? ['office'] : []))
+  const [needs, setNeeds] = useState<Need[]>(start?.needs ?? existingTask?.needs ?? (domain === 'work' ? ['computer'] : []))
+  const [storeType, setStoreType] = useState<StoreType | ''>(start?.storeType ?? existingTask?.storeType ?? '')
+  const [projectId, setProjectId] = useState(start?.projectId ?? existingTask?.projectId ?? '')
   const [showDetails, setShowDetails] = useState(Boolean(existingTask))
-  const untriaged = existingTask?.metadataComplete === false
 
   function chooseStore(next: StoreType | '') {
     setStoreType(next)

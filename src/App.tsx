@@ -33,6 +33,8 @@ import { pushWidget, widgetSnapshot } from './native/widget'
 import { syncPhoneRest } from './native/health'
 import { moneyBriefing } from './domain/money'
 import { moneyReader } from './companion/moneyRead'
+import { useTaskGuesses } from './companion/taskGuesses'
+import { sortedTask } from './domain/taskGuess'
 import { minuteOptions, TodayView } from './views/TodayView'
 import { ProgressView } from './views/ProgressView'
 import { bumpsBetween, recordBumps } from './review/bumpLog'
@@ -848,6 +850,12 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
   const shownView: View = docked && view === 'chat' ? 'today' : view
   const reviews = useReviews({ domain: activeDomain, currentDay, tasks, product, onProduct: setProduct, settings, notesVault: connectionStatus === 'connected' ? personalData?.notes : undefined, userName: account.name })
   const untriaged = tasks.filter((task) => task.domain === activeDomain && task.metadataComplete === false && !task.completed && !task.storeType)
+  const activeProjects = product.projects.filter((project) => project.domain === activeDomain && project.status === 'active')
+  const guesses = useTaskGuesses({ domain: activeDomain, tasks: untriaged, projects: activeProjects, settings })
+  function confirmGuess(id: string): void {
+    const task = tasksRef.current.find((item) => item.id === id)
+    if (task && guesses[id]) updateTask(sortedTask(task, guesses[id], currentDay))
+  }
   const floorToday = product.dayOverrides.some((item) => item.domain === activeDomain && item.date === currentDay && item.kind === 'floor')
   const strategicTodayMin = product.activities.filter((item) => item.domain === activeDomain && item.kind === 'strategic' && item.occurredAt.slice(0, 10) === currentDay).reduce((sum, item) => sum + (item.minutes ?? 0), 0)
   const primaryViews = primaryViewsFor(activeDomain)
@@ -903,7 +911,7 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
           weekPaid={weekPaid} floorToday={floorToday} strategicTodayMin={strategicTodayMin}
           onFloorNight={() => setProduct((current) => ({ ...current, dayOverrides: [...current.dayOverrides, { date: currentDay, domain: activeDomain, kind: 'floor' }] }))}
           onStrategic={(minutes) => setProduct((current) => ({ ...current, activities: [...current.activities, { id: newId('activity'), domain: activeDomain, kind: 'strategic', occurredAt: new Date().toISOString(), minutes }] }))}
-          untriaged={untriaged} openCount={openTasks.length} openMin={openEstimate} onToggle={toggleComplete} onOpen={editTask}
+          untriaged={untriaged} guesses={guesses} projects={activeProjects} onConfirm={confirmGuess} openCount={openTasks.length} openMin={openEstimate} onToggle={toggleComplete} onOpen={editTask}
           calendar={eventsOn(calendarEvents, currentDay)} inbox={activeDomain === 'personal' ? inboxCounts : undefined} mailAppUrl={activeDomain === 'personal' ? settings.mailAppUrl : ''} />}
         {shownView === 'dashboard' && <WorkScreens currentDay={currentDay} />}
         {shownView === 'progress' && <ProgressView domain={activeDomain} product={product} tasks={tasks} journalVault={activeDomain === 'personal' ? tripVault ?? (connectionStatus === 'connected' ? personalData?.notes : undefined) : undefined} currentDay={currentDay} heldEvents={heldEvents} onProduct={setProduct} onGoals={() => setView('goals')} onReview={reviews.open} readMoney={activeDomain === 'personal' ? moneyReader(settings) : undefined} />}
@@ -913,7 +921,7 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
         {shownView === 'journal' && <Suspense fallback={<header className="view-head"><h1>journal</h1></header>}><JournalView key={activeDomain} domain={activeDomain} vault={activeDomain === 'personal' ? tripVault ?? (connectionStatus === 'connected' ? personalData?.notes : undefined) : workJournal} onSettings={() => setView('settings')} onChat={(attachment) => { setChatAttachment(attachment); setView('chat') }} /></Suspense>}
         {shownView === 'trips' && <TripsView vault={tripVault} currentDay={currentDay} onSettings={() => setView('settings')} />}
         {shownView === 'settings' && <SettingsView domain={activeDomain} accountName={accountName} connectionStatus={connectionStatus} settings={settings} syncing={syncing} syncError={syncError} canInstall={install.canPrompt} onInstall={() => void install.install()} onConnect={connectPersonal} onDisconnect={disconnectPersonal} onSync={() => { void (activeDomain === 'work' ? syncWork() : syncPersonal(personalData, true)) }} onSettings={changeSettings} account={account} onAccount={markAccountChanged} />}
-        {shownView === 'task' && <TaskPage key={editingTaskId ?? 'new'} domain={activeDomain} existingTask={tasks.find((task) => task.id === editingTaskId)} projects={product.projects.filter((project) => project.domain === activeDomain && project.status === 'active')} onAdd={addTask} onUpdate={updateTask} onDelete={deleteTask} onNotMine={delegateTask} onCancel={() => { setEditingTaskId(undefined); setView('today') }} />}
+        {shownView === 'task' && <TaskPage key={editingTaskId ?? 'new'} domain={activeDomain} existingTask={tasks.find((task) => task.id === editingTaskId)} guess={editingTaskId ? guesses[editingTaskId] : undefined} projects={activeProjects} onAdd={addTask} onUpdate={updateTask} onDelete={deleteTask} onNotMine={delegateTask} onCancel={() => { setEditingTaskId(undefined); setView('today') }} />}
       </div>
 
       {shownView !== 'task' && <nav className="tabbar" aria-label="primary">

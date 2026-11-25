@@ -4,7 +4,9 @@ import { timeRange } from '../domain/calendar'
 import { isDoneToday } from '../domain/personalNow'
 import type { buildNowPlan } from '../domain/personalNow'
 import { completedParts, dueParts } from '../domain/habits'
-import type { Domain, Energy, Habit, HabitEntry, Place, Task } from '../domain/types'
+import { needOptions, placeOptions, priorityLabels, type TaskGuess } from '../domain/taskGuess'
+import { storeOptions } from '../domain/shopping'
+import type { Domain, Energy, Habit, HabitEntry, Place, Project, Task } from '../domain/types'
 import { duration, weekday } from '../format'
 import { Card, Empty, Menu, Segmented, TaskRow, Toggle } from '../ui'
 
@@ -14,6 +16,19 @@ export const energyOptions: { value: Energy; label: string }[] = [
   { value: 'deep', label: 'focused' },
   { value: 'errand', label: 'out' },
 ]
+
+/** A guess in the words the sort form uses, for the line under a task waiting to be sorted. */
+export function guessLine(guess: TaskGuess, domain: Domain, projects: Pick<Project, 'id' | 'title'>[]): string {
+  const personal = domain === 'personal'
+  return [
+    duration(guess.estimateMin),
+    guess.priority !== 3 && priorityLabels[guess.priority],
+    personal && !guess.storeType && energyOptions.find((option) => option.value === guess.energy)?.label,
+    ...(personal && !guess.storeType ? [...placeOptions.filter((option) => guess.place?.includes(option.value)), ...needOptions.filter((option) => guess.needs?.includes(option.value))].map((option) => option.label) : []),
+    personal && guess.storeType && (guess.storeType === 'other' ? 'store' : storeOptions.find((store) => store.value === guess.storeType)?.shortLabel.toLowerCase()),
+    projects.find((project) => project.id === guess.projectId)?.title,
+  ].filter(Boolean).join(' · ')
+}
 
 export function commitmentHint(task: Task, currentDay: string, place: Place): string | undefined {
   if (isDoneToday(task, currentDay)) return undefined
@@ -56,7 +71,7 @@ export function CalendarCard({ events }: { events: CalendarBlock[] }) {
   </Card>
 }
 
-export function TodayView({ domain, currentDay, place, placeOverride, onPlaceOverride, commitments, weeklyCommitments, habits, habitEntries, onHabitPart, plan, availableMin, energy, onMinutes, onEnergy, weekPaid, floorToday, strategicTodayMin, onFloorNight, onStrategic, untriaged, openCount, openMin, onToggle, onOpen, calendar, inbox, mailAppUrl }: {
+export function TodayView({ domain, currentDay, place, placeOverride, onPlaceOverride, commitments, weeklyCommitments, habits, habitEntries, onHabitPart, plan, availableMin, energy, onMinutes, onEnergy, weekPaid, floorToday, strategicTodayMin, onFloorNight, onStrategic, untriaged, guesses, projects, onConfirm, openCount, openMin, onToggle, onOpen, calendar, inbox, mailAppUrl }: {
   domain: Domain
   currentDay: string
   place: Place
@@ -78,6 +93,9 @@ export function TodayView({ domain, currentDay, place, placeOverride, onPlaceOve
   onFloorNight: () => void
   onStrategic: (minutes: number) => void
   untriaged: Task[]
+  guesses: Record<string, TaskGuess>
+  projects: Pick<Project, 'id' | 'title'>[]
+  onConfirm: (id: string) => void
   openCount: number
   openMin: number
   onToggle: (id: string) => void
@@ -138,7 +156,10 @@ export function TodayView({ domain, currentDay, place, placeOverride, onPlaceOve
 
     {untriaged.length > 0 && <details className="card sort">
       <summary>{untriaged.length} new to sort</summary>
-      <ul className="rows">{untriaged.map((task) => <li className="row" key={task.id}><button className="row-main" type="button" onClick={() => onOpen(task.id)}><span className="row-title">{task.title}</span></button></li>)}</ul>
+      <ul className="rows">{untriaged.map((task) => <li className="row" key={task.id}>
+        <button className="row-main" type="button" onClick={() => onOpen(task.id)}><span className="row-title">{task.title}</span>{guesses[task.id] && <small>{guessLine(guesses[task.id], domain, projects)}</small>}</button>
+        {guesses[task.id] && <button className="link" type="button" aria-label={`confirm ${task.title}`} onClick={() => onConfirm(task.id)}>confirm</button>}
+      </li>)}</ul>
     </details>}
 
     <p className="ledger">{openCount} open · {duration(openMin)}</p>

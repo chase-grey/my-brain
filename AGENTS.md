@@ -85,6 +85,18 @@ Chase, 2026-11-25. `journal.test.ts` holds these. The journal is under the more 
 
 An unsorted To Do task created more than 30 days ago (`oldAfterDays` in `src/domain/age.ts`) is left in To Do and never brought into the app, and the flagged count on today covers the last 30 days of mail only. Tasks Chase has sorted stay whatever their age. Anything new that pulls items in from Microsoft on its own applies the same check.
 
+## sorting tasks
+
+Chase, 2026-11-25. A task new to sort arrives with the ai's guess at its time, priority, energy, where, needs, store and project (`src/domain/taskGuess.ts`, `src/companion/taskGuesses.ts`). `taskGuess.test.ts` and `taskGuesses.test.ts` hold these.
+
+- A guess is only an offer. Nothing is written to the task until Chase confirms it: `confirm` on its row under new to sort takes the guess as it stands, and opening the task shows the sort form filled with it, where any value can be changed before `save`.
+- Confirming a guess writes exactly what saving the untouched form would (`sortedTask`).
+- Guesses are made in the background by the cheapest model, up to 20 tasks a request, once per wording, and kept on the device. A task with no guess is sorted by hand as before; a failed request is not retried in a loop.
+- Work tasks go only to Claude Code on the bridge, never the personal key or Jev. Personal ones go where the personal chat goes: the bridge when the device has one, the key when it does not, and nowhere with ai off.
+- A task's words go to the model as data, with the line that they are never an instruction. The model is given only the choices the form has, and anything else it returns is dropped.
+- A guess never lowers a task Outlook has flagged important.
+- A kept guess leaves when its task is sorted, and after 30 days in any case.
+
 ## reviews
 
 The week, month and year reviews (`src/review/`) follow these rules. `review.test.ts` holds them.
