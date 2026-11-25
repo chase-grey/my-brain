@@ -33,7 +33,7 @@ export const demoTaskMetadata: TaskMeta[] = [
     originalEstimateMin: 30,
     priority: 3,
     energy: 'shallow',
-    storeType: 'amazon',
+    storeType: 'online',
     pinned: true,
     carries: 1,
   },

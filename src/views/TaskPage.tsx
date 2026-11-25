@@ -47,7 +47,7 @@ export function TaskPage({ domain: initialDomain, existingTask, guess, projects,
 
   function chooseStore(next: StoreType | '') {
     setStoreType(next)
-    if (next === 'amazon') {
+    if (next === 'online') {
       setPlaces((current) => [...current.filter((place) => place !== 'out'), ...(current.includes('home') ? [] : ['home' as const])])
       setEnergy('shallow')
     } else if (next) {

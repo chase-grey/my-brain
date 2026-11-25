@@ -20,7 +20,7 @@ export function StoresView({ activeStore, tasks, onStore, onToggle, onAdd }: {
     const cleanTitle = title.trim()
     if (!cleanTitle) return
     const id = newId('item')
-    const isOnline = activeStore === 'amazon'
+    const isOnline = activeStore === 'online'
     onAdd({
       id, taskId: id, domain: 'personal', title: cleanTitle, completed: false,
       estimateMin: 5, originalEstimateMin: 5, priority: 3,

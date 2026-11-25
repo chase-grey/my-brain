@@ -13,6 +13,7 @@ import { useFitColumns } from './fitColumns'
 import { besideThisApp } from './site'
 import { splitRail, useRailSlots } from './rail'
 import { buildNowPlan, isDoneToday, thisWeekCommitments, todayCommitments } from './domain/personalNow'
+import { currentStore } from './domain/shopping'
 import { projectTasks } from './domain/taskProjection'
 import { buildWeekReceipt } from './domain/receipt'
 import { toggleHabitPart } from './domain/habits'
@@ -157,7 +158,7 @@ function loadTasks(domain: Domain, owner: boolean): Task[] {
     if (stored) {
       const loaded = (JSON.parse(stored) as Task[]).filter((task) => task.domain === domain && !task.triageForTaskId).map((task) => ({
         ...task,
-        storeType: (task.storeType as string) === 'general' ? 'other' as const : task.storeType,
+        storeType: currentStore(task.storeType),
       }))
       const missingRoutines = initialTasks(domain, owner).filter((task) => task.recurrence && !loaded.some((item) => item.id === task.id))
       return [...loaded, ...missingRoutines]

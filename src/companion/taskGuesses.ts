@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { isOld } from '../domain/age'
+import { currentStore } from '../domain/shopping'
 import { guessBatch, guessPrompt, guessRequest, parseGuesses, type TaskGuess } from '../domain/taskGuess'
 import type { Domain, Project, Task } from '../domain/types'
 import { autoModel, type AppSettings } from '../settings'
@@ -58,7 +59,9 @@ export function prunedGuesses(kept: KeptGuesses, waitingIds: ReadonlySet<string>
 
 export function loadGuesses(domain: Domain, now = new Date().toISOString()): KeptGuesses {
   try {
-    return prunedGuesses(JSON.parse(localStorage.getItem(storageKey(domain)) ?? '{}') as KeptGuesses, undefined, now)
+    const kept = JSON.parse(localStorage.getItem(storageKey(domain)) ?? '{}') as KeptGuesses
+    for (const entry of Object.values(kept)) if (entry.guess?.storeType) entry.guess.storeType = currentStore(entry.guess.storeType)
+    return prunedGuesses(kept, undefined, now)
   } catch {
     return {}
   }

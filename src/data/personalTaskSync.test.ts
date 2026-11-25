@@ -11,6 +11,10 @@ const meta: TaskMeta = {
   priority: 2, energy: 'deep', pinned: false, carries: 0,
 }
 
+it('reads an item saved under a store\'s old name as the store it is now', () => {
+  expect(mergePersonalTasks([provider], [{ ...meta, storeType: 'amazon' as never }])[0].storeType).toBe('online')
+})
+
 describe('personal task sync', () => {
   it('joins remote provider fields to remote metadata', () => {
     expect(mergePersonalTasks([provider], [meta])[0]).toMatchObject({

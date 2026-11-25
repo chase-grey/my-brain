@@ -1,5 +1,6 @@
 import type { Energy, ProviderTask, Task, TaskMeta } from '../domain/types'
 import { isOld } from '../domain/age'
+import { currentStore } from '../domain/shopping'
 import { projectTasks } from '../domain/taskProjection'
 
 export const personalTaskMetaFile = 'task-meta.v1.json'
@@ -41,7 +42,7 @@ export function mergePersonalTasks(
   now = new Date().toISOString(),
 ): Task[] {
   providerTasks = providerTasks.filter((task) => task.domain === 'personal')
-  metadata = metadata.filter((item) => item.domain === 'personal')
+  metadata = metadata.filter((item) => item.domain === 'personal').map((item) => item.storeType ? { ...item, storeType: currentStore(item.storeType) } : item)
   const projection = projectTasks(providerTasks, metadata)
   const projected = [
     ...projection.triaged.map((task) => ({ ...task, metadataComplete: task.metadataComplete ?? true })),

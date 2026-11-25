@@ -40,10 +40,10 @@ describe('guessing what a task is', () => {
 
   it('gives a store its place and energy, as picking one on the form does', () => {
     const tasks = [unsorted('a', 'buy milk'), unsorted('b', 'order hdmi cable')]
-    const reply = '{"tasks":[{"n":1,"minutes":15,"priority":3,"energy":"shallow","where":["home"],"store":"grocery"},{"n":2,"minutes":5,"priority":3,"energy":"errand","where":["out"],"store":"amazon"}]}'
+    const reply = '{"tasks":[{"n":1,"minutes":15,"priority":3,"energy":"shallow","where":["home"],"store":"grocery"},{"n":2,"minutes":5,"priority":3,"energy":"errand","where":["out"],"store":"online"}]}'
     const guesses = parseGuesses(reply, tasks, 'personal', [])
     expect(guesses.a).toMatchObject({ storeType: 'grocery', energy: 'errand', place: ['out'] })
-    expect(guesses.b).toMatchObject({ storeType: 'amazon', energy: 'shallow', place: ['home'] })
+    expect(guesses.b).toMatchObject({ storeType: 'online', energy: 'shallow', place: ['home'] })
   })
 
   it('never lowers a task flagged important, and leaves work its fixed place', () => {
