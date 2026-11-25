@@ -12,7 +12,7 @@ export function Card({ title, aside, children, className = '' }: { title?: React
 
 export type MenuItem = { label: string; onSelect: () => void; disabled?: boolean }
 
-export function Menu({ label = 'more', items, align = 'end', children }: { label?: string; items: MenuItem[]; align?: 'start' | 'end'; children?: ReactNode }) {
+export function Menu({ label = 'more', items, align = 'end', children, controls }: { label?: string; items: MenuItem[]; align?: 'start' | 'end'; children?: ReactNode; /** Pickers shown above the items; choosing in one leaves the menu open. */ controls?: ReactNode }) {
   const details = useRef<HTMLDetailsElement>(null)
   useEffect(() => {
     const element = details.current
@@ -27,6 +27,7 @@ export function Menu({ label = 'more', items, align = 'end', children }: { label
   return <details className={`menu menu-${align}`} ref={details}>
     <summary aria-label={label} title={label}>{children ?? <Icon name="more" />}</summary>
     <div className="menu-list" role="menu">
+      {controls}
       {items.map((item) => <button key={item.label} role="menuitem" type="button" disabled={item.disabled} onClick={() => { details.current!.open = false; item.onSelect() }}>{item.label}</button>)}
     </div>
   </details>

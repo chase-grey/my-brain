@@ -6,7 +6,7 @@ import { copyText } from '../clipboard'
 import { holdUpdates } from '../appUpdate'
 import { autoModel, effortOptions, modelShortName, type AppSettings } from '../settings'
 import { Icon } from '../navIcons'
-import { Empty } from '../ui'
+import { Empty, Menu } from '../ui'
 import { useVoice } from '../voice/useVoice'
 import type { CompanionAction, ActionStatus } from './actions'
 import { ActionHandlersContext, ActionPart, type ActionHandlers } from './ActionParts'
@@ -85,6 +85,13 @@ function AttachedImage({ image, filename }: { image: string; filename?: string }
 
 function AttachedFile({ filename }: { filename?: string }) {
   return <span className="turn-file">{filename}</span>
+}
+
+/** The one button beside the message box: it sends once there is something to send, and is the way into voice until then. */
+export function composerButton({ voiceSupported, voiceOn, hasText, hasFiles }: { voiceSupported: boolean; voiceOn: boolean; hasText: boolean; hasFiles: boolean }): 'send' | 'voice' {
+  if (!voiceSupported) return 'send'
+  if (voiceOn) return 'voice'
+  return hasText || hasFiles ? 'send' : 'voice'
 }
 
 export function UserMessage() {
@@ -449,6 +456,14 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
     onRespondToToolApproval,
   })
   composerRef.current = runtime.thread.composer
+  const [hasText, setHasText] = useState(false)
+  useEffect(() => {
+    const composer = runtime.thread.composer
+    const read = () => setHasText(composer.getState().text.trim().length > 0)
+    read()
+    return composer.subscribe(read)
+  }, [runtime])
+  const button = composerButton({ voiceSupported: voice.supported, voiceOn: voice.on, hasText, hasFiles: attached.length > 0 })
 
   useEffect(() => {
     if (!prefill || unavailable) return
@@ -460,6 +475,21 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
     <header className="view-head">
       <h1>chat</h1>
       {!unavailable && domain === 'work' && conversation.sessionId && <button className="pill" type="button" disabled={sending || openedId === conversation.id} onClick={() => { void openInSessionRunner() }}>{openedId === conversation.id ? 'opened in session runner' : 'open in session runner'}</button>}
+      {!unavailable && <Menu
+        controls={<>
+          <label className="menu-field">model<select className="picker" aria-label="model" value={model} onChange={(event) => onChangeSettings?.({ [modelField(domain, settings)]: event.target.value })}>
+            {modelChoices(domain, settings).map((option) => <option key={option} value={option}>{option === autoModel && answeredBy ? `auto · ${modelShortName(answeredBy)}` : anthropic ? modelShortName(option) : option}</option>)}
+          </select></label>
+          {anthropic && model !== autoModel && <label className="menu-field">effort<select className="picker" aria-label="effort" value={settings.chatEffort} onChange={(event) => onChangeSettings?.({ chatEffort: event.target.value as AppSettings['chatEffort'] })}>
+            {effortOptions.map((level) => <option key={level} value={level}>{level}</option>)}
+          </select></label>}
+        </>}
+        items={[
+          { label: 'new chat', onSelect: startNew, disabled: !conversation.turns.length },
+          { label: history ? 'back to chat' : 'past chats', onSelect: () => setHistory(history ? undefined : loadHistory(domain)) },
+          { label: 'upload', onSelect: pickFiles, disabled: reading },
+        ]}
+      />}
     </header>
     {unavailable
       ? <Empty>{domain === 'personal'
@@ -478,17 +508,6 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
                 <ThreadPrimitive.Messages components={{ UserMessage, AssistantMessage }} />
                 <ThreadPrimitive.If running><div className="turn assistant is-pending" aria-live="polite">…</div></ThreadPrimitive.If>
               </ThreadPrimitive.Viewport>}
-            <div className="chat-tools">
-              <select className="picker" aria-label="model" value={model} onChange={(event) => onChangeSettings?.({ [modelField(domain, settings)]: event.target.value })}>
-                {modelChoices(domain, settings).map((option) => <option key={option} value={option}>{option === autoModel && answeredBy ? `auto · ${modelShortName(answeredBy)}` : anthropic ? modelShortName(option) : option}</option>)}
-              </select>
-              {anthropic && model !== autoModel && <select className="picker" aria-label="effort" value={settings.chatEffort} onChange={(event) => onChangeSettings?.({ chatEffort: event.target.value as AppSettings['chatEffort'] })}>
-                {effortOptions.map((level) => <option key={level} value={level}>{level}</option>)}
-              </select>}
-              <span className="chat-tools-gap" />
-              <button className="icon-button" type="button" aria-label="history" aria-pressed={Boolean(history)} onClick={() => setHistory(history ? undefined : loadHistory(domain))}><Icon name="history" size={18} /></button>
-              <button className="icon-button" type="button" aria-label="new chat" disabled={!conversation.turns.length} onClick={startNew}><Icon name="compose" size={18} /></button>
-            </div>
             <input ref={fileInput} type="file" hidden multiple accept={attachmentAccept} onChange={(event) => { const files = Array.from(event.target.files ?? []); event.target.value = ''; void attach(files) }} />
             {attached.length > 0 && <ul className="attached" aria-label="attached">
               {attached.map((item, index) => <li key={`${item.name}-${index}`}>
@@ -496,13 +515,13 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
                 <button type="button" aria-label={`remove ${item.name}`} onClick={() => setAttached((items) => items.filter((_, at) => at !== index))}><Icon name="close" size={14} /></button>
               </li>)}
             </ul>}
-            <ComposerPrimitive.Root className={`composer${voice.supported ? ' has-mic' : ''}`}>
-              <button className="composer-attach" type="button" aria-label="attach" disabled={reading} onClick={pickFiles}><Icon name="plus" size={18} /></button>
+            <ComposerPrimitive.Root className="composer">
               <ComposerPrimitive.Input className="composer-input" aria-label="message" placeholder={bridge === 'checking' ? 'checking work pc' : voice.state === 'listening' ? 'listening' : 'message'} rows={1} maxRows={6} />
-              {voice.supported && <button className={`composer-mic${voice.state !== 'idle' ? ` is-${voice.state}` : ''}`} type="button" aria-pressed={voice.on} aria-label={voice.on ? 'stop' : 'talk'} disabled={sending && !voice.on} onClick={voice.toggle}><Icon name="mic" size={18} /></button>}
-              {attached.length
-                ? <button className="composer-send" type="button" aria-label="send" disabled={sending || reading} onClick={sendAttached}><Icon name="send" size={18} /></button>
-                : <ComposerPrimitive.Send className="composer-send" aria-label="send"><Icon name="send" size={18} /></ComposerPrimitive.Send>}
+              {button === 'voice'
+                ? <button className={`composer-mic${voice.state !== 'idle' ? ` is-${voice.state}` : ''}`} type="button" aria-pressed={voice.on} aria-label={voice.on ? 'stop' : 'talk'} disabled={sending && !voice.on} onClick={voice.toggle}><Icon name="waveform" size={20} /></button>
+                : attached.length
+                  ? <button className="composer-send" type="button" aria-label="send" disabled={sending || reading} onClick={sendAttached}><Icon name="send" size={18} /></button>
+                  : <ComposerPrimitive.Send className="composer-send" aria-label="send"><Icon name="send" size={18} /></ComposerPrimitive.Send>}
             </ComposerPrimitive.Root>
           </ThreadPrimitive.Root>
         </ActionHandlersContext.Provider>

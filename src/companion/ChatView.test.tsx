@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { AssistantRuntimeProvider, ThreadPrimitive, useExternalStoreRuntime } from '@assistant-ui/react'
-import { AssistantMessage, HistoryList, UserMessage, toMessage } from './ChatView'
+import { AssistantMessage, HistoryList, UserMessage, composerButton, toMessage } from './ChatView'
 import type { CompanionTurn } from './companionStore'
 
 function Thread({ turns }: { turns: CompanionTurn[] }) {
@@ -53,4 +53,14 @@ it('lists past conversations by their first message with a delete button each', 
   expect(html).toContain('class="is-current"')
   expect(html).toContain('>delete all</button>')
   expect(renderToStaticMarkup(<HistoryList items={[]} onOpen={() => {}} onDelete={() => {}} onDeleteAll={() => {}} />)).toContain('no past conversations')
+})
+
+it('shows one button beside the message box: voice until there is something to send', () => {
+  const idle = { voiceSupported: true, voiceOn: false, hasText: false, hasFiles: false }
+  expect(composerButton(idle)).toBe('voice')
+  expect(composerButton({ ...idle, hasText: true })).toBe('send')
+  expect(composerButton({ ...idle, hasFiles: true })).toBe('send')
+  // Spoken words land in the box while voice is on; the button stays the way out of voice.
+  expect(composerButton({ ...idle, voiceOn: true, hasText: true })).toBe('voice')
+  expect(composerButton({ ...idle, voiceSupported: false })).toBe('send')
 })
