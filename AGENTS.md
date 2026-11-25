@@ -72,6 +72,7 @@ Chase, 2026-11-25. `journal.test.ts` holds these. The journal is under the more 
 - Words not saved yet are kept on the device, so closing the app or a failed save loses nothing.
 - `save` adds the words to that day's file under the time as a heading, exactly as said. Nothing rewrites or tidies them. Personal entries go to `journal/YYYY-MM-DD.md` in the notes vault.
 - Work entries go through the bridge into `01 Journal/` in the work vault (`workJournal.ts`, the bridge's `/journal` routes), so the work journal is there only on the work pc. Those routes only list, read and add to files. Work words are never sent to Jev, the personal key, or the personal vault, and the two spaces keep separate unsaved words.
+- A work dump is spoken on the phone into the Transcribe app, which writes it down on the phone itself. A recording titled `journal` (alone, or followed by a dash, colon or number) sent with `send transcript` is added by the bridge to that day's work journal under the time it was recorded, words only, instead of to the meeting transcripts (`work/bridge/transcript-inbox.ps1`). This is the only way speech reaches the work journal.
 - The journal never calls the ai. An entry reaches the chat only when Chase adds it to a message by hand, as an attachment: `add to chat` on the entry, or `add journal entry` in the chat menu.
 
 ## old tasks and mail

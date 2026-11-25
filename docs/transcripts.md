@@ -35,6 +35,7 @@ Written 2026-11-04 after reading Mark's repo and interviewing Chase.
 | **Who writes work** | **`work/bridge/transcript-inbox.ps1`**, run by the bridge at startup and every two minutes while idle, and callable alone for a scheduled task. A ledger of filed artifact ids lives under `%LOCALAPPDATA%\my-brain\`. | The bridge is the process already on the PC. The ledger keeps the vault free of bookkeeping and makes a re-run idempotent. |
 | **Duplicates** | A title already taken that day gets ` 2`, ` 3`. | Same rule as notes. |
 | **Which space a share belongs to** | **Always personal.** | Personal owns notes. A work recording goes out through `send transcript`, never through share. |
+| **Work brain dumps** | **A recording titled `journal` goes to the work journal, not to meetings.** The title is `journal` alone, or `journal` then a dash, colon or number (`journal - staffing`, `journal 2`); `journal club planning` is still a meeting. The bridge adds the words to `01 Journal/YYYY-MM-DD.md` in Hivemind under the time it was recorded, with timestamps and speaker labels taken off. *Chosen 2026-11-25.* | The app's own mic would send work audio to Microsoft or Google to be written down, so voice is off in the work space. Transcribe writes it down on the phone and the text travels the company path that already exists. |
 
 ## what Mark's app produces
 
