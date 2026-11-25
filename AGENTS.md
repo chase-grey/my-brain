@@ -127,6 +127,7 @@ The body slice follows workout-tracker (Chase, 2026-11-24), on every device (202
 - The slice reads the last four weeks: a hit week is 1, a week saved by freezes a half, a missed week nothing. With goals to read, the weeks are three quarters of the fill and the goals the last quarter (Chase, 2026-11-25: the streak earns more than the goals cost): the share that are met or on pace, out of every goal met or committed to. Met counts every goal the tracker shows as reached, committed or not.
 - The slice's card shows what fills it: the percent, weeks hit, and goals met or on pace. That row opens the goals by name, and `open workout tracker` lands on the tracker's goals (`?tab=progress` there).
 - A week that ended with no word from the tracker counts as missed, and the streak is not shown until the tracker reports again.
+- Today shows `body · this week` in personal: the tracker's own count for each weekly goal, with `open` into the tracker. It goes away once that week is over and the tracker has not reported the new one.
 - With a summary, body needs no 28-day target and the targets form does not ask for one. Without one, body works like every other area.
 - Reviews read the body area from the same summary.
 

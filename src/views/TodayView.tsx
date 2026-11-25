@@ -1,5 +1,6 @@
 import type { CalendarBlock } from '../data/calendarGraphProvider'
 import type { InboxCounts } from '../data/mailGraphProvider'
+import { TRACKER_LINK, weekRowLabels, type TrackerWeekRow } from '../domain/bodyTracker'
 import { timeRange } from '../domain/calendar'
 import { isDoneToday } from '../domain/personalNow'
 import type { buildNowPlan } from '../domain/personalNow'
@@ -39,6 +40,13 @@ export function HabitCard({ date, entries, habits, onToggle }: { date: string; e
   </Card>
 }
 
+/** This week in workout-tracker, counted there; the card is the way into it. */
+export function BodyWeekCard({ rows }: { rows: TrackerWeekRow[] }) {
+  return <Card title="body · this week" aside={<a className="link" href={TRACKER_LINK}>open</a>}>
+    <ul className="slice-facts">{rows.map((row) => <li key={row.kind}><span>{weekRowLabels[row.kind]}</span><small className={row.done >= row.goal ? '' : 'is-loud'}>{row.done} of {row.goal}</small></li>)}</ul>
+  </Card>
+}
+
 export function inboxLine(inbox: InboxCounts): string {
   const parts = [`${inbox.unread} unread`]
   if (inbox.flagged) parts.push(`${inbox.flagged} flagged`)
@@ -56,7 +64,8 @@ export function CalendarCard({ events }: { events: CalendarBlock[] }) {
   </Card>
 }
 
-export function TodayView({ domain, currentDay, place, placeOverride, onPlaceOverride, commitments, weeklyCommitments, habits, habitEntries, onHabitPart, plan, availableMin, energy, onMinutes, onEnergy, weekPaid, floorToday, strategicTodayMin, onFloorNight, onStrategic, untriaged, openCount, openMin, onToggle, onOpen, calendar, inbox, mailAppUrl }: {
+export function TodayView({ domain, currentDay, place, placeOverride, onPlaceOverride, commitments, weeklyCommitments, habits, habitEntries, onHabitPart, plan, availableMin, energy, onMinutes, onEnergy, weekPaid, floorToday, strategicTodayMin, onFloorNight, onStrategic, untriaged, openCount, openMin, onToggle, onOpen, calendar, inbox, mailAppUrl, bodyWeek }: {
+  bodyWeek?: TrackerWeekRow[]
   domain: Domain
   currentDay: string
   place: Place
@@ -110,6 +119,8 @@ export function TodayView({ domain, currentDay, place, placeOverride, onPlaceOve
     <CalendarCard events={calendar} />
 
     <HabitCard date={currentDay} entries={habitEntries} habits={personalHabits} onToggle={onHabitPart} />
+
+    {bodyWeek && <BodyWeekCard rows={bodyWeek} />}
 
     <Card title="this week" aside={weeklyCommitments.length > 0 && <span className="count">{weeklyCommitments.length}</span>}>
       {weeklyCommitments.length

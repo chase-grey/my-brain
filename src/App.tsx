@@ -17,7 +17,7 @@ import { buildWeekReceipt } from './domain/receipt'
 import { toggleHabitPart } from './domain/habits'
 import type { Domain, Energy, Goal, Place, Priority, StoreType, Task } from './domain/types'
 import { loadProductState, saveProductState, withMoneyReading, type ProductState } from './productState'
-import { fetchTrackerSummary, newerSummary, readTrackerSummary, readTrackerToken, type TrackerSummary } from './domain/bodyTracker'
+import { fetchTrackerSummary, newerSummary, readTrackerSummary, readTrackerToken, trackerThisWeek, type TrackerSummary } from './domain/bodyTracker'
 import { loadSettings, saveSettings, type AppSettings } from './settings'
 import { applyDeviceSetup, loadAccount, saveAccount, setupFromHash, showsWork, type DeviceAccount } from './account'
 import { accountFile, accountFileFrom, mergeAccountFile, type AccountFile } from './settingsSync'
@@ -898,6 +898,7 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
         {sharing && <Suspense fallback={null}><ShareLanding onClose={() => setSharing(false)} /></Suspense>}
         {shownView === 'today' && <TodayView domain={activeDomain} currentDay={currentDay} place={currentPlace} placeOverride={placeOverride} onPlaceOverride={setPlaceOverride}
           commitments={commitments} weeklyCommitments={weeklyCommitments} habits={product.habits} habitEntries={product.habitEntries}
+          bodyWeek={activeDomain === 'personal' ? trackerThisWeek(product.bodyTracker, currentDay) : undefined}
           onHabitPart={(habitId, partId) => setProduct((current) => ({ ...current, habitEntries: toggleHabitPart(current.habitEntries, habitId, partId, currentDay) }))}
           plan={plan} availableMin={availableMin} energy={energy} onMinutes={(min) => setPick({ min, at: Date.now() })} onEnergy={setEnergy}
           weekPaid={weekPaid} floorToday={floorToday} strategicTodayMin={strategicTodayMin}

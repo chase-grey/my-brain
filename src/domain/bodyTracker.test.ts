@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { bodyReading, fetchTrackerSummary, newerSummary, parseTrackerSummary, signInToTracker, type TrackerSummary } from './bodyTracker'
+import { bodyReading, trackerThisWeek, fetchTrackerSummary, newerSummary, parseTrackerSummary, signInToTracker, type TrackerSummary } from './bodyTracker'
 import { buildLifeRing } from './lifeRing'
 
 const hit = (week: string, inProgress = false) => ({ week, result: 'hit' as const, ...(inProgress ? { inProgress } : {}) })
@@ -59,6 +59,15 @@ describe('body slice from workout-tracker', () => {
     expect(bodyReading(summary({ weeks, asOf: '2026-11-20' }), '2026-11-21')).toMatchObject({ weeksHit: 4, weeksJudged: 4, streak: 11 })
     expect(bodyReading(summary({ weeks, asOf: '2026-11-20' }), '2026-11-22')).toMatchObject({ weeksHit: 4, weeksJudged: 4, streak: 11 })
     expect(bodyReading(summary({ weeks, asOf: '2026-11-20' }), '2026-11-29')).toMatchObject({ weeksHit: 3, weeksJudged: 4 })
+  })
+
+  it('shows this week as the tracker counted it, and nothing once that week is over', () => {
+    const thisWeek = { week: '2026-11-23', rows: [{ kind: 'workouts', done: 1, goal: 2 }, { kind: 'naps', done: 1, goal: 2 }] }
+    const parsed = parseTrackerSummary(JSON.stringify({ ...summary(), thisWeek }))
+    expect(trackerThisWeek(parsed, '2026-11-25')).toEqual([{ kind: 'workouts', done: 1, goal: 2 }])
+    expect(trackerThisWeek(parsed, '2026-11-29')).toHaveLength(1)
+    expect(trackerThisWeek(parsed, '2026-11-30')).toBeUndefined()
+    expect(trackerThisWeek(summary(), '2026-11-25')).toBeUndefined()
   })
 
   it('ignores a summary it cannot read', () => {
