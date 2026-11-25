@@ -21,6 +21,16 @@ The accent itself can be changed: settings has a swatch for the app's color and 
 
 A new deploy reaches an open tab or installed window on its own (`src/appUpdate.ts`, the pattern in `~/.claude/patterns/app-update.md`; my-mail carries the same file). The app reloads onto it at a quiet moment: off screen, just reopened and not yet touched, or left alone for five minutes. It never reloads over an open sheet, a draft, or a screen that called `holdUpdates`. Until the reload happens, the more menu wears a dot and offers `update ready · restart`, and the settings button says the same. A new screen whose state a reload would lose calls `holdUpdates()`. Do not reload any other way.
 
+## monitors
+
+Chase, 2026-11-25, after two asks. `src/fitColumns.ts` lays out every screen made of cards (today, progress, goals, settings, trips, the work dashboard) from the size of the window in both directions, and `fitColumns.test.ts` holds the rules.
+
+- A window with height to spare stacks the cards into fewer columns and draws them larger, up to 1.35 times, rather than leaving a row of small cards over an empty window.
+- Columns are added, and the cards shrunk back, only when the cards would otherwise run past the bottom of the window.
+- Cards never go under 22rem wide, and the block of cards sits centred.
+- A new screen made of cards joins `deckViews` in `App.tsx`. Do not give one a fixed column count or a width cap of its own.
+- The phone is untouched: none of this applies under 48rem.
+
 ## restarting the bridge
 
 `npm run bridge` runs `work/bridge/work-bridge.ps1` (the work side is a separate private repo checked out at `work/`), a PowerShell HttpListener on port 47321. To restart it after an edit, stop only that process, by PID:

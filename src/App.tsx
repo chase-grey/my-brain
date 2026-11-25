@@ -9,6 +9,7 @@ import type { TaskProvider } from './data/taskProvider'
 import { WorkBridgeProvider, outlookTaskList } from './data/workBridgeProvider'
 import { mergeWorkTasks } from './data/workTaskSync'
 import { demoProviderTasks, demoTaskMetadata } from './demoData'
+import { useFitColumns } from './fitColumns'
 import { buildNowPlan, isDoneToday, thisWeekCommitments, todayCommitments } from './domain/personalNow'
 import { projectTasks } from './domain/taskProjection'
 import { buildWeekReceipt } from './domain/receipt'
@@ -58,6 +59,8 @@ const primaryViewsFor = (domain: Domain): { view: View; icon: IconName }[] => [
 const JournalView = lazy(() => import('./journal/JournalView').then((module) => ({ default: module.JournalView })))
 const ChatView = lazy(() => import('./companion/ChatView').then((module) => ({ default: module.ChatView })))
 const ShareLanding = lazy(() => import('./transcripts/ShareLanding'))
+/** The screens made of cards, which src/fitColumns.ts lays out to fit a monitor. */
+const deckViews: View[] = ['today', 'progress', 'goals', 'settings', 'trips']
 const views: View[] = ['today', 'progress', 'dashboard', 'chat', 'journal', 'stores', 'trips', 'goals', 'settings', 'task']
 
 function parseHash(): { view: View; taskId?: string } {
@@ -826,6 +829,8 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
   const floorToday = product.dayOverrides.some((item) => item.domain === activeDomain && item.date === currentDay && item.kind === 'floor')
   const strategicTodayMin = product.activities.filter((item) => item.domain === activeDomain && item.kind === 'strategic' && item.occurredAt.slice(0, 10) === currentDay).reduce((sum, item) => sum + (item.minutes ?? 0), 0)
   const primaryViews = primaryViewsFor(activeDomain)
+  const contentRef = useRef<HTMLDivElement>(null)
+  useFitColumns(contentRef, `${activeDomain} ${shownView}`)
   const moreItems = [
     ...(updateReady ? [{ label: 'update ready · restart', onSelect: () => void checkForUpdate() }] : []),
     ...(activeDomain === 'personal' ? [{ label: 'journal', onSelect: () => setView('journal') }, { label: 'stores', onSelect: () => setView('stores') }, { label: 'trips', onSelect: () => setView('trips') }] : [{ label: 'progress', onSelect: () => setView('progress') }]),
@@ -853,7 +858,7 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
         {shownView !== 'task' && <button className="icon-button" type="button" aria-label="new task" title="new task" onClick={startAddingTask}><Icon name="plus" /></button>}
       </header>
 
-      <div className={`content view-${shownView}`}>
+      <div className={`content view-${shownView}${deckViews.includes(shownView) ? ' is-deck' : ''}`} ref={contentRef}>
         {install.installed && shownView === 'today' && <div className="install-banner"><span>installed. open my brain from your apps</span></div>}
         {install.offer && !install.installed && shownView === 'today' && <div className="install-banner">
           {install.offer === 'prompt'
