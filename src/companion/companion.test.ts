@@ -171,12 +171,15 @@ describe('companion prompt and store', () => {
     const summary = { today: 'd', openCount: 2, dueToday: [], overdue: [], thisWeek: [], suggested: [], goals: [], projects: [] }
     const untold = buildSystemPrompt({ domain: 'work', vaultAvailable: false, summary })
     expect(untold).toContain('2 open tasks.')
-    expect(untold).not.toMatch(/minutes available|calendar is clear|on the calendar today/)
+    expect(untold).not.toMatch(/minutes available|calendar is clear|on the calendar/)
     expect(timeNowLine({})).toBe('')
     expect(timeNowLine({ availableMin: 30 })).toBe('The user set 30 minutes available right now.')
     expect(timeNowLine({ freeNow: { freeMin: 47, nextStart: '2026-11-25T15:00:00' } })).toBe('The calendar is clear for 47 minutes, until an event at 3pm.')
     expect(timeNowLine({ freeNow: { busyUntil: '2026-11-25T15:30:00' } })).toBe('The calendar has an event on now, until 3:30pm.')
-    expect(timeNowLine({ freeNow: { freeMin: 200 } })).toBe('Nothing else is on the calendar today.')
+    expect(timeNowLine({ freeNow: { freeMin: 200 } })).toBe("Nothing is on the calendar before 9pm, when the user's time for tasks ends, 200 minutes from now.")
+    expect(timeNowLine({ freeNow: { dayOver: true } })).toBe("It is past 9pm, when the user's time for tasks ends for the day. Do not suggest starting tasks tonight unless they ask to.")
+    // Picking a length after 9pm is the user going on.
+    expect(timeNowLine({ availableMin: 30, freeNow: { dayOver: true } })).toBe('The user set 30 minutes available right now.')
     expect(buildSystemPrompt({ domain: 'personal', vaultAvailable: false, summary: { ...summary, availableMin: 120, freeNow: { freeMin: 47, nextStart: '2026-11-25T15:00:00' } } })).toContain('2 open tasks. The user set 120 minutes available right now. The calendar is clear for 47 minutes, until an event at 3pm.')
   })
 

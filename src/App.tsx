@@ -2,7 +2,7 @@ import { Suspense, lazy, useEffect, useMemo, useRef, useState, type SetStateActi
 import { InteractionRequiredAuthError } from '@azure/msal-browser'
 import type { CalendarBlock } from './data/calendarGraphProvider'
 import type { InboxCounts } from './data/mailGraphProvider'
-import { addDays, blockWindow, eventsOn, fittingMinutes, freeNow, reconcileHeldGoal } from './domain/calendar'
+import { addDays, blockWindow, eventsOn, fittingMinutes, keptPick, reconcileHeldGoal, timeNow } from './domain/calendar'
 import { configuredPersonalClientId, createPersonalGraphData, type PersonalGraphData } from './data/personalGraphData'
 import { mergePersonalTasks, personalTaskMetaFile, taskMetadata } from './data/personalTaskSync'
 import type { TaskProvider } from './data/taskProvider'
@@ -193,7 +193,7 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
   const [docked, setDocked] = useState(() => typeof matchMedia === 'function' && matchMedia(dockedQuery).matches)
   const [tasks, setTasks] = useState<Task[]>(() => loadTasks(activeDomain, account.owner))
   // The time picked on today. Until one is picked the calendar chooses, and chat is told no number.
-  const [pickedMin, setPickedMin] = useState<number>()
+  const [pick, setPick] = useState<{ min: number; at: number }>()
   const [energy, setEnergy] = useState<Energy>('shallow')
   const [placeOverride, setPlaceOverride] = useState<Place | undefined>()
   const [activeStore, setActiveStore] = useState<StoreType>('grocery')
@@ -234,13 +234,13 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
   productRef.current = product
 
   const currentDay = today()
-  // The gap to the next event shrinks as the clock moves, so the calendar's answer is taken again each minute.
+  // The gap to the next event shrinks and the day ends as the clock moves, so the answer is taken again each minute.
   useEffect(() => {
-    if (!calendarRead) return
     const timer = setInterval(() => setMinute((value) => value + 1), 60_000)
     return () => clearInterval(timer)
-  }, [calendarRead])
-  const availableMin = pickedMin ?? fittingMinutes(calendarRead ? freeNow(calendarEvents) : undefined, minuteOptions, 60)
+  }, [])
+  const pickedMin = keptPick(pick)
+  const availableMin = pickedMin ?? fittingMinutes(timeNow(calendarRead ? calendarEvents : undefined), minuteOptions, 60)
   // Trips read and write the HomeBase vault directly, with the same repo settings the chat uses.
   const tripVault = useMemo(() => {
     const config = { repo: normalizeRepo(settings.githubRepo), token: settings.githubToken.replace(/\s+/g, ''), branch: normalizeBranch(settings.vaultBranch) }
@@ -752,7 +752,7 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
         return { saved: Object.keys(figures), undo: () => setProduct((current) => ({ ...current, moneySnapshots: before })) }
       },
     } satisfies Partial<CompanionActions> : {}),
-    todaySummary: () => buildPlanSummary({ today: currentDay, domain: activeDomain, tasks: tasksRef.current, commitments, weeklyCommitments, plan, goals: productRef.current.goals, projects: productRef.current.projects, calendar: activeDomain === 'personal' ? eventsOn(calendarEvents, currentDay) : [], pickedMin, freeNow: calendarRead ? freeNow(calendarEvents) : undefined, money: activeDomain === 'personal' ? moneyBriefing(productRef.current.moneyGoals, productRef.current.moneySnapshots, currentDay) : undefined }),
+    todaySummary: () => buildPlanSummary({ today: currentDay, domain: activeDomain, tasks: tasksRef.current, commitments, weeklyCommitments, plan, goals: productRef.current.goals, projects: productRef.current.projects, calendar: activeDomain === 'personal' ? eventsOn(calendarEvents, currentDay) : [], pickedMin: keptPick(pick), freeNow: timeNow(calendarRead ? calendarEvents : undefined), money: activeDomain === 'personal' ? moneyBriefing(productRef.current.moneyGoals, productRef.current.moneySnapshots, currentDay) : undefined }),
   }
 
   function editTask(id: string) {
@@ -872,7 +872,7 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
         {shownView === 'today' && <TodayView domain={activeDomain} currentDay={currentDay} place={currentPlace} placeOverride={placeOverride} onPlaceOverride={setPlaceOverride}
           commitments={commitments} weeklyCommitments={weeklyCommitments} habits={product.habits} habitEntries={product.habitEntries}
           onHabitPart={(habitId, partId) => setProduct((current) => ({ ...current, habitEntries: toggleHabitPart(current.habitEntries, habitId, partId, currentDay) }))}
-          plan={plan} availableMin={availableMin} energy={energy} onMinutes={setPickedMin} onEnergy={setEnergy}
+          plan={plan} availableMin={availableMin} energy={energy} onMinutes={(min) => setPick({ min, at: Date.now() })} onEnergy={setEnergy}
           weekPaid={weekPaid} floorToday={floorToday} strategicTodayMin={strategicTodayMin}
           onFloorNight={() => setProduct((current) => ({ ...current, dayOverrides: [...current.dayOverrides, { date: currentDay, domain: activeDomain, kind: 'floor' }] }))}
           onStrategic={(minutes) => setProduct((current) => ({ ...current, activities: [...current.activities, { id: newId('activity'), domain: activeDomain, kind: 'strategic', occurredAt: new Date().toISOString(), minutes }] }))}

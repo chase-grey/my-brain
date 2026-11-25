@@ -1,4 +1,4 @@
-import { clockTime, type FreeNow } from '../domain/calendar'
+import { clockTime, dayEndHour, localDateTime, type FreeNow } from '../domain/calendar'
 import type { Domain } from '../domain/types'
 import type { PlanSummary, TaskSummary } from './companionTools'
 import type { AttachedMail } from './mailTools'
@@ -29,13 +29,17 @@ function taskLine(task: TaskSummary): string {
 /** How much time there is right now, said only when it is known: a time the user picked, or what the calendar shows. */
 export function timeNowLine(summary: Pick<PlanSummary, 'availableMin' | 'freeNow'>): string {
   const picked = summary.availableMin === undefined ? [] : [`The user set ${summary.availableMin} minutes available right now.`]
-  return [...picked, ...(summary.freeNow ? [calendarNowLine(summary.freeNow)] : [])].join(' ')
+  // A length picked after the day's end is the user choosing to go on, so the day's end is not repeated to them.
+  const now = summary.freeNow && !(picked.length && 'dayOver' in summary.freeNow) ? [calendarNowLine(summary.freeNow)] : []
+  return [...picked, ...now].join(' ')
 }
 
 function calendarNowLine(free: FreeNow): string {
+  const dayEnd = clockTime(localDateTime('2000-01-01', dayEndHour))
+  if ('dayOver' in free) return `It is past ${dayEnd}, when the user's time for tasks ends for the day. Do not suggest starting tasks tonight unless they ask to.`
   if ('busyUntil' in free) return `The calendar has an event on now, until ${clockTime(free.busyUntil)}.`
   if (free.nextStart) return `The calendar is clear for ${free.freeMin} minutes, until an event at ${clockTime(free.nextStart)}.`
-  return 'Nothing else is on the calendar today.'
+  return `Nothing is on the calendar before ${dayEnd}, when the user's time for tasks ends, ${free.freeMin} minutes from now.`
 }
 
 function section(title: string, lines: string[]): string {

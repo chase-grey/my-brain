@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { CalendarBlock } from '../data/calendarGraphProvider'
 import type { Goal } from './types'
-import { addDays, blockWindow, busyMinutes, eventsOn, fittingMinutes, freeNow, reconcileHeldGoal, timeRange } from './calendar'
+import { addDays, blockWindow, busyMinutes, eventsOn, fittingMinutes, freeNow, keptPick, reconcileHeldGoal, timeNow, timeRange } from './calendar'
 
 const block = (id: string, start: string, end: string, isAllDay = false): CalendarBlock => ({ id, subject: id, start, end, isAllDay })
 const goal: Goal = { id: 'g', domain: 'personal', horizon: 'season', title: 'paint the bedroom', funded: true, status: 'active', revisions: [], shape: 'block', scheduledOn: '2026-11-07', calendarEventId: 'e' }
@@ -40,10 +40,30 @@ describe('calendar', () => {
     // Back-to-back events are one stretch: busy until the last of them ends.
     expect(freeNow(blocks, at('09:10'))).toEqual({ busyUntil: '2026-11-02T10:15:00' })
     expect(freeNow(blocks, at('10:15'))).toEqual({ freeMin: 465, nextStart: '2026-11-02T18:00:00' })
-    // Nothing later today: clear to midnight, and tomorrow's events are not today's.
-    expect(freeNow(blocks, at('22:30'))).toEqual({ freeMin: 90, nextStart: undefined })
+    // Nothing later before 9pm: clear until then, and tomorrow's events are not today's.
+    expect(freeNow(blocks, at('19:30'))).toEqual({ freeMin: 90, nextStart: undefined })
+    // An event after 9pm is past the day's end, so it does not shorten the stretch.
+    expect(freeNow([block('late', '2026-11-02T21:30:00', '2026-11-02T22:00:00')], at('20:00'))).toEqual({ freeMin: 60, nextStart: undefined })
     // An all-day event holds no time.
-    expect(freeNow([blocks[0]], at('12:00'))).toEqual({ freeMin: 720, nextStart: undefined })
+    expect(freeNow([blocks[0]], at('12:00'))).toEqual({ freeMin: 540, nextStart: undefined })
+  })
+
+  it('ends time for tasks at 9pm unless a length is picked after that', () => {
+    const at = (time: string, day = '02') => new Date(`2026-11-${day}T${time}:00`)
+    const options = [30, 60, 120] as const
+    expect(freeNow([], at('20:59'))).toEqual({ freeMin: 1, nextStart: undefined })
+    expect(freeNow([], at('21:00'))).toEqual({ dayOver: true })
+    expect(fittingMinutes({ dayOver: true }, options, 60)).toBe(0)
+    // With no calendar, as at work, the day still ends.
+    expect(timeNow(undefined, at('14:00'))).toBeUndefined()
+    expect(timeNow(undefined, at('21:05'))).toEqual({ dayOver: true })
+    // A length picked in the afternoon lasts until 9pm and no further; one picked after 9pm stands.
+    expect(keptPick({ min: 120, at: at('15:00').getTime() }, at('20:30'))).toBe(120)
+    expect(keptPick({ min: 120, at: at('15:00').getTime() }, at('21:10'))).toBeUndefined()
+    expect(keptPick({ min: 60, at: at('21:15').getTime() }, at('22:00'))).toBe(60)
+    // And none carries into the next day.
+    expect(keptPick({ min: 60, at: at('21:15').getTime() }, at('08:00', '03'))).toBeUndefined()
+    expect(keptPick(undefined, at('08:00'))).toBeUndefined()
   })
 
   it('starts the time picker on the longest choice that fits', () => {

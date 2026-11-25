@@ -36,11 +36,19 @@ export function busyMinutes(blocks: CalendarBlock[], date: string): number {
   }, 0)
 }
 
-/** What the calendar says about this moment: in an event until a time, or clear for some minutes. */
-export type FreeNow = { busyUntil: string } | { freeMin: number; nextStart?: string }
+/** Time for tasks ends at 9pm. Past it nothing is offered unless a length is picked then. */
+export const dayEndHour = 21
 
-/** Back-to-back events count as one. With nothing later today, the clear stretch runs to midnight. All-day events hold no time. */
+export function dayOver(now: Date = new Date()): boolean {
+  return now.getHours() >= dayEndHour
+}
+
+/** What this moment holds: the day is over, an event is on until a time, or it is clear for some minutes. */
+export type FreeNow = { dayOver: true } | { busyUntil: string } | { freeMin: number; nextStart?: string }
+
+/** Back-to-back events count as one. With nothing before the day's end, the clear stretch runs to it. All-day events hold no time. */
 export function freeNow(blocks: CalendarBlock[], now: Date = new Date()): FreeNow {
+  if (dayOver(now)) return { dayOver: true }
   const at = now.getTime()
   const timed = blocks.filter((block) => !block.isAllDay).sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime())
   let busyUntil: CalendarBlock | undefined
@@ -49,16 +57,31 @@ export function freeNow(blocks: CalendarBlock[], now: Date = new Date()): FreeNo
     if (new Date(block.start).getTime() <= cursor && new Date(block.end).getTime() > cursor) busyUntil = block
   }
   if (busyUntil) return { busyUntil: busyUntil.end }
-  const midnight = new Date(now)
-  midnight.setHours(24, 0, 0, 0)
-  const next = timed.find((block) => new Date(block.start).getTime() > at && new Date(block.start).getTime() < midnight.getTime())
-  const until = next ? new Date(next.start).getTime() : midnight.getTime()
+  const dayEnd = new Date(now)
+  dayEnd.setHours(dayEndHour, 0, 0, 0)
+  const next = timed.find((block) => new Date(block.start).getTime() > at && new Date(block.start).getTime() < dayEnd.getTime())
+  const until = next ? new Date(next.start).getTime() : dayEnd.getTime()
   return { freeMin: Math.floor((until - at) / 60_000), nextStart: next?.start }
 }
 
-/** The time-available choice the calendar points at: the longest one that fits before the next event, the shortest during one. */
+/** Without a calendar only the end of the day is known. */
+export function timeNow(blocks: CalendarBlock[] | undefined, now: Date = new Date()): FreeNow | undefined {
+  if (blocks) return freeNow(blocks, now)
+  return dayOver(now) ? { dayOver: true } : undefined
+}
+
+/** A picked length lasts the day, except that one picked before the day's end does not carry past it. */
+export function keptPick(pick: { min: number; at: number } | undefined, now: Date = new Date()): number | undefined {
+  if (!pick) return undefined
+  const pickedAt = new Date(pick.at)
+  if (pickedAt.toDateString() !== now.toDateString()) return undefined
+  return dayOver(now) && !dayOver(pickedAt) ? undefined : pick.min
+}
+
+/** The time-available choice to start on: the longest one that fits before the next event, the shortest during one, none once the day is over. */
 export function fittingMinutes(free: FreeNow | undefined, options: readonly number[], fallback: number): number {
   if (!free) return fallback
+  if ('dayOver' in free) return 0
   if ('busyUntil' in free) return options[0]
   return [...options].reverse().find((minutes) => minutes <= free.freeMin) ?? options[0]
 }
