@@ -8,8 +8,9 @@ import { autoModel, effortOptions, modelShortName, type AppSettings } from '../s
 import { Icon } from '../navIcons'
 import { Empty, Menu } from '../ui'
 import { useVoice } from '../voice/useVoice'
-import { journalAttachment, journalDays, journalPath } from '../journal/journal'
+import { journalAttachment, journalDays, journalPath, type JournalStore } from '../journal/journal'
 import { JournalDays } from '../journal/JournalView'
+import { WorkJournal } from '../journal/workJournal'
 import type { CompanionAction, ActionStatus } from './actions'
 import { ActionHandlersContext, ActionPart, type ActionHandlers } from './ActionParts'
 import { attachmentAccept, readAttachment, type Attachment } from './attachments'
@@ -217,6 +218,9 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
 
   const vault = useMemo<VaultStore | undefined>(() => hasGitHubVault ? new GitHubVault(vaultConfig) : fallbackVault, [hasGitHubVault, fallbackVault, vaultConfig.repo, vaultConfig.token, vaultConfig.branch])
 
+  // Where this space's journal is kept: the notes vault, or for work the vault on the work pc.
+  const journalStore = useMemo<JournalStore | undefined>(() => domain === 'work' ? new WorkJournal() : vault, [domain, vault])
+
   const companion = useMemo<Companion | undefined>(() => {
     const systemPrompt = (memoryIndex?: string) => buildSystemPrompt({ domain, summary: summaryRef.current, vaultAvailable: domain === 'work' ? true : hasVault, memoryIndex, notes: fallbackVault ? 'onedrive' : 'homebase', userName, mailAvailable: domain === 'personal' && Boolean(mailRef.current), mail: conversationRef.current.mail })
     if (domain === 'work') {
@@ -330,21 +334,21 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
 
   // The journal is only ever read into a message by hand, here: nothing sends it on its own.
   function pickJournal() {
-    if (!vault) return
+    if (!journalStore) return
     setHistory(undefined)
     setJournal({})
-    vault.listNotes().then((notes) => setJournal((current) => current && { days: journalDays(notes) })).catch(() => {
+    journalStore.listNotes().then((notes) => setJournal((current) => current && { days: journalDays(notes) })).catch(() => {
       setJournal(undefined)
       appendTurn({ role: 'assistant', text: "couldn't load the journal", at: new Date().toISOString(), error: true })
     })
   }
 
   async function attachJournal(day: string) {
-    if (!vault) return
+    if (!journalStore) return
     setJournal(undefined)
     setReading(true)
     try {
-      const { content } = await vault.readNote(journalPath(day))
+      const { content } = await journalStore.readNote(journalPath(day))
       setAttached((items) => [...items, journalAttachment(day, content)])
     } catch {
       appendTurn({ role: 'assistant', text: "couldn't open that entry", at: new Date().toISOString(), error: true })
@@ -590,7 +594,7 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
           { label: 'new chat', onSelect: startNew, disabled: !conversation.turns.length && !conversation.mail },
           { label: history ? 'back to chat' : 'past chats', onSelect: () => setHistory(history ? undefined : loadHistory(domain)) },
           { label: 'upload', onSelect: pickFiles, disabled: reading },
-          ...(vault ? [{ label: journal ? 'back to chat' : 'add journal entry', onSelect: () => (journal ? setJournal(undefined) : pickJournal()), disabled: reading }] : []),
+          ...(journalStore ? [{ label: journal ? 'back to chat' : 'add journal entry', onSelect: () => (journal ? setJournal(undefined) : pickJournal()), disabled: reading }] : []),
         ]}
       />}
     </header>

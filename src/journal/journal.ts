@@ -1,5 +1,9 @@
 import type { Attachment } from '../companion/attachments'
-import type { VaultNote } from '../companion/githubVault'
+import type { VaultNote, VaultStore } from '../companion/githubVault'
+import type { Domain } from '../domain/types'
+
+/** What the journal needs from wherever it is kept: the notes vault for personal, the bridge for work. */
+export type JournalStore = Pick<VaultStore, 'listNotes' | 'readNote' | 'appendNote'>
 
 /** One file per day journaled, in the vault's `journal/` folder. */
 export const journalPath = (day: string) => `journal/${day}.md`
@@ -49,8 +53,8 @@ export function entryParts(content: string): { kind: 'time' | 'words'; text: str
   return parts
 }
 
-/** Words said or typed and not saved yet. Kept on the device so a closed tab or a failed save loses nothing. */
-export const draftStorageKey = 'my-brain.personal.journal.draft.v1'
+/** Words said or typed and not saved yet. Kept on the device so a closed tab or a failed save loses nothing, and apart for each space. */
+export const draftStorageKey = (domain: Domain) => `my-brain.${domain}.journal.draft.v1`
 
 type StorageLike = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>
 
@@ -62,18 +66,18 @@ function storage(): StorageLike | undefined {
   }
 }
 
-export function loadDraft(store: StorageLike | undefined = storage()): string {
+export function loadDraft(domain: Domain, store: StorageLike | undefined = storage()): string {
   try {
-    return store?.getItem(draftStorageKey) ?? ''
+    return store?.getItem(draftStorageKey(domain)) ?? ''
   } catch {
     return ''
   }
 }
 
-export function saveDraft(text: string, store: StorageLike | undefined = storage()): void {
+export function saveDraft(text: string, domain: Domain, store: StorageLike | undefined = storage()): void {
   try {
-    if (text) store?.setItem(draftStorageKey, text)
-    else store?.removeItem(draftStorageKey)
+    if (text) store?.setItem(draftStorageKey(domain), text)
+    else store?.removeItem(draftStorageKey(domain))
   } catch {
     // The words still sit on screen.
   }

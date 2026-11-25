@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { holdUpdates } from '../appUpdate'
 import type { Attachment } from '../companion/attachments'
-import type { VaultStore } from '../companion/githubVault'
+import type { Domain } from '../domain/types'
 import { Icon } from '../navIcons'
 import { Empty } from '../ui'
 import { dictate, recognitionSupported } from '../voice/speech'
 import { endMessage } from '../voice/useVoice'
-import { dayLabel, entryBlock, entryParts, journalAttachment, journalDays, journalPath, loadDraft, saveDraft } from './journal'
+import { dayLabel, entryBlock, entryParts, journalAttachment, journalDays, journalPath, loadDraft, saveDraft, type JournalStore } from './journal'
 
 /** The days with an entry, as a list to pick from. The chat uses it too. */
 export function JournalDays({ days, onOpen }: { days: string[] | undefined; onOpen: (day: string) => void }) {
@@ -21,15 +21,17 @@ export function JournalDays({ days, onOpen }: { days: string[] | undefined; onOp
  * The journal: say or type whatever is on your mind and save it under today. Nothing here goes to the ai.
  * An entry reaches the chat only when it is added to a message by hand.
  */
-export function JournalView({ vault, onSettings, onChat }: {
-  vault?: VaultStore
+export function JournalView({ domain, vault, onSettings, onChat }: {
+  domain: Domain
+  /** Where the entries are kept: the notes vault, or for work the vault on the work pc. */
+  vault?: JournalStore
   onSettings: () => void
   /** Open the chat with this entry attached to the next message. */
   onChat: (attachment: Attachment) => void
 }) {
   const [days, setDays] = useState<string[]>()
   const [open, setOpen] = useState<{ day: string; content?: string }>()
-  const [draft, setDraftValue] = useState(loadDraft)
+  const [draft, setDraftValue] = useState(() => loadDraft(domain))
   const draftRef = useRef(draft)
   const [listening, setListening] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -40,8 +42,8 @@ export function JournalView({ vault, onSettings, onChat }: {
   const setDraft = useCallback((text: string) => {
     draftRef.current = text
     setDraftValue(text)
-    saveDraft(text)
-  }, [])
+    saveDraft(text, domain)
+  }, [domain])
 
   // A reload would stop the listening; the words themselves are already kept on the device.
   useEffect(() => (listening || saving ? holdUpdates() : undefined), [listening, saving])

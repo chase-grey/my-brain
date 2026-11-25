@@ -65,11 +65,12 @@ Mail in the chat is read-only (`src/companion/mailTools.ts`): search and read, n
 
 ## journal
 
-Chase, 2026-11-25. `journal.test.ts` holds these. The journal is under the more menu, personal only (`src/journal/`).
+Chase, 2026-11-25. `journal.test.ts` holds these. The journal is under the more menu in both spaces (`src/journal/`).
 
 - It is a place to dump, by voice or typing. Listening there ends only on a tap or when the app is hidden; a pause or a long silence never ends it, saves, or sends.
 - Words not saved yet are kept on the device, so closing the app or a failed save loses nothing.
-- `save` adds the words to `journal/YYYY-MM-DD.md` in the notes vault under the time as a heading, exactly as said. Nothing rewrites or tidies them.
+- `save` adds the words to that day's file under the time as a heading, exactly as said. Nothing rewrites or tidies them. Personal entries go to `journal/YYYY-MM-DD.md` in the notes vault.
+- Work entries go through the bridge into `01 Journal/` in the work vault (`workJournal.ts`, the bridge's `/journal` routes), so the work journal is there only on the work pc. Those routes only list, read and add to files. Work words are never sent to Jev, the personal key, or the personal vault, and the two spaces keep separate unsaved words.
 - The journal never calls the ai. An entry reaches the chat only when Chase adds it to a message by hand, as an attachment: `add to chat` on the entry, or `add journal entry` in the chat menu.
 
 ## old tasks and mail
