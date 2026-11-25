@@ -4,6 +4,7 @@ import App from './App'
 import './styles.css'
 import { followAppLinks, isNativeApp } from './native/platform'
 import { watchForUpdates } from './appUpdate'
+import { applyAccent, loadAccent } from './accent'
 
 /** Microsoft sends the sign-in popup, and the hidden frame that renews a sign-in, back to this page with the result in the url. */
 function isSignInResponse(): boolean {
@@ -20,6 +21,9 @@ if (isSignInResponse() && !isNativeApp()) {
 }
 
 function startApp(): void {
+  // Before the first paint, so the app never opens in a color that is about to change.
+  applyAccent(loadAccent())
+
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
       <App />

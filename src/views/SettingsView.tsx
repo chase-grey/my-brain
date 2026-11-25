@@ -8,6 +8,7 @@ import type { DeviceAccount } from '../account'
 import { providerOf, providers } from '../companion/aiProvider'
 import type { AiMode, AppSettings } from '../settings'
 import { Card, Field, Segmented } from '../ui'
+import { AccentPicker } from './AccentPicker'
 import { ShareCard } from './ShareCard'
 
 /** Where each account that chat bills shows its spend. The key pages break it down per key. */
@@ -109,6 +110,10 @@ export function SettingsView({ domain, accountName, connectionStatus, settings, 
     {!account.owner && <Card title="work space">
       <Segmented label="work space" value={account.workSpace ? 'on' : 'off'} onChange={(value) => onAccount({ ...account, workSpace: value === 'on' })} options={[{ value: 'off', label: 'off' }, { value: 'on', label: 'on' }]} />
     </Card>}
+
+    <Card title="color">
+      <AccentPicker />
+    </Card>
 
     <Card title="app">
       <p className="note">build {APP_COMMIT} · {new Date(APP_BUILD_TIME).toLocaleString()}</p>
