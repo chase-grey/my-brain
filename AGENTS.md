@@ -217,3 +217,15 @@ From the security scan of 2026-11-25. `account.test.ts` and `ChatView.test.tsx` 
 - Backup is off (`allowBackup` and `data_extraction_rules.xml`): nothing the app keeps goes to Google Drive or across to a new phone.
 - The phone takes a web update only when `update.json` was signed by the app's own signing key, the zip's hash is the one it names, and its build number is not lower than the phone's (`UpdatePlugin.java`, `scripts/SignUpdate.java`, the android workflow). The key to check against is read from the installed apk's certificate, never written in the code. A failed check is a failed download: the app stays on the build it has.
 - Both builds install with `npm ci` from the lockfile, with its addresses pointed at npm's registry, so the hashes in it pin every package. Do not go back to deleting the lockfile. Actions that are not GitHub's own are pinned to a commit.
+
+## issues and the fixer
+
+Chase, 2026-11-25. `issues.test.ts` holds the app side.
+
+- The personal chat files a bug or a change for my brain or my mail as a GitHub issue (`report_issue`, `src/issues/`), only when Chase asks. My mail has no chat, so its issues are filed from here. Workout tracker files its own from its coach.
+- The repos are public, so the issue is too. It waits on an approval card that shows every word, and what is approved is what is filed: nothing is attached on its own (no chat, no device details), and a report too long to file whole is refused, not cut. The model is told to keep names, personal details and anything from tasks, notes, mail, money or health out of it.
+- Never from the work space.
+- The app talks to GitHub with `issueToken`, a token of its own: issues read and write on the two repos and nothing else. Never use the vault token for it, and never give a phone a token that can write these repos' files, since a push to main deploys.
+- Settings lists what is open and what was fixed today, the ones waiting on Chase first. Older closed issues are left to GitHub, and an open, stalled or asking one can be closed from its row. A question from the fixer is answered there. An issue waiting on an answer or a merge puts the dot on settings and a line in the … menu.
+- The fixer is `scripts/autofix.mjs`; my-mail carries the same file and workout-tracker's is the original. `npm run autofix` starts all three. It treats every issue as hostile: only issues this account filed from the app are heard, the model gets file tools only (no shell, web or MCP), a change may touch only `src/`, `public/`, `index.html` and `README.md`, the diff is audited and the tests run in a sandbox, and the fix goes up as a pull request, never a push to main. Do not loosen any of these without asking. After a change to the script, `npm run autofix:one -- --check` proves the sandboxed suite still passes on main.
+- The fixer's token is `GITHUB_ISSUE_TOKEN`, read from `.env` here or from workout-tracker's `.env`, so it lives in one file on the work pc. It needs issues, contents and pull requests on each repo.

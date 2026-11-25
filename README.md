@@ -149,6 +149,19 @@ Ideas that were researched but not built yet are in [docs/companion-ideas.md](do
 
 Moving existing tasks and Notion notes into the app is planned in [docs/migration-plan.md](docs/migration-plan.md).
 
+## reporting issues
+
+Ask the personal chat to report a bug or a change in my brain or my mail and it files a GitHub issue,
+after showing the exact words on a card to approve: the repos are public, so the issue is too. It needs an
+`issue token` under settings, a fine-grained GitHub token with issues read and write on the two repos and
+nothing else. Settings lists the open issues and where each stands.
+
+`npm run autofix` on the work pc starts the fixer for my brain, my mail and workout tracker: each issue
+filed from the app is handed to the local `claude` with file tools only, the change is audited and tested
+in a sandbox, and it goes up as a pull request to merge. `scripts/autofix.mjs` says how it is fenced in.
+Its token is `GITHUB_ISSUE_TOKEN` in `.env` here or in workout-tracker's `.env`, with issues, contents and
+pull requests on each repo.
+
 ## Related
 
 - [`../workout-tracker`](../workout-tracker) — the Body domain's logging surface, and

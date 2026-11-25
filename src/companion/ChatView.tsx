@@ -27,6 +27,7 @@ import { memoryFolders } from './memory'
 import { clearHistory, conversationTitle, conversationUpdatedAt, deleteConversation, loadHistory, newConversation, saveConversation, type CompanionConversation, type CompanionTurn } from './companionStore'
 import type { CompanionActions, PlanSummary } from './companionTools'
 import { GitHubVault, normalizeBranch, normalizeRepo, vaultConfigured, type VaultStore } from './githubVault'
+import { GitHubIssues, type IssueStore } from '../issues/issues'
 import { JevClient } from './jev'
 import { OpenAiCompatClient } from './openAiClient'
 import { routeWithJev } from './route'
@@ -225,11 +226,15 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
 
   const vault = useMemo<VaultStore | undefined>(() => hasGitHubVault ? new GitHubVault(vaultConfig) : fallbackVault, [hasGitHubVault, fallbackVault, vaultConfig.repo, vaultConfig.token, vaultConfig.branch])
 
+  // Reports about the apps are filed from the personal chat only: a work conversation never goes to a public repo.
+  const issueToken = domain === 'personal' ? compact(settings.issueToken) : ''
+  const issues = useMemo<IssueStore | undefined>(() => issueToken ? new GitHubIssues(issueToken) : undefined, [issueToken])
+
   // Where this space's journal is kept: the notes vault, or for work the vault on the work pc.
   const journalStore = useMemo<JournalStore | undefined>(() => domain === 'work' ? new WorkJournal() : vault, [domain, vault])
 
   const companion = useMemo<Companion | undefined>(() => {
-    const systemPrompt = (memoryIndex?: string) => buildSystemPrompt({ domain, summary: summaryRef.current, vaultAvailable: domain === 'work' ? true : hasVault, memoryIndex, notes: fallbackVault ? 'onedrive' : 'homebase', userName, mailAvailable: domain === 'personal' && Boolean(mailRef.current), mail: conversationRef.current.mail })
+    const systemPrompt = (memoryIndex?: string) => buildSystemPrompt({ domain, summary: summaryRef.current, vaultAvailable: domain === 'work' ? true : hasVault, memoryIndex, notes: fallbackVault ? 'onedrive' : 'homebase', userName, mailAvailable: domain === 'personal' && Boolean(mailRef.current), issuesAvailable: Boolean(issues), mail: conversationRef.current.mail })
     if (domain === 'work') {
       return createBridgeCompanion({ client: new BridgeCompanionClient(), sessionId: () => conversationRef.current.sessionId, systemPrompt, model: modelShortName(model), effort: settings.chatEffort })
     }
@@ -249,8 +254,9 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
       memoryFolder: memoryFolders[domain],
       hasCalendar: () => hasCalendarRef.current,
       mail: () => domain === 'personal' ? mailRef.current : undefined,
+      issues: () => issues,
     })
-  }, [domain, hasKey, viaBridge, keyReady, hasGitHubVault, fallbackVault, userName, settings.aiMode, settings.aiProvider, baseUrl, model, settings.anthropicApiKey, settings.jevApiKey, settings.chatEffort, vaultConfig.repo, vaultConfig.token, vaultConfig.branch])
+  }, [domain, hasKey, viaBridge, keyReady, hasGitHubVault, fallbackVault, userName, settings.aiMode, settings.aiProvider, baseUrl, model, settings.anthropicApiKey, settings.jevApiKey, settings.chatEffort, vaultConfig.repo, vaultConfig.token, vaultConfig.branch, issues])
 
   useEffect(() => {
     if (domain !== 'work') return

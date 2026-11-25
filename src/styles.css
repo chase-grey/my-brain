@@ -200,7 +200,7 @@ button.row-main { min-height: 3rem; }
 .action-fields { display: grid; grid-template-columns: max-content 1fr; gap: 0.2rem 0.75rem; margin: 0; padding: 0.35rem 1rem 0.5rem; }
 .action-field { display: contents; }
 .action-fields dt { color: var(--muted); font-size: 0.85rem; line-height: 1.5; }
-.action-fields dd { margin: 0; font-size: 0.95rem; overflow-wrap: anywhere; }
+.action-fields dd { margin: 0; font-size: 0.95rem; overflow-wrap: anywhere; white-space: pre-wrap; }
 .action-card-foot { display: flex; gap: 0.5rem; padding: 0.6rem 1rem; border-top: 1px solid var(--border); border-radius: 0 0 var(--radius) var(--radius); background: var(--surface-2); }
 .primary.small, .secondary.small { min-height: 2.25rem; padding: 0 0.9rem; font-size: 0.9rem; }
 
@@ -463,3 +463,4 @@ button.row-main { min-height: 3rem; }
 .rest-goals { padding: 0.6rem 0 0.4rem; }
 .text-draft-body { padding: 0.25rem 1rem 0.75rem; white-space: pre-wrap; overflow-wrap: anywhere; }
 .text-draft a.primary { display: inline-flex; align-items: center; text-decoration: none; }
+.issue-question { white-space: pre-wrap; overflow-wrap: anywhere; }

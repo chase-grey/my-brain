@@ -9,6 +9,7 @@ import { providerOf, providers } from '../companion/aiProvider'
 import type { AiMode, AppSettings } from '../settings'
 import { Card, Field, Segmented } from '../ui'
 import { AccentPicker } from './AccentPicker'
+import { IssuesCard } from './IssuesCard'
 import { ShareCard } from './ShareCard'
 
 /** Where each account that chat bills shows its spend. The key pages break it down per key. */
@@ -95,6 +96,8 @@ export function SettingsView({ domain, accountName, connectionStatus, settings, 
     {domain === 'personal' && <Card title="notes">
       <NotesExport settings={settings} />
     </Card>}
+
+    {domain === 'personal' && (account.owner || settings.issueToken) && <IssuesCard settings={settings} onSettings={onSettings} />}
 
     <Card title="capacity">
       <div className="grid-2">

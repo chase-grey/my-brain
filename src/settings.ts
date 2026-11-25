@@ -49,6 +49,8 @@ export type AppSettings = {
   mailAppUrl: string
   /** The workout-tracker account key; the body slice reads that account's summary with it. */
   trackerToken: string
+  /** A GitHub token that can only file and answer issues on the apps' repos; chat reports problems with it. */
+  issueToken: string
 }
 
 export const defaultSettings: AppSettings = {
@@ -68,10 +70,11 @@ export const defaultSettings: AppSettings = {
   vaultBranch: 'main',
   mailAppUrl: 'https://chase-grey.github.io/my-mail/',
   trackerToken: '',
+  issueToken: '',
 }
 
 const settingsStorageKey = (domain: Domain) => `my-brain.${domain}.settings.v1`
-const companionFields = ['aiProvider', 'aiBaseUrl', 'aiModel', 'anthropicApiKey', 'jevApiKey', 'githubRepo', 'githubToken', 'vaultBranch', 'mailAppUrl', 'trackerToken'] as const
+const companionFields = ['aiProvider', 'aiBaseUrl', 'aiModel', 'anthropicApiKey', 'jevApiKey', 'githubRepo', 'githubToken', 'vaultBranch', 'mailAppUrl', 'trackerToken', 'issueToken'] as const
 // Model and effort are per space: the work chat picks them for Claude Code, the personal one for the api.
 const chatFields = ['anthropicModel', 'chatEffort'] as const
 

@@ -45,6 +45,7 @@ import { StoresView } from './views/StoresView'
 import { SettingsView, type ConnectionStatus } from './views/SettingsView'
 import { UpdateToast } from './views/UpdateToast'
 import { checkForUpdate, holdUpdates, useAppUpdate } from './appUpdate'
+import { useIssuesWaiting } from './issues/useIssues'
 import { TaskPage } from './views/TaskPage'
 import { TripsView } from './views/TripsView'
 import { WorkScreens } from './views/WorkScreens'
@@ -222,6 +223,9 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
   const [placeOverride, setPlaceOverride] = useState<Place | undefined>()
   const [activeStore, setActiveStore] = useState<StoreType>('grocery')
   const [settings, setSettings] = useState(() => loadSettings(activeDomain))
+  // An issue the fixer cannot move without an answer or a merge puts the same dot on settings that a waiting update does.
+  const issuesWaiting = useIssuesWaiting(activeDomain === 'personal' ? settings.issueToken : '')
+  const settingsDot = updateReady || issuesWaiting > 0
   const [product, setProduct] = useState<ProductState>(() => loadProductState(activeDomain, account.owner))
   const settingsRef = useRef(settings)
   settingsRef.current = settings
@@ -911,6 +915,7 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
   useFitColumns(contentRef, `${activeDomain} ${shownView}`)
   const moreViews = moreViewsFor(activeDomain)
   const menuFor = (shown: typeof moreViews) => [
+    ...(issuesWaiting ? [{ label: issuesWaiting === 1 ? 'issue waiting' : `${issuesWaiting} issues waiting`, onSelect: () => setView('settings') }] : []),
     ...(updateReady ? [{ label: updateByHand ? 'update ready · install' : 'update ready · restart', onSelect: () => void checkForUpdate() }] : []),
     ...shown.map((item) => ({ label: item.view, onSelect: () => setView(item.view) })),
     ...(install.canPrompt ? [{ label: 'install app', onSelect: () => void install.install() }] : []),
@@ -922,14 +927,14 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
   const chat = <Suspense fallback={<header className="view-head"><h1>chat</h1></header>}><ChatView key={activeDomain} domain={activeDomain} settings={settings} actions={companionActions} summary={companionActions.todaySummary()} hasCalendar={activeDomain === 'personal' && connectionStatus === 'connected'} onSettings={() => setView('settings')} onChangeSettings={(change) => changeSettings((current) => ({ ...current, ...change }))} notesVault={connectionStatus === 'connected' ? personalData?.notes : undefined} userName={account.name} prefill={kickoff} onPrefilled={onKickoffUsed} attach={chatAttachment} onAttached={() => setChatAttachment(undefined)} docked={docked} talk={talk} onTalkStarted={() => setTalk(false)} mail={activeDomain === 'personal' && connectionStatus === 'connected' ? personalData?.mail : undefined} mailId={activeDomain === 'personal' ? mailId : undefined} mailOff={connectionStatus !== 'connected' && (connectionStatus === 'unconfigured' || Boolean(personalData) || Boolean(syncError))} onMailTaken={() => setMailId(undefined)} /></Suspense>
 
   function navButton(item: { view: View; icon: IconName }) {
-    return <button key={item.view} className={shownView === item.view ? 'active' : ''} onClick={() => setView(item.view)} type="button" aria-current={shownView === item.view ? 'page' : undefined}><Icon name={item.icon} /><span>{item.view}</span>{updateReady && item.view === 'settings' && <i className="nav-dot" aria-hidden="true" />}</button>
+    return <button key={item.view} className={shownView === item.view ? 'active' : ''} onClick={() => setView(item.view)} type="button" aria-current={shownView === item.view ? 'page' : undefined}><Icon name={item.icon} /><span>{item.view}</span>{settingsDot && item.view === 'settings' && <i className="nav-dot" aria-hidden="true" />}</button>
   }
 
   return <div className={`app${docked ? ' is-docked' : ''}`}>
     <nav className="rail" aria-label="primary">
       {railPrimary.map(navButton)}
       {rail.onRail.map(navButton)}
-      {railMenu.length > 0 && <div className="rail-more"><Menu label="more" align="start" items={railMenu}><Icon name="more" /><span>more</span>{updateReady && <i className="nav-dot" aria-hidden="true" />}</Menu></div>}
+      {railMenu.length > 0 && <div className="rail-more"><Menu label="more" align="start" items={railMenu}><Icon name="more" /><span>more</span>{settingsDot && <i className="nav-dot" aria-hidden="true" />}</Menu></div>}
     </nav>
 
     <div className="main">
@@ -973,7 +978,7 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
 
       {shownView !== 'task' && <nav className="tabbar" aria-label="primary">
         {primaryViews.map(navButton)}
-        <Menu label="more" items={moreItems}><Icon name="more" /><span>more</span>{updateReady && <i className="nav-dot" aria-hidden="true" />}</Menu>
+        <Menu label="more" items={moreItems}><Icon name="more" /><span>more</span>{settingsDot && <i className="nav-dot" aria-hidden="true" />}</Menu>
       </nav>}
     </div>
 

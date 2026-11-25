@@ -8,6 +8,7 @@ import { GitHubError } from './githubVault'
 import { today } from '../format'
 import { isTripTool, runTripTool, tripTools } from '../trips/tripTools'
 import { isMailTool, mailTools, runMailTool, type MailReader } from './mailTools'
+import { isIssueApp, issueApps, issueBodyLimit, issueTitleLimit, type IssueStore } from '../issues/issues'
 import { forgetMemory, memoryFilePath, memoryIndexPath, memoryTypes, readMemoryIndex, saveMemory, validateMemoryName } from './memory'
 
 export type TaskSummary = Pick<Task, 'id' | 'title' | 'dueDate' | 'completed' | 'estimateMin' | 'priority' | 'projectId' | 'notes'>
@@ -60,7 +61,7 @@ export interface CompanionActions {
   recordMoney?(figures: Partial<Record<MoneyFigure, number>>, accounts: MoneyAccount[]): { saved: string[]; undo(): void }
 }
 
-export type ToolContext = { actions: CompanionActions; vault?: VaultStore; memoryFolder?: string; mail?: MailReader }
+export type ToolContext = { actions: CompanionActions; vault?: VaultStore; memoryFolder?: string; mail?: MailReader; issues?: IssueStore }
 export type Undo = () => Promise<void>
 /** A successful change carries the way back; reads and failures do not. */
 export type ToolOutcome = { ok: true; content: string; undo?: Undo } | { ok: false; error: string }
@@ -105,6 +106,10 @@ const textTools: AnthropicTool[] = [
   { name: 'draft_text', description: "Show a text message draft with a button that opens the user's messaging app with it filled in. Only when the user asks for a text to be drafted. Nothing is sent: they send it themselves from there.", input_schema: { type: 'object', properties: { body: { type: 'string', description: 'the message, exactly as it should be sent' }, to: { type: 'string', description: 'who it is for: a name, or a phone number when the user gave one' } }, required: ['body'] } },
 ]
 
+const issueTools: AnthropicTool[] = [
+  { name: 'report_issue', description: 'File a bug or a change request for one of the user\'s own apps as a GitHub issue, which an automated fixer picks up. Only when the user asks to report, fix or change something in the app itself. The issue is public: describe only how the app behaves and what should happen instead, with no names, no personal details, and nothing from their tasks, notes, mail, money or health. The user approves the exact words in the app before it is filed.', input_schema: { type: 'object', properties: { app: { type: 'string', enum: [...issueApps], description: 'my-brain is this app; my-mail is the mail app' }, title: { type: 'string', description: 'one plain line naming the problem or the change' }, body: { type: 'string', description: 'what happens now, what should happen, and where in the app' } }, required: ['app', 'title', 'body'] } },
+]
+
 /** The tools a message can do without. Tasks and goals always go along. */
 export type ToolGroup = 'notes' | 'trips' | 'calendar' | 'mail'
 
@@ -113,7 +118,7 @@ export function toolGroups(options: { hasVault: boolean; hasCalendar?: boolean; 
   return [...(options.hasVault ? ['notes', 'trips'] as const : []), ...(options.hasCalendar ? ['calendar'] as const : []), ...(options.hasMail ? ['mail'] as const : [])]
 }
 
-export function companionTools(options: { hasVault: boolean; hasCalendar?: boolean; hasMail?: boolean; skip?: ToolGroup[] }): AnthropicTool[] {
+export function companionTools(options: { hasVault: boolean; hasCalendar?: boolean; hasMail?: boolean; hasIssues?: boolean; skip?: ToolGroup[] }): AnthropicTool[] {
   const has = (group: ToolGroup) => toolGroups(options).includes(group) && !options.skip?.includes(group)
   return [
     ...(has('notes') ? [...noteTools, ...memoryTools] : []),
@@ -123,6 +128,7 @@ export function companionTools(options: { hasVault: boolean; hasCalendar?: boole
     ...moneyTools,
     ...textTools,
     ...(has('mail') ? mailTools : []),
+    ...(options.hasIssues ? issueTools : []),
   ]
 }
 
@@ -191,7 +197,7 @@ function requireVault(vault: VaultStore | undefined): VaultStore {
   return vault
 }
 
-async function run(name: string, input: Args, { actions, vault, memoryFolder = 'memory', mail }: ToolContext): Promise<RunResult> {
+async function run(name: string, input: Args, { actions, vault, memoryFolder = 'memory', mail, issues }: ToolContext): Promise<RunResult> {
   if (isTripTool(name)) return runTripTool(name, input, requireVault(vault), today())
   if (isMailTool(name)) {
     if (!mail) throw new Error('email is not connected')
@@ -340,6 +346,18 @@ async function run(name: string, input: Args, { actions, vault, memoryFolder = '
       if (!Object.keys(figures).length && !accounts.length) throw new Error('no numbers to save')
       const { saved, undo } = actions.recordMoney(figures, accounts)
       return done({ ok: true, saved }, async () => undo())
+    }
+    case 'report_issue': {
+      if (!issues) throw new Error('there is no issue token in settings')
+      const app = arg(input, 'app')
+      if (!isIssueApp(app)) throw new Error(`app must be one of ${issueApps.join(', ')}`)
+      const title = requireString(input, 'title')
+      const body = requireString(input, 'body')
+      // What was approved is what is filed: a report too long to file whole is refused, not cut.
+      if (title.length > issueTitleLimit) throw new Error(`title is longer than ${issueTitleLimit} characters`)
+      if (body.length > issueBodyLimit) throw new Error(`body is longer than ${issueBodyLimit} characters`)
+      const filed = await issues.file(app, title, body)
+      return done({ ok: true, app, number: filed.number, url: filed.url, next: 'the fixer on the work pc picks it up and opens a pull request; where it stands shows under settings.' })
     }
     case 'draft_text':
       requireString(input, 'body')

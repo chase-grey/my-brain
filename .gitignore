@@ -12,3 +12,6 @@ dist
 
 # the work side is its own private repo, checked out here (see README)
 work/
+
+# the auto-fixer keeps its lock, logs and scratch here (scripts/autofix.mjs)
+.autofix

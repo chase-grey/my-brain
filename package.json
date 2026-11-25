@@ -13,6 +13,8 @@
     "typecheck": "tsc -b",
     "lint": "oxlint",
     "local": "node scripts/local-apps.mjs",
+    "autofix": "node scripts/autofix-all.mjs",
+    "autofix:one": "node scripts/autofix.mjs",
     "bridge": "powershell -NoProfile -ExecutionPolicy Bypass -File work/bridge/work-bridge.ps1"
   },
   "dependencies": {

@@ -5,6 +5,7 @@ import type { CompanionActions } from './companionTools'
 import { money, moneyFigureLabels, type MoneyFigure } from '../domain/money'
 import { describeTripAction, isTripTool, tripReadTools } from '../trips/tripTools'
 import { mailToolNames } from './mailTools'
+import { isIssueApp, issueAppNames } from '../issues/issues'
 
 // How much UI an action gets is set by what it costs to be wrong, not by which tool ran.
 //   read:  nothing is shown; lists and reads leave no trace.
@@ -113,6 +114,12 @@ export async function describeAction(name: string, input: Record<string, unknown
     case 'draft_text': {
       const to = text(input, 'to')
       return { weight: 'light', title: 'draft a text', done: to ? `text for ${to}` : 'text', fields: [...(to ? [{ label: 'to', value: to }] : []), { label: 'text', value: text(input, 'body') }] }
+    }
+    case 'report_issue': {
+      // Heavy: it is published where anyone can read it, so every word that goes is on the card first.
+      const title = text(input, 'title')
+      const app = input.app
+      return { weight: 'heavy', title: `file issue ${quote(title)}`, done: `filed issue ${quote(title)}`, fields: [{ label: 'app', value: isIssueApp(app) ? issueAppNames[app] : String(app ?? '') }, { label: 'issue', value: text(input, 'body') }, { label: 'seen by', value: 'anyone on github' }] }
     }
     case 'save_memory': {
       const name = text(input, 'name')
