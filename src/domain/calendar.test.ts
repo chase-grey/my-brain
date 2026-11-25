@@ -44,6 +44,8 @@ describe('calendar', () => {
     expect(freeNow(blocks, at('19:30'))).toEqual({ freeMin: 90, nextStart: undefined })
     // An event after 9pm is past the day's end, so it does not shorten the stretch.
     expect(freeNow([block('late', '2026-11-02T21:30:00', '2026-11-02T22:00:00')], at('20:00'))).toEqual({ freeMin: 60, nextStart: undefined })
+    // Neither does one shown as free.
+    expect(freeNow([{ ...block('hold', '2026-11-02T12:30:00', '2026-11-02T13:30:00'), free: true }, block('sync', '2026-11-02T14:00:00', '2026-11-02T14:30:00')], at('12:45'))).toEqual({ freeMin: 75, nextStart: '2026-11-02T14:00:00' })
     // An all-day event holds no time.
     expect(freeNow([blocks[0]], at('12:00'))).toEqual({ freeMin: 540, nextStart: undefined })
   })

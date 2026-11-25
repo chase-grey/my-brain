@@ -1,4 +1,5 @@
 import type { ProviderTask } from '../domain/types'
+import type { CalendarBlock } from './calendarGraphProvider'
 import type { NewProviderTask, ProviderTaskChanges, TaskProvider } from './taskProvider'
 
 type BridgeTask = {
@@ -40,6 +41,12 @@ export class WorkBridgeProvider implements TaskProvider {
 
   async status(): Promise<WorkStatus> {
     return await this.request<WorkStatus>('/status')
+  }
+
+  /** Work events from start up to end, both local dates such as 2026-11-02, read from Outlook on the work pc. */
+  async events(start: string, end: string): Promise<CalendarBlock[]> {
+    const { events } = await this.request<{ events: CalendarBlock[] }>(`/calendar?start=${start}&end=${end}`)
+    return events.map(({ id, subject, start, end, isAllDay, free }) => ({ id, subject, start, end, isAllDay: Boolean(isAllDay), free: Boolean(free) }))
   }
 
   async listTasks(): Promise<WorkProviderTask[]> {

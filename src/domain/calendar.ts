@@ -46,11 +46,11 @@ export function dayOver(now: Date = new Date()): boolean {
 /** What this moment holds: the day is over, an event is on until a time, or it is clear for some minutes. */
 export type FreeNow = { dayOver: true } | { busyUntil: string } | { freeMin: number; nextStart?: string }
 
-/** Back-to-back events count as one. With nothing before the day's end, the clear stretch runs to it. All-day events hold no time. */
+/** Back-to-back events count as one. With nothing before the day's end, the clear stretch runs to it. All-day events and ones shown as free hold no time. */
 export function freeNow(blocks: CalendarBlock[], now: Date = new Date()): FreeNow {
   if (dayOver(now)) return { dayOver: true }
   const at = now.getTime()
-  const timed = blocks.filter((block) => !block.isAllDay).sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime())
+  const timed = blocks.filter((block) => !block.isAllDay && !block.free).sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime())
   let busyUntil: CalendarBlock | undefined
   for (const block of timed) {
     const cursor = busyUntil ? new Date(busyUntil.end).getTime() : at

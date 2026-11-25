@@ -7,6 +7,8 @@ export type CalendarBlock = {
   end: string
   isAllDay: boolean
   webLink?: string
+  /** Shown as free in the calendar: a hold that keeps no time. Only the work calendar says. */
+  free?: boolean
 }
 
 type GraphEvent = {

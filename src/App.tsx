@@ -498,6 +498,16 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
     await syncGlance(data)
   }
 
+  /** The work calendar is a glance like the personal one: its failure is said, and never blocks the task sync. */
+  async function syncWorkCalendar(): Promise<void> {
+    try {
+      setCalendarEvents(await workBridge.events(currentDay, addDays(currentDay, 7)))
+      setCalendarRead(true)
+    } catch (error) {
+      setSyncError(`calendar: ${workErrorMessage(error)}`)
+    }
+  }
+
   async function syncWork(): Promise<void> {
     if (activeDomain !== 'work') return
     setSyncing(true)
@@ -508,6 +518,7 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
       workSyncedAt.current = Date.now()
       setConnectionStatus('connected')
       setAccountName('outlook tasks through the work bridge')
+      void syncWorkCalendar()
     } catch (error) {
       setConnectionStatus('disconnected')
       setSyncError(workErrorMessage(error))
@@ -889,7 +900,7 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
           onFloorNight={() => setProduct((current) => ({ ...current, dayOverrides: [...current.dayOverrides, { date: currentDay, domain: activeDomain, kind: 'floor' }] }))}
           onStrategic={(minutes) => setProduct((current) => ({ ...current, activities: [...current.activities, { id: newId('activity'), domain: activeDomain, kind: 'strategic', occurredAt: new Date().toISOString(), minutes }] }))}
           untriaged={untriaged} openCount={openTasks.length} openMin={openEstimate} onToggle={toggleComplete} onOpen={editTask}
-          calendar={activeDomain === 'personal' ? eventsOn(calendarEvents, currentDay) : []} inbox={activeDomain === 'personal' ? inboxCounts : undefined} mailAppUrl={activeDomain === 'personal' ? settings.mailAppUrl : ''} />}
+          calendar={eventsOn(calendarEvents, currentDay)} inbox={activeDomain === 'personal' ? inboxCounts : undefined} mailAppUrl={activeDomain === 'personal' ? settings.mailAppUrl : ''} />}
         {shownView === 'dashboard' && <WorkScreens currentDay={currentDay} />}
         {shownView === 'progress' && <ProgressView domain={activeDomain} product={product} currentDay={currentDay} heldEvents={heldEvents} onProduct={setProduct} onGoals={() => setView('goals')} onReview={reviews.open} readMoney={activeDomain === 'personal' ? moneyReader(settings) : undefined} />}
         {shownView === 'chat' && chat}
