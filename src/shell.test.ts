@@ -24,3 +24,8 @@ it('lays the tab bar on the ground in dark and pads it past the navigation bar',
   expect(bar).toMatch(/background:\s*light-dark\(var\(--surface\),\s*var\(--bg\)\)/)
   expect(bar).toContain('env(safe-area-inset-bottom)')
 })
+
+it('holds the page still at its ends, so the tab bar never drags with it', () => {
+  const page = /^html, body \{[^}]*\}/m.exec(css)?.[0] ?? ''
+  expect(page).toMatch(/overscroll-behavior(-y)?:\s*none/)
+})

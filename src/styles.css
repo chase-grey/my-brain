@@ -21,7 +21,7 @@
 }
 
 *, *::before, *::after { box-sizing: border-box; }
-html, body { margin: 0; min-height: 100%; }
+html, body { margin: 0; min-height: 100%; overscroll-behavior-y: none; } /* the page never stretches or drags past its ends, so the bar at the bottom edge stays put (~/.claude/patterns/android-nav-bar.md) */
 body { min-width: 320px; }
 h1, h2, h3, p, ul { margin: 0; }
 ul { padding: 0; list-style: none; }
