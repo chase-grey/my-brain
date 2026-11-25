@@ -55,4 +55,9 @@ describe('afterReloadToast', () => {
   it('says you are current when the reload landed the same build', () => {
     expect(afterReloadToast('abc1234', 'abc1234')).toBe('you’re on the latest version')
   })
+
+  it('says the restart failed when a newer build was found and the same one came back', () => {
+    expect(afterReloadToast('abc1234', 'abc1234', true)).toBe('couldn’t update')
+    expect(afterReloadToast('abc1234', 'def5678', true)).toBe('updated to def5678')
+  })
 })

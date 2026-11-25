@@ -19,6 +19,8 @@ export const idleMs = 5 * 60_000
 const returnCheckMs = 60_000
 /** An app left open asks this often. */
 const backgroundCheckMs = 30 * 60_000
+/** A restart from the button that has not left the page after this long has failed, and says so. */
+const moveWaitMs = 8_000
 
 // --- is there a newer build ---------------------------------------------------
 
@@ -165,10 +167,14 @@ export function takeResumePlace(): string | null {
   }
 }
 
-/** The toast for the load after a reload the settings button asked for. Null when this load was not one of those. */
-export function afterReloadToast(from: string | null, now: string): string | null {
+/**
+ * The toast for the load after a reload the settings button asked for. Null when this load was not one of those.
+ * Landing on the build it left, when a newer one had been found, is a restart that did not work.
+ */
+export function afterReloadToast(from: string | null, now: string, foundNewer = false): string | null {
   if (from == null) return null
-  return from === now ? 'you’re on the latest version' : `updated to ${now}`
+  if (from === now) return foundNewer ? 'couldn’t update' : 'you’re on the latest version'
+  return `updated to ${now}`
 }
 
 function reload(announce: boolean): void {
@@ -188,18 +194,24 @@ function reload(announce: boolean): void {
     // Blocked storage costs only the toast and the place.
   }
   if (!source) return window.location.reload()
-  void source.move().then(() => window.location.reload(), () => { set({ checking: false }); showUpdateToast('couldn’t update') })
+  const failed = () => { set({ checking: false }); showUpdateToast('couldn’t update') }
+  // The button always answers: a move that never comes back, or a reload that never happens, says so too.
+  const stuck = announce ? setTimeout(failed, moveWaitMs) : undefined
+  if (announce) set({ checking: true })
+  void source.move().then(() => window.location.reload(), () => { clearTimeout(stuck); failed() })
 }
 
 function announceReload(): void {
   let from: string | null = null
+  let foundNewer = false
   try {
     from = sessionStorage.getItem(fromKey)
     sessionStorage.removeItem(fromKey)
+    foundNewer = sessionStorage.getItem(reloadedForKey) != null
   } catch {
     return
   }
-  const text = afterReloadToast(from, APP_COMMIT)
+  const text = afterReloadToast(from, APP_COMMIT, foundNewer)
   if (text) showUpdateToast(text)
 }
 
