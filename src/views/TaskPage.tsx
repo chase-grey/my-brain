@@ -11,7 +11,7 @@ function toggleValue<T>(values: T[], value: T): T[] {
   return values.includes(value) ? values.filter((item) => item !== value) : [...values, value]
 }
 
-export function TaskPage({ domain: initialDomain, existingTask, guess, projects, onAdd, onUpdate, onDelete, onNotMine, onCancel }: {
+export function TaskPage({ domain: initialDomain, existingTask, guess, projects, onAdd, onUpdate, onDelete, onDone, onNotMine, onCancel }: {
   domain: Domain
   existingTask?: Task
   /** What the ai made of a task still to be sorted. It fills the form; saving is what confirms it. */
@@ -20,11 +20,13 @@ export function TaskPage({ domain: initialDomain, existingTask, guess, projects,
   onAdd: (task: Task) => void
   onUpdate: (task: Task) => void
   onDelete: (id: string) => void
+  onDone: (id: string) => void
   onNotMine: (id: string) => void
   onCancel: () => void
 }) {
   const domain = existingTask?.domain ?? initialDomain
   const untriaged = existingTask?.metadataComplete === false
+  const doneAlready = existingTask ? (existingTask.recurrence ? existingTask.lastCompletedDate === today() : existingTask.completed) : true
   const start = untriaged ? guess : undefined
   const [title, setTitle] = useState(existingTask?.title ?? '')
   const [notes, setNotes] = useState(existingTask?.notes ?? '')
@@ -80,6 +82,7 @@ export function TaskPage({ domain: initialDomain, existingTask, guess, projects,
       <button className="icon-button" type="button" aria-label="back" onClick={onCancel}><Icon name="back" /></button>
       <h1>{existingTask ? (untriaged ? 'sort task' : 'edit task') : 'new task'}</h1>
       {existingTask && <Menu label="task options" items={[
+        ...(doneAlready ? [] : [{ label: 'mark done', onSelect: () => onDone(existingTask.id) }]),
         ...(untriaged ? [{ label: 'not mine', onSelect: () => onNotMine(existingTask.id) }] : []),
         { label: 'delete', onSelect: () => onDelete(existingTask.id) },
       ]} />}

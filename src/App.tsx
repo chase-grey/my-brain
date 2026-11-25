@@ -790,6 +790,12 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
     setView('today')
   }
 
+  function finishTask(id: string) {
+    completeTask(id)
+    setEditingTaskId(undefined)
+    setView('today')
+  }
+
   function delegateTask(id: string): void {
     const source = tasksRef.current.find((task) => task.id === id)
     if (!source) return
@@ -921,7 +927,7 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
         {shownView === 'journal' && <Suspense fallback={<header className="view-head"><h1>journal</h1></header>}><JournalView key={activeDomain} domain={activeDomain} vault={activeDomain === 'personal' ? tripVault ?? (connectionStatus === 'connected' ? personalData?.notes : undefined) : workJournal} onSettings={() => setView('settings')} onChat={(attachment) => { setChatAttachment(attachment); setView('chat') }} /></Suspense>}
         {shownView === 'trips' && <TripsView vault={tripVault} currentDay={currentDay} onSettings={() => setView('settings')} />}
         {shownView === 'settings' && <SettingsView domain={activeDomain} accountName={accountName} connectionStatus={connectionStatus} settings={settings} syncing={syncing} syncError={syncError} canInstall={install.canPrompt} onInstall={() => void install.install()} onConnect={connectPersonal} onDisconnect={disconnectPersonal} onSync={() => { void (activeDomain === 'work' ? syncWork() : syncPersonal(personalData, true)) }} onSettings={changeSettings} account={account} onAccount={markAccountChanged} />}
-        {shownView === 'task' && <TaskPage key={editingTaskId ?? 'new'} domain={activeDomain} existingTask={tasks.find((task) => task.id === editingTaskId)} guess={editingTaskId ? guesses[editingTaskId] : undefined} projects={activeProjects} onAdd={addTask} onUpdate={updateTask} onDelete={deleteTask} onNotMine={delegateTask} onCancel={() => { setEditingTaskId(undefined); setView('today') }} />}
+        {shownView === 'task' && <TaskPage key={editingTaskId ?? 'new'} domain={activeDomain} existingTask={tasks.find((task) => task.id === editingTaskId)} guess={editingTaskId ? guesses[editingTaskId] : undefined} projects={activeProjects} onAdd={addTask} onUpdate={updateTask} onDelete={deleteTask} onDone={finishTask} onNotMine={delegateTask} onCancel={() => { setEditingTaskId(undefined); setView('today') }} />}
       </div>
 
       {shownView !== 'task' && <nav className="tabbar" aria-label="primary">
