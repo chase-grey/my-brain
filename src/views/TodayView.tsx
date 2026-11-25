@@ -2,6 +2,7 @@ import type { CalendarBlock } from '../data/calendarGraphProvider'
 import type { InboxCounts } from '../data/mailGraphProvider'
 import { timeRange } from '../domain/calendar'
 import { isDoneToday } from '../domain/personalNow'
+import { localMoment, remindHint, remindLabel, remindedBy, upcoming } from '../domain/remind'
 import type { buildNowPlan } from '../domain/personalNow'
 import { completedParts, dueParts } from '../domain/habits'
 import { placeOptions, priorityLabels, type TaskGuess } from '../domain/taskGuess'
@@ -18,7 +19,7 @@ export const energyOptions: { value: Energy; label: string }[] = [
 ]
 
 /** A guess in the words the sort form uses, for the line under a task waiting to be sorted. */
-export function guessLine(guess: TaskGuess, domain: Domain, projects: Pick<Project, 'id' | 'title'>[]): string {
+export function guessLine(guess: TaskGuess, domain: Domain, projects: Pick<Project, 'id' | 'title'>[], now = localMoment()): string {
   const personal = domain === 'personal'
   return [
     duration(guess.estimateMin),
@@ -27,11 +28,13 @@ export function guessLine(guess: TaskGuess, domain: Domain, projects: Pick<Proje
     ...(personal && !guess.storeType ? placeOptions.filter((option) => guess.place?.includes(option.value)).map((option) => option.label) : []),
     personal && guess.storeType && (guess.storeType === 'other' ? 'store' : storeOptions.find((store) => store.value === guess.storeType)?.shortLabel.toLowerCase()),
     projects.find((project) => project.id === guess.projectId)?.title,
+    personal && upcoming(guess.remindAt, now) && `remind ${remindLabel(guess.remindAt!, now)}`,
   ].filter(Boolean).join(' · ')
 }
 
 export function commitmentHint(task: Task, currentDay: string, place: Place): string | undefined {
   if (isDoneToday(task, currentDay)) return undefined
+  if (remindedBy(task, currentDay)) return remindHint(task.remindAt!, currentDay)
   if (task.place?.length && !task.place.includes(place)) return task.place.includes('home') ? 'when you’re home' : 'when you’re at work'
   if (task.dueDate && task.dueDate < currentDay) return 'overdue'
   if (task.timeWindow === 'morning') return new Date().getHours() >= 17 ? 'missed this morning' : 'this morning'

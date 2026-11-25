@@ -32,6 +32,8 @@ import { newId, today } from './format'
 import { Menu } from './ui'
 import { useKeyboardInset } from './useKeyboardInset'
 import { pushWidget, widgetSnapshot } from './native/widget'
+import { pushReminders } from './native/reminders'
+import { localMoment, remindersFor } from './domain/remind'
 import { syncPhoneRest } from './native/health'
 import { moneyBriefing } from './domain/money'
 import { moneyReader } from './companion/moneyRead'
@@ -301,6 +303,12 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
   useEffect(() => {
     void pushWidget(widgetSnapshot(activeDomain, commitments, currentDay, currentPlace))
   }, [activeDomain, commitments, currentDay, currentPlace])
+
+  // The android app holds every reminder still to come and gives it at its moment, open or not. Only the
+  // personal space sets them, so opening work never clears them.
+  useEffect(() => {
+    if (activeDomain === 'personal') void pushReminders(remindersFor(tasks, localMoment()))
+  }, [activeDomain, tasks])
 
   useEffect(() => {
     const clientId = configuredPersonalClientId()

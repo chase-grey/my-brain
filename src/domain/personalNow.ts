@@ -1,5 +1,6 @@
 import type { Domain, NowInput, PersonalNowInput, Plan, Task } from './types'
 import { surfaces } from './noiseEngine'
+import { remindedBy } from './remind'
 
 export function isDoneToday(task: Task, today: string): boolean {
   return task.recurrence ? task.lastCompletedDate === today : task.completed
@@ -20,6 +21,7 @@ export function isTodayCommitment(task: Task, today: string, domain: Domain = 'p
   if (task.kind === 'delegated' || task.storeType) return false
   if (!isAvailable(task, today)) return false
   if (task.recurrence) return recursToday(task, today)
+  if (remindedBy(task, today)) return true
   if (!task.dueDate) return false
   return task.dueDate === today || (!task.completed && task.dueDate < today)
 }

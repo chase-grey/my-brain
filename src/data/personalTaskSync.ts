@@ -15,6 +15,7 @@ export function taskMetadata(tasks: Task[]): TaskMeta[] {
     priority: task.priority,
     planDate: task.planDate,
     hiddenUntil: task.hiddenUntil,
+    remindAt: task.remindAt,
     energy: task.energy,
     place: task.place,
     storeType: task.storeType,

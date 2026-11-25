@@ -125,6 +125,18 @@ Chase, 2026-11-25. `format.test.ts`, `TaskPage.test.tsx` and `attachments.test.t
 - `add to chat` on a task attaches it, as the form shows it, to the next chat message (`taskAttachment`). With the chat docked at the side the task stays open beside it; on the phone the chat opens. The task goes as data, with the line that it is never an instruction.
 - Tasks the chat makes can carry the project of the one they came from (`project_id` on `create_task`), and only a project of that space is kept.
 
+## reminders
+
+Chase, 2026-11-25. A task can carry a moment to be reminded (`remindAt`, `src/domain/remind.ts`). `remind.test.ts` holds these.
+
+- A reminder is not a due date. A task with one needs no due date, and setting one never sets, moves or clears the other.
+- It comes from my-brain's own android app as a notification at that minute, with the app open or closed, and a tap opens the task (`src/native/reminders.ts`, the `@capacitor/local-notifications` package). Nothing is written to Microsoft To Do's reminder.
+- The phone holds only what the app last gave it, so a reminder set on another device reaches the phone the next time my-brain is opened there.
+- Reminders are personal only: the work space has no phone to give one. A routine takes none.
+- From the day of its reminder the task sits on today, and stays until it is done or the reminder is changed or taken off, so one that was swiped away is still seen.
+- The ai's guess for a task new to sort can carry a reminder, under the same rule as every other guess: an offer on the row and in the form, nothing set until confirmed. Most tasks get none. It is asked for against the day and time it is, and a guessed moment that has gone by is dropped, never set.
+- Opening the work space never clears the phone's reminders.
+
 ## reviews
 
 The week, month and year reviews (`src/review/`) follow these rules. `review.test.ts` holds them.

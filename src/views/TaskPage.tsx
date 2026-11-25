@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { shopsFromHome, storeOptions } from '../domain/shopping'
-import { taskAttachment, type Attachment } from '../companion/attachments'
+import type { Attachment } from '../companion/attachments'
+import { taskAttachment } from '../companion/attachments'
+import { localMoment, takesReminder, upcoming } from '../domain/remind'
 import { placeOptions, priorityLabels, type TaskGuess } from '../domain/taskGuess'
 import type { Domain, Energy, Place, Priority, Project, StoreType, Task } from '../domain/types'
 import { duration, newId, parseDuration, today } from '../format'
@@ -35,6 +37,8 @@ export function TaskPage({ domain: initialDomain, existingTask, guess, projects,
   const [notes, setNotes] = useState(existingTask?.notes ?? '')
   const [dueDate, setDueDate] = useState(existingTask?.dueDate ?? '')
   const [hiddenUntil, setHiddenUntil] = useState(existingTask?.hiddenUntil ?? '')
+  const reminds = takesReminder({ domain, recurrence: existingTask?.recurrence })
+  const [remindAt, setRemindAt] = useState(() => existingTask?.remindAt ?? upcoming(start?.remindAt, localMoment()) ?? '')
   // Any length can be typed. Words that are not a length keep the last one that was.
   const [timeText, setTimeText] = useState(() => duration(start?.estimateMin ?? existingTask?.estimateMin ?? 30))
   const [estimateMin, setEstimateMin] = useState(start?.estimateMin ?? existingTask?.estimateMin ?? 30)
@@ -75,7 +79,7 @@ export function TaskPage({ domain: initialDomain, existingTask, guess, projects,
     const id = existingTask?.id ?? newId('task')
     const task: Task = {
       ...existingTask, id, taskId: existingTask?.taskId ?? id, domain, title: cleanTitle, notes: notes || undefined,
-      dueDate: dueDate || undefined, hiddenUntil: hiddenUntil || undefined, completed: existingTask?.completed ?? false,
+      dueDate: dueDate || undefined, hiddenUntil: hiddenUntil || undefined, remindAt: reminds && remindAt ? remindAt : undefined, completed: existingTask?.completed ?? false,
       estimateMin, originalEstimateMin: existingTask?.originalEstimateMin ?? estimateMin, priority, energy,
       planDate: existingTask?.planDate ?? (showDetails ? today() : undefined),
       place: domain === 'personal' ? (places.length ? places : undefined) : ['office'],
@@ -107,6 +111,7 @@ export function TaskPage({ domain: initialDomain, existingTask, guess, projects,
           <Field label="due"><input type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} /></Field>
           <Field label="hide until"><input type="date" value={hiddenUntil} onChange={(event) => setHiddenUntil(event.target.value)} /></Field>
         </div>
+        {reminds && <Field label="remind me"><input type="datetime-local" value={remindAt} onChange={(event) => setRemindAt(event.target.value.slice(0, 16))} /></Field>}
         <div className="grid-2">
           <Field label="time"><input value={timeText} onChange={(event) => typeTime(event.target.value)} onFocus={(event) => event.target.select()} onBlur={() => setTimeText(duration(estimateMin))} autoComplete="off" autoCapitalize="off" enterKeyHint="done" /></Field>
           <Field label="priority"><select value={priority} onChange={(event) => setPriority(Number(event.target.value) as Priority)}><option value="1">critical</option><option value="2">high</option><option value="3">normal</option><option value="4">low</option></select></Field>

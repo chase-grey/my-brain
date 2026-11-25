@@ -34,6 +34,8 @@ export type TaskMeta = {
   priority: Priority
   planDate?: string
   hiddenUntil?: string
+  /** A moment to be reminded, on the phone's clock: 2026-11-30T07:00. Not a due date. */
+  remindAt?: string
   energy: Energy
   place?: Place[]
   storeType?: StoreType

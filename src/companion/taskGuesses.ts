@@ -50,7 +50,8 @@ export async function guessTasks(tasks: Task[], domain: Domain, projects: Projec
 /** A guess is made once for a task's wording and kept on the device. `on` is the day it was made. */
 export type KeptGuesses = Record<string, { title: string; on: string; guess: TaskGuess }>
 
-const storageKey = (domain: Domain) => `my-brain.${domain}.taskGuesses.v1`
+// v2: a guess can carry a reminder. The guesses kept before it could are made again.
+const storageKey = (domain: Domain) => `my-brain.${domain}.taskGuesses.v2`
 
 /** Guesses leave when their task is no longer waiting to be sorted, and in any case once they are old. */
 export function prunedGuesses(kept: KeptGuesses, waitingIds: ReadonlySet<string> | undefined, now: string): KeptGuesses {
@@ -70,6 +71,7 @@ export function loadGuesses(domain: Domain, now = new Date().toISOString()): Kep
 function saveGuesses(domain: Domain, kept: KeptGuesses): void {
   try {
     localStorage.setItem(storageKey(domain), JSON.stringify(kept))
+    localStorage.removeItem(`my-brain.${domain}.taskGuesses.v1`)
   } catch {
     // Guessed again next time.
   }

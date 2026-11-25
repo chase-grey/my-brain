@@ -87,4 +87,7 @@
     <!-- the rest slice reads sleep from health connect and screen time from the usage record; both are read only -->
     <uses-permission android:name="android.permission.health.READ_SLEEP" />
     <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" tools:ignore="ProtectedPermissions" />
+    <!-- a reminder shows at the minute it was set for. this one is granted without asking; the notifications
+         plugin brings its own for android 12, the notification permission, and the one that sets them again after a restart -->
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
 </manifest>

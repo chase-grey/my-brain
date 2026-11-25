@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import App from './App'
 import './styles.css'
 import { followAppLinks, isNativeApp } from './native/platform'
+import { followReminderTaps } from './native/reminders'
 import { APP_COMMIT, watchForUpdates } from './appUpdate'
 import { shellUpdates } from './native/update'
 import { applyAccent, loadAccent } from './accent'
@@ -32,6 +33,7 @@ function startApp(): void {
   )
 
   void followAppLinks()
+  void followReminderTaps()
 
   // The android shell carries its own copy of the app, so it looks at the release its builds are published to instead of a page.
   if (import.meta.env.PROD) watchForUpdates(isNativeApp() ? shellUpdates(APP_COMMIT) : undefined)

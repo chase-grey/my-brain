@@ -27,6 +27,17 @@ same hints as the today card, plus a talk button. The web app pushes the lines w
 and redraws every placed widget. Taps are `mybrain://` links: `mybrain://today`, `mybrain://task/<id>`,
 `mybrain://chat/talk`. `src/native/platform.ts` turns those into hash routes on launch and while the app is open.
 
+
+## reminders
+
+A task's `remind me` time (`src/domain/remind.ts`) becomes a notification from the app itself. Whenever the
+personal tasks change, `src/native/reminders.ts` hands the phone every open task whose reminder is still to come,
+through `@capacitor/local-notifications`: what the phone held before is dropped and the list is set again, so a
+changed time or a finished task never leaves an old one behind. The plugin keeps them through a restart of the
+phone. `USE_EXACT_ALARM` in the manifest lets them land on the minute without a trip to settings, and android asks
+once whether the app may notify, the first time there is a reminder to set. A tap opens `#task/<id>`. The small
+icon is `ic_stat_reminder`, named in `capacitor.config.ts`.
+
 ## sleep and screen time
 
 The rest slice reads the phone through the `Health` plugin (`src/native/health.ts` -> `HealthPlugin.java`). It only

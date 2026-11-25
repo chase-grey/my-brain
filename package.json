@@ -25,6 +25,7 @@
     "@capacitor-community/text-to-speech": "^8.0.2",
     "@capacitor/app": "^8.1.2",
     "@capacitor/core": "^8.6.0",
+    "@capacitor/local-notifications": "^8.3.1",
     "@tiptap/core": "^3.33.0",
     "@tiptap/extension-image": "^3.33.0",
     "@tiptap/extension-list": "^3.33.0",

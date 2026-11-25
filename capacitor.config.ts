@@ -17,6 +17,10 @@ const config: CapacitorConfig = {
     // microsoft's sign-in pages have to load inside the webview so their redirect can land back on the app.
     allowNavigation: ['login.microsoftonline.com', 'login.live.com', '*.microsoftonline.com', '*.live.com', '*.msauth.net', '*.msftauth.net'],
   },
+  plugins: {
+    // a task's reminder (src/native/reminders.ts) wears the bell in the status bar.
+    LocalNotifications: { smallIcon: 'ic_stat_reminder' },
+  },
 }
 
 export default config
