@@ -7,8 +7,9 @@ android {
         applicationId "com.chasegrey.mybrain"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        // The github build passes its run number, so each apk installs over the one before it.
+        versionCode((project.findProperty('versionCode') ?: 1) as int)
+        versionName((project.findProperty('versionName') ?: "1.0") as String)
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,7 +17,25 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    // The github build signs with the key kept in the repo's secrets. Without it, a build uses the local debug key.
+    def sharedKeystore = System.getenv('ANDROID_KEYSTORE_FILE')
+    signingConfigs {
+        shared {
+            if (sharedKeystore) {
+                storeFile file(sharedKeystore)
+                storeType 'pkcs12'
+                storePassword System.getenv('ANDROID_KEYSTORE_PASSWORD')
+                keyAlias 'mybrain'
+                keyPassword System.getenv('ANDROID_KEYSTORE_PASSWORD')
+            }
+        }
+    }
     buildTypes {
+        debug {
+            if (sharedKeystore) {
+                signingConfig signingConfigs.shared
+            }
+        }
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'

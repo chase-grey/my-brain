@@ -49,7 +49,15 @@ the shell asks for no SMS permission.
 
 ## building
 
-Needs Android Studio (or the SDK plus JDK 17+). Nothing on the build PC is required beyond Node for the web part.
+GitHub builds the app on every push to main (`.github/workflows/android.yml`) and replaces the apk on the
+`android` release, so the phone always installs from the same address:
+https://github.com/chase-grey/my-brain/releases/download/android/my-brain.apk. The work PC cannot run Android
+Studio (it is blocked there), so this is how the app gets built. Each build is signed with the key in the repo
+secrets `ANDROID_KEYSTORE_BASE64` and `ANDROID_KEYSTORE_PASSWORD`, which is what lets a new apk install over the
+last one and keep the app's data. The key exists only in those secrets; replacing it means uninstalling the app once.
+
+To build on a PC instead, it needs Android Studio (or the SDK plus JDK 21). Nothing else is required beyond Node
+for the web part.
 
 ```sh
 npm run build:android   # web build with base "/" then cap sync android
@@ -71,8 +79,8 @@ Studio or a signed APK sideloaded is enough; the internal testing track works if
    platform of the app behind `VITE_MICROSOFT_CLIENT_ID`. Inside the shell, sign-in uses the redirect flow in the
    webview and comes back to that origin. Without it, connecting Microsoft in the shell fails with a redirect
    mismatch.
-2. **Install Android Studio** on the PC that will build, open `android/`, let Gradle sync, plug in the phone with
-   USB debugging on, run.
+2. **Install the apk** on the phone from the address under building, allowing the browser to install apps the
+   first time.
 3. On the phone, long-press the home screen, add the **today** widget, and allow the microphone the first time the
    mic is tapped.
 4. On progress, open the rest slice, tap **connect sleep** and **allow screen time**, then set the two goals.
@@ -82,5 +90,3 @@ Studio or a signed APK sideloaded is enough; the internal testing track works if
 - The Anthropic key and GitHub token still live in web storage inside the shell, same as in the browser. Moving them
   into the Android keystore needs a secure-storage plugin and an async settings load.
 - The "hey ..." wake word and registering as the phone's assistant (step 4 of the plan).
-- Nothing here has been compiled: the build PC had no Android SDK or JDK when this was written. Expect small
-  fixes on the first Gradle build.
