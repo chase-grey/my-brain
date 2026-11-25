@@ -3,9 +3,10 @@ import { newPersonSettings, type DeviceAccount } from '../account'
 import { providerOf, providers, trimBaseUrl, type ProviderId } from '../companion/aiProvider'
 import { configuredPersonalClientId, createPersonalGraphData, type PersonalGraphData } from '../data/personalGraphData'
 import { openInChrome, useInstallPrompt } from '../installPrompt'
-import { loadSettings, type AiMode, type AppSettings } from '../settings'
+import { defaultSettings, loadSettings, type AiMode, type AppSettings } from '../settings'
 import { accountFile, accountFileFrom, mergeAccountFile, type AccountFile } from '../settingsSync'
-import { Field, Segmented } from '../ui'
+import { appOffers, saveGuide, uses, type Use } from '../tour'
+import { Chips, Field, Segmented } from '../ui'
 
 /** How setup ended: a new account opens on chat with a request typed, when it has a key to answer it. */
 export type WelcomeFinish = { kickoff?: string }
@@ -59,8 +60,19 @@ export function aiSettings(answers: AiAnswers): Pick<AppSettings, 'aiMode' | 'ai
   }
 }
 
-type Step = 'start' | 'name' | 'chat'
-const questions: Step[] = ['name', 'chat']
+type Step = 'start' | 'name' | 'uses' | 'apps' | 'chat'
+
+/** The questions in order. The apps are offered only to someone who picked what one of them does. */
+export function welcomeQuestions(picked: readonly Use[]): Exclude<Step, 'start'>[] {
+  return ['name', 'uses', ...(appOffers(picked).length ? ['apps' as const] : []), 'chat']
+}
+
+/** What a new person starts with: the ai answers, and the mail app's address only for someone who picked email. */
+export function welcomeSettings(base: AppSettings, ai: AiAnswers, picked: readonly Use[]): AppSettings {
+  return { ...newPersonSettings({ ...base, ...aiSettings(ai) }), ...(picked.includes('email') ? { mailAppUrl: defaultSettings.mailAppUrl } : {}) }
+}
+
+const headings: Record<Exclude<Step, 'start'>, string> = { name: 'about you', uses: 'what for?', apps: 'get the apps', chat: 'use ai?' }
 
 /**
  * The first screens on a device that has never been set up.
@@ -74,12 +86,16 @@ const questions: Step[] = ['name', 'chat']
  * The ai step asks the workout tracker's questions in its order: whether to use ai at all, then a
  * key of your own or copy and paste into another ai app, then the provider (anthropic unless
  * changed), its key, and a jev key.
+ *
+ * Between the two a new person picks what the app is for (src/tour.ts). The picks choose the steps
+ * of the tour that follows, and picking email or workouts offers my mail or workout tracker.
  */
 export function WelcomeView({ onDone }: { onDone: (account: DeviceAccount, settings: AppSettings, finish?: WelcomeFinish) => void }) {
   const clientId = configuredPersonalClientId()
   const [step, setStep] = useState<Step>(clientId ? 'start' : 'name')
   const [name, setName] = useState('')
   const [ai, setAi] = useState<AiAnswers>(noAiAnswers)
+  const [picked, setPicked] = useState<Use[]>([])
   const answerAi = (change: Partial<AiAnswers>) => setAi((current) => ({ ...current, ...change }))
   const [installFirst, setInstallFirst] = useState(inIosBrowserTab)
   const [busy, setBusy] = useState(false)
@@ -147,11 +163,14 @@ export function WelcomeView({ onDone }: { onDone: (account: DeviceAccount, setti
   async function finish(): Promise<void> {
     if (busy) return
     const base = loadSettings('personal')
-    const settings = newPersonSettings({ ...base, ...aiSettings(ai) })
+    const settings = welcomeSettings(base, ai, picked)
     const now = new Date().toISOString()
     const account: DeviceAccount = { setupComplete: true, owner: false, name: name.trim(), workSpace: false, ...(data.current ? { updatedAt: now } : {}) }
     const ending: WelcomeFinish = settings.aiMode === 'key' ? { kickoff: kickoffText } : {}
+    // A new person is shown around. One of your own devices never gets here: it took its settings above.
+    const showAround = () => saveGuide({ uses: picked, seen: [], done: false })
     if (!data.current) {
+      showAround()
       onDone(account, settings, ending)
       return
     }
@@ -159,6 +178,7 @@ export function WelcomeView({ onDone }: { onDone: (account: DeviceAccount, setti
     setError(undefined)
     try {
       await data.current.sidecar.writeJson(accountFile, accountFileFrom(account, settings, now))
+      showAround()
       onDone(account, settings, ending)
     } catch (caught) {
       fail(caught, 'could not reach onedrive')
@@ -197,29 +217,35 @@ export function WelcomeView({ onDone }: { onDone: (account: DeviceAccount, setti
     </main>
   }
 
+  const questions = welcomeQuestions(picked)
+  const offers = appOffers(picked)
   const index = questions.indexOf(step)
   const last = step === 'chat'
   // Signed in, there is nothing to go back to: the account is already chosen.
-  const canGoBack = step === 'chat' || (Boolean(clientId) && !data.current)
-  const ready = step === 'name' ? name.trim().length > 0 : aiAnswered(ai)
+  const canGoBack = index > 0 || (Boolean(clientId) && !data.current)
+  const ready = step === 'name' ? name.trim().length > 0 : step === 'chat' ? aiAnswered(ai) : true
   const provider = providerOf(ai.provider)
   const next = () => {
     if (!ready || busy) return
     if (last) void finish()
-    else setStep('chat')
+    else setStep(questions[index + 1])
   }
   const nextLabel = last ? (busy ? 'starting' : 'start') : 'next'
 
   return <main className="welcome">
     <div className="welcome-top">
-      {canGoBack ? <button className="plain" type="button" disabled={busy} onClick={() => setStep(step === 'chat' ? 'name' : 'start')}>back</button> : <span />}
+      {canGoBack ? <button className="plain" type="button" disabled={busy} onClick={() => setStep(index > 0 ? questions[index - 1] : 'start')}>back</button> : <span />}
       <div className="welcome-dots" role="img" aria-label={`step ${index + 1} of ${questions.length}`}>
         {questions.map((item) => <span key={item} className={item === step ? 'is-current' : ''} />)}
       </div>
     </div>
-    <h1>{step === 'name' ? 'about you' : 'use ai?'}</h1>
+    <h1>{headings[step]}</h1>
     <form className="stack welcome-fill" onSubmit={(event) => { event.preventDefault(); next() }}>
       {step === 'name' && <Field label="name"><input autoComplete="given-name" autoFocus value={name} onChange={(event) => setName(event.target.value)} /></Field>}
+      {step === 'uses' && <Chips<Use> label="what for" options={uses.map((use) => ({ value: use, label: use }))} values={picked} onToggle={(use) => setPicked((current) => current.includes(use) ? current.filter((item) => item !== use) : uses.filter((item) => item === use || current.includes(item)))} />}
+      {step === 'apps' && <div className="welcome-apps">
+        {offers.map((offer) => <a key={offer.id} className="primary" href={offer.url} target="_blank" rel="noreferrer">get {offer.name}</a>)}
+      </div>}
       {step === 'chat' && <>
         <Segmented label="use ai" value={ai.want === undefined ? '' : ai.want ? 'yes' : 'no'} onChange={(value) => answerAi({ want: value === 'yes' })} options={[{ value: 'yes', label: 'yes' }, { value: 'no', label: 'not now' }]} />
         {ai.want && <div className="field"><span>how?</span><Segmented label="how" value={ai.path ?? ''} onChange={(value) => answerAi({ path: value as AiAnswers['path'] })} options={[{ value: 'key', label: 'my api key' }, { value: 'paste', label: 'copy & paste' }]} /></div>}
@@ -234,7 +260,7 @@ export function WelcomeView({ onDone }: { onDone: (account: DeviceAccount, setti
     </form>
     {error && <p className="note is-error" role="alert">{error}</p>}
     <div className="actions welcome-actions">
-      <button className="primary" type="button" disabled={!ready || busy} onClick={next}>{nextLabel}</button>
+      <button className={step === 'apps' ? 'plain' : 'primary'} type="button" disabled={!ready || busy} onClick={next}>{nextLabel}</button>
     </div>
   </main>
 }

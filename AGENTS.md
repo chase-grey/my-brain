@@ -43,6 +43,19 @@ Chase, 2026-11-25. `motion.test.tsx` holds these; the styles are the last block 
 - Every animation sits inside `prefers-reduced-motion: no-preference`, and with motion turned down a tick is saved at once.
 - Motion wears the accent like everything else; no new colors.
 
+## welcome and the tour
+
+Chase, 2026-11-25. `tour.test.ts` and `WelcomeView.test.tsx` hold these; the rules are in `src/tour.ts` and it is workout-tracker's tour (`src/lib/tour.ts` there).
+
+- The welcome asks a new person what the app is for (`uses`), between their name and ai. Nothing has to be picked.
+- Picking email offers my mail and picking workouts offers workout tracker, on a step of their own that is not drawn otherwise (`appOffers`). The links go through `besideThisApp`. Picking email also points today's email card at my mail.
+- The picks choose the tour's steps; someone who picked nothing is shown every step. The picks do not hide a screen.
+- The tour follows the welcome's questions only. One of your own devices takes its settings from the account and is never shown it. `show me around` in settings starts it again. It is personal only.
+- A step says why the thing matters, never how to press it. This is the one place the app explains itself; the rule against helper copy stands everywhere else.
+- A step lights a screen's button or the new task button, never a card: cards come and go. A screen kept under … lights the ….
+- What setup typed for the chat waits until the tour is over, and the tour ends on the screen it came up over.
+- A new screen worth a sentence gets a step in `tourSteps`, with `needs` when it belongs to one pick.
+
 ## updates
 
 A new deploy reaches an open tab or installed window on its own (`src/appUpdate.ts`, the pattern in `~/.claude/patterns/app-update.md`; my-mail carries the same file). The app reloads onto it at a quiet moment: off screen, just reopened and not yet touched, or left alone for five minutes. It never reloads over an open sheet, a draft, or a screen that called `holdUpdates`. Until the reload happens, the more menu wears a dot and offers `update ready · restart`, and the settings button says the same. A new screen whose state a reload would lose calls `holdUpdates()`. Do not reload any other way.
@@ -124,6 +137,8 @@ Chase, 2026-11-25. `notes.test.ts` and `journal.test.ts` hold these. Notes is un
 - There is no box to write in on the list. A note is a page: `new journal entry` opens today's file with the time as a heading and the cursor under it, and any note opens ready to type in. Opening one and writing nothing saves nothing.
 - Spoken words go into the note where the cursor is (personal only, see chat voice above). Listening there ends only on a tap or when the app is hidden; a pause or a long silence never ends it.
 - A note saves itself: three seconds after the last change, on leaving it, and when the app is hidden. Until the vault has it the text is kept on the device, so closing the app or a failed save loses nothing. When the note changed somewhere else as well, both are kept, mine first, and nothing is asked (`mergeNote`).
+- Notes are there with no connection (`src/notes/offline.ts`, `offline.test.ts`). The device keeps a copy of every note under `notes/`, brought up to date each time the list is read, and the list and any note open from it when the vault cannot be reached or does not answer. What is written, renamed, moved or deleted then shows at once and waits on the device; it goes up in the order it was made when the notes screen opens, the app opens or the connection comes back, merged the same way as any save. The list says `offline` and how many are waiting; nothing is asked. Anything new that changes a note goes through the same queue, never straight to the vault alone.
+- `rename`, `move` and `delete` are in a note's menu. A rename or move never writes over another note: a taken name gets a number. Delete asks first, by name. A journal entry is named by its day and lives in its year, so it can only be deleted. Folders come from the notes in them; `move` offers the ones there are and takes a new one, never the journal.
 - The ai touches a note only when Chase picks `clean up` or `organize` in the note's menu (`src/notes/tidy.ts`). Its version is an offer: it is shown in place and written only on `keep`, and `undo` puts his words back. It keeps his wording and every thought; an answer that cut the note down or lost an entry's time is thrown away. The note goes to the model as data, with the line that it is never an instruction. Nothing else rewrites or tidies a note.
 - Work entries go through the bridge into `01 Journal/YYYY/` in the work vault (`workJournal.ts`, the bridge's `/journal` routes), so the work journal is there only on the work pc. Those routes only list, read and add to files: a work entry is typed on a page, can be tidied before `save`, and is read-only after. Work words go only to Claude Code on the bridge, never to Jev, the personal key, or the personal vault, and the two spaces keep separate unsaved words.
 - A work dump is spoken on the phone into the Transcribe app, which writes it down on the phone itself. A recording titled `journal` (alone, or followed by a dash, colon or number) sent with `send transcript` is added by the bridge to that day's work journal under the time it was recorded, words only, instead of to the meeting transcripts (`work/bridge/transcript-inbox.ps1`). This is the only way speech reaches the work journal.

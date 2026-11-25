@@ -56,6 +56,8 @@ import { TaskPage } from './views/TaskPage'
 import { TripsView } from './views/TripsView'
 import { WorkScreens } from './views/WorkScreens'
 import { WelcomeView } from './views/WelcomeView'
+import { Tour } from './views/Tour'
+import { currentStep, stepsFor, useGuide } from './tour'
 import { SetupLanding, landsOnInstall } from './views/SetupLanding'
 import { openInChrome, useInstallPrompt } from './installPrompt'
 
@@ -234,6 +236,9 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
   accountRef.current = account
   const accountPush = useRef<ReturnType<typeof setTimeout>>(undefined)
   const install = useInstallPrompt()
+  // The tour is for the personal space, and what setup typed for the chat waits until it is over.
+  const guide = useGuide()
+  const touring = activeDomain === 'personal' && currentStep(stepsFor(guide, settings.aiMode !== 'off'), guide) !== undefined
   // A transcript shared from the phone lands on #share before the hash effect normalizes it; capture it once.
   const [sharing, setSharing] = useState(() => typeof location !== 'undefined' && location.hash === '#share')
   // A journal entry on its way into the chat: attached to the next message once the chat opens.
@@ -947,10 +952,10 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
   const railPrimary = primaryViews.filter((item) => !(docked && item.view === 'chat'))
   const rail = splitRail(moreViews, railSlots, railPrimary.length, menuFor([]).length)
   const railMenu = menuFor(rail.underMore)
-  const chat = <Suspense fallback={<header className="view-head"><h1>chat</h1></header>}><ChatView key={activeDomain} domain={activeDomain} settings={settings} actions={companionActions} summary={companionActions.todaySummary()} hasCalendar={activeDomain === 'personal' && connectionStatus === 'connected'} onSettings={() => setView('settings')} onChangeSettings={(change) => changeSettings((current) => ({ ...current, ...change }))} notesVault={connectionStatus === 'connected' ? personalData?.notes : undefined} userName={account.name} prefill={kickoff} onPrefilled={onKickoffUsed} attach={chatAttachment} onAttached={() => setChatAttachment(undefined)} docked={docked} talk={talk} onTalkStarted={() => setTalk(false)} mail={activeDomain === 'personal' && connectionStatus === 'connected' ? personalData?.mail : undefined} mailId={activeDomain === 'personal' ? mailId : undefined} mailOff={connectionStatus !== 'connected' && (connectionStatus === 'unconfigured' || Boolean(personalData) || Boolean(syncError))} onMailTaken={() => setMailId(undefined)} /></Suspense>
+  const chat = <Suspense fallback={<header className="view-head"><h1>chat</h1></header>}><ChatView key={activeDomain} domain={activeDomain} settings={settings} actions={companionActions} summary={companionActions.todaySummary()} hasCalendar={activeDomain === 'personal' && connectionStatus === 'connected'} onSettings={() => setView('settings')} onChangeSettings={(change) => changeSettings((current) => ({ ...current, ...change }))} notesVault={connectionStatus === 'connected' ? personalData?.notes : undefined} userName={account.name} prefill={touring ? undefined : kickoff} onPrefilled={onKickoffUsed} attach={chatAttachment} onAttached={() => setChatAttachment(undefined)} docked={docked} talk={talk} onTalkStarted={() => setTalk(false)} mail={activeDomain === 'personal' && connectionStatus === 'connected' ? personalData?.mail : undefined} mailId={activeDomain === 'personal' ? mailId : undefined} mailOff={connectionStatus !== 'connected' && (connectionStatus === 'unconfigured' || Boolean(personalData) || Boolean(syncError))} onMailTaken={() => setMailId(undefined)} /></Suspense>
 
   function navButton(item: { view: View; icon: IconName }) {
-    return <button key={item.view} className={shownView === item.view ? 'active' : ''} onClick={() => setView(item.view)} type="button" aria-current={shownView === item.view ? 'page' : undefined}><Icon name={item.icon} /><span>{item.view}</span>{settingsDot && item.view === 'settings' && <i className="nav-dot" aria-hidden="true" />}</button>
+    return <button key={item.view} data-tour={item.view} className={shownView === item.view ? 'active' : ''} onClick={() => setView(item.view)} type="button" aria-current={shownView === item.view ? 'page' : undefined}><Icon name={item.icon} /><span>{item.view}</span>{settingsDot && item.view === 'settings' && <i className="nav-dot" aria-hidden="true" />}</button>
   }
 
   return <div className={`app${docked ? ' is-docked' : ''}`}>
@@ -965,7 +970,7 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
         {showsWork(account) ? <div className="switch" role="group" aria-label="space">
           {(['personal', 'work'] as const).map((item) => <button aria-pressed={activeDomain === item} className={activeDomain === item ? 'selected' : ''} key={item} onClick={() => onDomain(item)} type="button">{item}</button>)}
         </div> : <span />}
-        {shownView !== 'task' && <button className="icon-button" type="button" aria-label="new task" title="new task" onClick={startAddingTask}><Icon name="plus" /></button>}
+        {shownView !== 'task' && <button className="icon-button" data-tour="new" type="button" aria-label="new task" title="new task" onClick={startAddingTask}><Icon name="plus" /></button>}
       </header>
 
       <div className={`content view-${shownView}${deckViews.includes(shownView) ? ' is-deck' : ''}`} ref={contentRef}>
@@ -1007,6 +1012,7 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
 
     {docked && <aside className="dock">{chat}</aside>}
     {reviews.overlay}
+    {touring && <Tour view={view} aiOn={settings.aiMode !== 'off'} onView={setView} />}
     <UpdateToast />
   </div>
 }

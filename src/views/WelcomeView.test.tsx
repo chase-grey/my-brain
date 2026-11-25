@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { aiAnswered, aiSettings, firstName, noAiAnswers, WelcomeView } from './WelcomeView'
+import { aiAnswered, aiSettings, firstName, noAiAnswers, welcomeQuestions, welcomeSettings, WelcomeView } from './WelcomeView'
+import { defaultSettings } from '../settings'
 import { SetupLanding, setupLanding } from './SetupLanding'
 
 describe('welcome', () => {
@@ -12,7 +13,20 @@ describe('welcome', () => {
     const html = renderToStaticMarkup(<WelcomeView onDone={() => {}} />)
     expect(html).toContain('about you')
     expect(html).toContain('name')
-    expect(html).toContain('step 1 of 2')
+    expect(html).toContain('step 1 of 3')
+  })
+
+  it('asks what the app is for, and offers the other apps only to someone who picked what they do', () => {
+    expect(welcomeQuestions([])).toEqual(['name', 'uses', 'chat'])
+    expect(welcomeQuestions(['tasks', 'notes'])).toEqual(['name', 'uses', 'chat'])
+    expect(welcomeQuestions(['email'])).toEqual(['name', 'uses', 'apps', 'chat'])
+    expect(welcomeQuestions(['workouts'])).toEqual(['name', 'uses', 'apps', 'chat'])
+  })
+
+  it('points today at my mail only for someone who picked email', () => {
+    const off = { ...noAiAnswers, want: false }
+    expect(welcomeSettings(defaultSettings, off, ['tasks']).mailAppUrl).toBe('')
+    expect(welcomeSettings(defaultSettings, off, ['email']).mailAppUrl).toBe(defaultSettings.mailAppUrl)
   })
 
   it('starts the name from the microsoft account', () => {

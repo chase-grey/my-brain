@@ -430,6 +430,19 @@ button.row-main { min-height: 3rem; }
 .welcome-dots span.is-current { background: var(--accent); }
 .welcome-sub { font-size: 0.85rem; font-weight: 500; color: var(--muted); }
 .welcome-fill .welcome-steps { flex: none; color: var(--text); }
+.welcome-apps { display: flex; flex-direction: column; gap: 0.6rem; }
+.welcome-apps a.primary { display: flex; align-items: center; justify-content: center; text-decoration: none; }
+
+/* the tour: a card over the app, the page dimmed by the lit box's own shadow */
+.tour { position: fixed; inset: 0; z-index: 50; padding-top: var(--top-inset); }
+.tour.is-dim { background: rgb(0 0 0 / 0.4); }
+.tour-spot { position: fixed; border-radius: 14px; outline: 2px solid var(--accent); box-shadow: 0 0 0 200vmax rgb(0 0 0 / 0.4); pointer-events: none; }
+.tour-card { position: fixed; width: min(22rem, calc(100vw - 1.5rem)); }
+.tour-step { padding: 1rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); box-shadow: 0 8px 24px rgb(0 0 0 / 0.22); }
+.tour-step header { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; }
+.tour-step h2 { font-size: 1rem; }
+.tour-step header span { color: var(--muted); font-size: 0.8rem; font-variant-numeric: tabular-nums; }
+.tour-step p { padding: 0.4rem 0 0.8rem; line-height: 1.5; }
 .share-qr { display: flex; flex-direction: column; align-items: center; gap: 0.6rem; padding: 0.85rem 0 0.5rem; }
 .share-qr .qr { width: 12rem; aspect-ratio: 1; padding: 0.5rem; border-radius: 10px; background: #fff; }
 .share-qr .qr svg { display: block; width: 100%; height: 100%; }
@@ -546,6 +559,7 @@ input, textarea, [contenteditable="true"] { caret-color: var(--accent); }
   .rail .menu[open] > .menu-list { transform-origin: bottom left; }
   .sheet[open] { animation: sheet-up 280ms cubic-bezier(0.2, 0.8, 0.2, 1); }
   .sheet[open]::backdrop { animation: fade-in 220ms ease-out; }
+  .tour-step { animation: rise-in 240ms cubic-bezier(0.2, 0.7, 0.2, 1) backwards; }
   @media (min-width: 48rem) { .sheet[open] { animation-name: sheet-pop; } }
 }
 @keyframes rise-in { from { opacity: 0; transform: translateY(8px); } }

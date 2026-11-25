@@ -7,6 +7,7 @@ import { exportFileName, exportVault, saveExport } from '../notes/exportNotes'
 import type { DeviceAccount } from '../account'
 import { providerOf, providers } from '../companion/aiProvider'
 import type { AiMode, AppSettings } from '../settings'
+import { loadGuide, restart, saveGuide } from '../tour'
 import { Card, Field, Segmented } from '../ui'
 import { AccentPicker } from './AccentPicker'
 import { IssuesCard } from './IssuesCard'
@@ -126,6 +127,7 @@ export function SettingsView({ domain, accountName, connectionStatus, settings, 
       <div className="actions row-actions">
         <button className={update.ready ? 'primary' : 'secondary'} disabled={update.checking} type="button" onClick={() => void checkForUpdate()}>{update.checking ? 'checking…' : update.ready ? (update.byHand ? 'update ready · install' : 'update ready · restart') : 'check for updates'}</button>
         {canInstall && <button className="primary" type="button" onClick={onInstall}>install on this device</button>}
+        {domain === 'personal' && <button className="secondary" type="button" onClick={() => saveGuide(restart(loadGuide()))}>show me around</button>}
       </div>
     </Card>
   </>
