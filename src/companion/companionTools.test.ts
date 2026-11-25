@@ -163,7 +163,7 @@ describe('companion tools', () => {
   it('builds app-shaped tasks and plan summaries', () => {
     const task = companionTask('personal', { title: 'call plumber', dueDate: '2026-11-06' }, '2026-10-30', 'id1')
     expect(task).toMatchObject({ id: 'id1', taskId: 'id1', domain: 'personal', estimateMin: 30, originalEstimateMin: 30, priority: 3, energy: 'shallow', planDate: '2026-10-30', metadataComplete: true, completed: false })
-    expect(companionTask('work', { title: 'x', estimateMin: 45, priority: 1 }, '2026-10-30', 'id2')).toMatchObject({ place: ['office'], needs: ['computer'], estimateMin: 45, priority: 1 })
+    expect(companionTask('work', { title: 'x', estimateMin: 45, priority: 1 }, '2026-10-30', 'id2')).toMatchObject({ place: ['office'], estimateMin: 45, priority: 1 })
     expect(companionTask('personal', { title: 'sand the rails', projectId: 'p-deck' }, '2026-10-30', 'id3').projectId).toBe('p-deck')
 
     const overdue: Task = { ...task, id: 'late', dueDate: '2026-10-01' }

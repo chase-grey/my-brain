@@ -386,7 +386,7 @@ export function companionTask(domain: Domain, input: NewTaskInput, today: string
   return {
     id, taskId: id, domain, title: input.title, notes: input.notes, dueDate: input.dueDate, projectId: input.projectId, completed: false,
     estimateMin, originalEstimateMin: estimateMin, priority, planDate: today, energy: 'shallow',
-    place: domain === 'work' ? ['office'] : undefined, needs: domain === 'work' ? ['computer'] : undefined,
+    place: domain === 'work' ? ['office'] : undefined,
     pinned: false, carries: 0, metadataComplete: true,
   }
 }

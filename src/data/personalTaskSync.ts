@@ -16,7 +16,6 @@ export function taskMetadata(tasks: Task[]): TaskMeta[] {
     hiddenUntil: task.hiddenUntil,
     energy: task.energy,
     place: task.place,
-    needs: task.needs,
     storeType: task.storeType,
     recurrence: task.recurrence,
     timeWindow: task.timeWindow,

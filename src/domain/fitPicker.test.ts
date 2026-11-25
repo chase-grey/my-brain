@@ -3,8 +3,8 @@ import { buildFitPlans } from './fitPicker'
 import type { Project, Task } from './types'
 
 const project: Project = { id: 'p', domain: 'personal', title: 'bike', status: 'active', rhythm: 'burst', drive: 'intrinsic', minBlockMin: 120, mode: 'tools' }
-const task: Task = { id: 't', taskId: 't', projectId: 'p', domain: 'personal', title: 'brakes', completed: false, estimateMin: 90, originalEstimateMin: 90, priority: 2, planDate: '2026-09-01', energy: 'deep', place: ['home'], needs: ['tools'], pinned: false, carries: 0 }
-const base = { domain: 'personal' as const, today: '2026-09-03', weeklyCapacityMin: 300, energy: 'deep' as const, place: 'home' as const, availableNeeds: ['tools'] as const }
+const task: Task = { id: 't', taskId: 't', projectId: 'p', domain: 'personal', title: 'brakes', completed: false, estimateMin: 90, originalEstimateMin: 90, priority: 2, planDate: '2026-09-01', energy: 'deep', place: ['home'], pinned: false, carries: 0 }
+const base = { domain: 'personal' as const, today: '2026-09-03', weeklyCapacityMin: 300, energy: 'deep' as const, place: 'home' as const }
 
 describe('fit picker', () => {
   it('uses only the selected space and its project metadata', () => {

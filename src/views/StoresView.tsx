@@ -26,7 +26,7 @@ export function StoresView({ activeStore, tasks, onStore, onToggle, onAdd }: {
       estimateMin: 5, originalEstimateMin: 5, priority: 3,
       energy: isOnline ? 'shallow' : 'errand',
       place: isOnline ? ['home'] : ['out'],
-      needs: isOnline ? ['computer'] : ['store'], storeType: activeStore,
+      storeType: activeStore,
       pinned: false, carries: 0, metadataComplete: true,
     })
     setTitle('')

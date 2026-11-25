@@ -1,4 +1,4 @@
-import type { Domain, Energy, Mode, Need, Place, Project, Task } from './types'
+import type { Domain, Energy, Mode, Place, Project, Task } from './types'
 import { surfaces } from './noiseEngine'
 
 export type FitInput = {
@@ -8,7 +8,6 @@ export type FitInput = {
   weeklyCapacityMin: number
   energy: Energy
   place: Place
-  availableNeeds: readonly Need[]
   currentMode?: Mode
 }
 
@@ -24,7 +23,6 @@ function eligible(task: Task, project: Project | undefined, input: FitInput): bo
   if (task.completed || !surfaces(task, input.today, input.weeklyCapacityMin)) return false
   if (task.energy !== input.energy) return false
   if (task.place?.length && !task.place.includes(input.place)) return false
-  if (task.needs?.some((need) => !input.availableNeeds.includes(need))) return false
   const minBlock = project?.rhythm === 'burst' ? project.minBlockMin ?? 0 : 0
   return input.availableMin >= minBlock && task.estimateMin <= input.availableMin
 }

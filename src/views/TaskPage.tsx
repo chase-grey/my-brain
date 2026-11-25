@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { storeOptions } from '../domain/shopping'
 import { taskAttachment, type Attachment } from '../companion/attachments'
-import { needOptions, placeOptions, priorityLabels, type TaskGuess } from '../domain/taskGuess'
-import type { Domain, Energy, Need, Place, Priority, Project, StoreType, Task } from '../domain/types'
+import { placeOptions, priorityLabels, type TaskGuess } from '../domain/taskGuess'
+import type { Domain, Energy, Place, Priority, Project, StoreType, Task } from '../domain/types'
 import { duration, newId, parseDuration, today } from '../format'
 import { Icon } from '../navIcons'
 import { Chips, Field, Menu, Segmented } from '../ui'
@@ -41,7 +41,6 @@ export function TaskPage({ domain: initialDomain, existingTask, guess, projects,
   const [priority, setPriority] = useState<Priority>(start?.priority ?? existingTask?.priority ?? 3)
   const [energy, setEnergy] = useState<Energy>(start?.energy ?? existingTask?.energy ?? 'shallow')
   const [places, setPlaces] = useState<Place[]>(start?.place ?? existingTask?.place ?? (domain === 'work' ? ['office'] : []))
-  const [needs, setNeeds] = useState<Need[]>(start?.needs ?? existingTask?.needs ?? (domain === 'work' ? ['computer'] : []))
   const [storeType, setStoreType] = useState<StoreType | ''>(start?.storeType ?? existingTask?.storeType ?? '')
   const [projectId, setProjectId] = useState(start?.projectId ?? existingTask?.projectId ?? '')
   const [showDetails, setShowDetails] = useState(Boolean(existingTask))
@@ -50,14 +49,10 @@ export function TaskPage({ domain: initialDomain, existingTask, guess, projects,
     setStoreType(next)
     if (next === 'amazon') {
       setPlaces((current) => [...current.filter((place) => place !== 'out'), ...(current.includes('home') ? [] : ['home' as const])])
-      setNeeds((current) => [...current.filter((need) => need !== 'store'), ...(current.includes('computer') ? [] : ['computer' as const])])
       setEnergy('shallow')
     } else if (next) {
       setPlaces((current) => current.includes('out') ? current : [...current, 'out'])
-      setNeeds((current) => current.includes('store') ? current : [...current, 'store'])
       setEnergy('errand')
-    } else {
-      setNeeds((current) => current.filter((need) => need !== 'store'))
     }
   }
 
@@ -84,7 +79,6 @@ export function TaskPage({ domain: initialDomain, existingTask, guess, projects,
       estimateMin, originalEstimateMin: existingTask?.originalEstimateMin ?? estimateMin, priority, energy,
       planDate: existingTask?.planDate ?? (showDetails ? today() : undefined),
       place: domain === 'personal' ? (places.length ? places : undefined) : ['office'],
-      needs: domain === 'personal' ? (needs.length ? needs : undefined) : ['computer'],
       storeType: domain === 'personal' && storeType ? storeType : undefined,
       projectId: projectId || undefined,
       pinned: existingTask?.pinned ?? false, carries: existingTask?.carries ?? 0,
@@ -120,7 +114,6 @@ export function TaskPage({ domain: initialDomain, existingTask, guess, projects,
         {domain === 'personal' && <>
           <div className="field"><span>energy</span><Segmented label="energy" options={energyOptions} value={energy} onChange={setEnergy} /></div>
           <div className="field"><span>where</span><Chips label="where" options={placeOptions} values={places} onToggle={(value) => setPlaces((current) => toggleValue(current, value))} /></div>
-          <div className="field"><span>needs</span><Chips label="needs" options={needOptions} values={needs} onToggle={(value) => setNeeds((current) => toggleValue(current, value))} /></div>
           <Field label="store"><select value={storeType} onChange={(event) => chooseStore(event.target.value as StoreType | '')}><option value="">none</option>{storeOptions.map((store) => <option key={store.value} value={store.value}>{store.shortLabel.toLowerCase()}</option>)}</select></Field>
         </>}
         {projects.length > 0 && <Field label="project"><select value={projectId} onChange={(event) => setProjectId(event.target.value)}><option value="">none</option>{projects.map((project) => <option key={project.id} value={project.id}>{project.title}</option>)}</select></Field>}

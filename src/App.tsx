@@ -143,7 +143,7 @@ function initialTasks(domain: Domain, owner: boolean): Task[] {
     })),
     {
       id: 'work-email-zero', taskId: 'work-email-zero', domain: 'work', title: 'clear email', completed: false,
-      estimateMin: 30, originalEstimateMin: 30, priority: 2, energy: 'shallow', place: ['office'], needs: ['computer'],
+      estimateMin: 30, originalEstimateMin: 30, priority: 2, energy: 'shallow', place: ['office'],
       mode: 'email', kind: 'execution', recurrence: 'weekdays-135', timeWindow: 'day', pinned: false, carries: 0, metadataComplete: true,
     },
   ]
@@ -281,7 +281,6 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
     weeklyCapacityMin: activeDomain === 'work' ? settings.workdayCapacityMin * 5 : settings.personalWeeklyCeilingMin,
     energy,
     place: energy === 'errand' ? 'out' : currentPlace,
-    availableNeeds: energy === 'errand' ? ['car', 'store', 'phone'] : currentPlace === 'office' ? ['computer', 'phone'] : ['computer', 'phone', 'tools'],
   }), [activeDomain, availableMin, currentDay, currentPlace, energy, openTasks, settings.personalWeeklyCeilingMin, settings.workdayCapacityMin])
   const openEstimate = openTasks.reduce((sum, task) => sum + task.estimateMin, 0)
   const activeCommitment = [...product.commitments].reverse().find((item) => item.domain === activeDomain)

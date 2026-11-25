@@ -8,17 +8,16 @@ const input = {
   weeklyCapacityMin: 300,
   energy: 'shallow' as const,
   place: 'home' as const,
-  availableNeeds: ['computer', 'phone'] as const,
 }
 
 describe('personal Now vertical slice', () => {
   it('narrows surfaced work to a complete plan that fits the stated window', () => {
     const result = buildPersonalNowPlan(
       [
-        task({ id: 'planned', taskId: 'planned', title: 'Book dentist', planDate: input.today, estimateMin: 15, priority: 2, needs: ['phone'] }),
-        task({ id: 'pinned', taskId: 'pinned', title: 'Order brake pads', pinned: true, estimateMin: 30, priority: 3, needs: ['computer'] }),
+        task({ id: 'planned', taskId: 'planned', title: 'Book dentist', planDate: input.today, estimateMin: 15, priority: 2 }),
+        task({ id: 'pinned', taskId: 'pinned', title: 'Order brake pads', pinned: true, estimateMin: 30, priority: 3 }),
         task({ id: 'future', taskId: 'future', title: 'Paint hallway', planDate: '2026-09-02', estimateMin: 45, priority: 1 }),
-        task({ id: 'tools', taskId: 'tools', title: 'Fix bike', pinned: true, estimateMin: 45, priority: 1, needs: ['tools'] }),
+        task({ id: 'tools', taskId: 'tools', title: 'Fix bike', pinned: true, estimateMin: 45, priority: 1, place: ['out'] }),
       ],
       input,
     )
@@ -88,24 +87,23 @@ describe('personal Now vertical slice', () => {
   })
 
   it('keeps work and personal plans separate', () => {
-    const personal = task({ id: 'personal', taskId: 'personal', pinned: true, needs: ['phone'] })
-    const work = task({ id: 'work', taskId: 'work', domain: 'work', pinned: true, place: ['office'], needs: ['computer'] })
+    const personal = task({ id: 'personal', taskId: 'personal', pinned: true })
+    const work = task({ id: 'work', taskId: 'work', domain: 'work', pinned: true, place: ['office'] })
 
     expect(buildNowPlan([personal, work], { ...input, domain: 'personal', place: 'office' }).tasks.map((item) => item.id)).toEqual(['personal'])
     expect(buildNowPlan([personal, work], { ...input, domain: 'work', place: 'office' }).tasks.map((item) => item.id)).toEqual(['work'])
   })
 
-  it('shows personal phone and computer tasks while at work', () => {
-    const phone = task({ id: 'phone', taskId: 'phone', pinned: true, needs: ['phone'] })
-    const computer = task({ id: 'computer', taskId: 'computer', pinned: true, needs: ['computer'] })
+  it('shows personal tasks with no place, and not ones for home, while at work', () => {
+    const phone = task({ id: 'phone', taskId: 'phone', pinned: true })
+    const computer = task({ id: 'computer', taskId: 'computer', pinned: true, place: ['home', 'office'] })
     const home = task({ id: 'home', taskId: 'home', pinned: true, place: ['home'] })
-    const tools = task({ id: 'tools', taskId: 'tools', pinned: true, needs: ['tools'] })
+    const tools = task({ id: 'tools', taskId: 'tools', pinned: true, place: ['home', 'out'] })
 
     const result = buildNowPlan([phone, computer, home, tools], {
       ...input,
       domain: 'personal',
       place: 'office',
-      availableNeeds: ['computer', 'phone'],
     })
 
     expect(result.tasks.map((item) => item.id)).toEqual(['computer', 'phone'])

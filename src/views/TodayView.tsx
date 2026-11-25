@@ -4,7 +4,7 @@ import { timeRange } from '../domain/calendar'
 import { isDoneToday } from '../domain/personalNow'
 import type { buildNowPlan } from '../domain/personalNow'
 import { completedParts, dueParts } from '../domain/habits'
-import { needOptions, placeOptions, priorityLabels, type TaskGuess } from '../domain/taskGuess'
+import { placeOptions, priorityLabels, type TaskGuess } from '../domain/taskGuess'
 import { storeOptions } from '../domain/shopping'
 import type { Domain, Energy, Habit, HabitEntry, Place, Project, Task } from '../domain/types'
 import { duration, weekday } from '../format'
@@ -24,7 +24,7 @@ export function guessLine(guess: TaskGuess, domain: Domain, projects: Pick<Proje
     duration(guess.estimateMin),
     guess.priority !== 3 && priorityLabels[guess.priority],
     personal && !guess.storeType && energyOptions.find((option) => option.value === guess.energy)?.label,
-    ...(personal && !guess.storeType ? [...placeOptions.filter((option) => guess.place?.includes(option.value)), ...needOptions.filter((option) => guess.needs?.includes(option.value))].map((option) => option.label) : []),
+    ...(personal && !guess.storeType ? placeOptions.filter((option) => guess.place?.includes(option.value)).map((option) => option.label) : []),
     personal && guess.storeType && (guess.storeType === 'other' ? 'store' : storeOptions.find((store) => store.value === guess.storeType)?.shortLabel.toLowerCase()),
     projects.find((project) => project.id === guess.projectId)?.title,
   ].filter(Boolean).join(' · ')

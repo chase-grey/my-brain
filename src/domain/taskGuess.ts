@@ -1,4 +1,4 @@
-import type { Domain, Energy, Need, Place, Priority, Project, StoreType, Task } from './types'
+import type { Domain, Energy, Place, Priority, Project, StoreType, Task } from './types'
 
 /**
  * What a task new to sort probably is, guessed from its words by the cheapest model. A guess is only ever an
@@ -9,7 +9,6 @@ export type TaskGuess = {
   priority: Priority
   energy: Energy
   place?: Place[]
-  needs?: Need[]
   storeType?: StoreType
   projectId?: string
 }
@@ -19,12 +18,6 @@ export const placeOptions: { value: Place; label: string }[] = [
   { value: 'home', label: 'at home' },
   { value: 'office', label: 'at work' },
   { value: 'out', label: 'out' },
-]
-export const needOptions: { value: Need; label: string }[] = [
-  { value: 'computer', label: 'computer' },
-  { value: 'phone', label: 'phone' },
-  { value: 'tools', label: 'tools' },
-  { value: 'car', label: 'car' },
 ]
 export const priorityLabels: Record<Priority, string> = { 1: 'critical', 2: 'high', 3: 'normal', 4: 'low' }
 
@@ -41,7 +34,6 @@ export function guessPrompt(domain: Domain, projects: Pick<Project, 'title'>[]):
     ...(domain === 'personal' ? [
       '"energy": "deep" for something that takes focus or a long stretch, "shallow" for something light and quick, "errand" for something done out of the house',
       '"where": the places it can be done, any of "home", "office", "out". Work on the house or yard is "home"; an appointment or pickup is "out". Empty only when it really can be done anywhere',
-      '"needs": what it takes, any of "computer", "phone", "tools", "car". A call needs "phone"; a form, booking, email or anything online needs "computer"; a repair or building job needs "tools"; driving somewhere needs "car". Empty only when it takes none of these',
       '"store": only when the task is buying something: "grocery", "amazon", "hardware", "thrift" for something to find second-hand, or "other". Otherwise "none"',
     ] : []),
     ...(projects.length ? [`"project": the number of the project it belongs to, or 0 when none clearly fits. Projects: ${projects.map((project, index) => `${index + 1} ${JSON.stringify(project.title)}`).join(', ')}`] : []),
@@ -67,11 +59,11 @@ function nearestEstimate(value: unknown): number {
   return estimateOptions.reduce((best, option) => Math.abs(option - minutes) < Math.abs(best - minutes) ? option : best)
 }
 
-/** A store carries its place, need and energy with it, the way picking one on the sort form does. */
+/** A store carries its place and energy with it, the way picking one on the sort form does. */
 function withStore(guess: TaskGuess): TaskGuess {
   if (!guess.storeType) return guess
-  if (guess.storeType === 'amazon') return { ...guess, energy: 'shallow', place: ['home'], needs: ['computer'] }
-  return { ...guess, energy: 'errand', place: ['out'], needs: ['store'] }
+  if (guess.storeType === 'amazon') return { ...guess, energy: 'shallow', place: ['home'] }
+  return { ...guess, energy: 'errand', place: ['out'] }
 }
 
 /** The guesses in a reply, by task id. Anything the model left out or got wrong falls back to what an unsorted task starts with. */
@@ -99,9 +91,7 @@ export function parseGuesses(reply: string, tasks: Pick<Task, 'id' | 'priority'>
     }
     if (domain === 'personal') {
       const place = list(entry.where, placeOptions.map((option) => option.value))
-      const needs = list(entry.needs, needOptions.map((option) => option.value))
       if (place.length) guess.place = place
-      if (needs.length) guess.needs = needs
       if (stores.includes(entry.store as StoreType)) guess.storeType = entry.store as StoreType
     }
     const project = typeof entry.project === 'number' ? projects[entry.project - 1] : undefined
@@ -131,7 +121,6 @@ export function sortedTask(task: Task, guess: TaskGuess, today: string): Task {
     energy: guess.energy,
     planDate: task.planDate ?? today,
     place: personal ? guess.place : ['office'],
-    needs: personal ? guess.needs : ['computer'],
     storeType: personal ? guess.storeType : undefined,
     projectId: guess.projectId,
     metadataComplete: true,

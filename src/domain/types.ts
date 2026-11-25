@@ -2,7 +2,6 @@ export type Domain = 'personal' | 'work'
 export type Priority = 1 | 2 | 3 | 4
 export type Energy = 'deep' | 'shallow' | 'errand'
 export type Place = 'office' | 'home' | 'out'
-export type Need = 'computer' | 'phone' | 'tools' | 'car' | 'store'
 export type StoreType = 'grocery' | 'amazon' | 'hardware' | 'thrift' | 'other'
 export type Recurrence = 'daily' | 'weekdays-135'
 export type TimeWindow = 'morning' | 'day' | 'evening' | 'anytime'
@@ -37,7 +36,6 @@ export type TaskMeta = {
   hiddenUntil?: string
   energy: Energy
   place?: Place[]
-  needs?: Need[]
   storeType?: StoreType
   recurrence?: Recurrence
   timeWindow?: TimeWindow
@@ -59,7 +57,6 @@ export type PersonalNowInput = {
   weeklyCapacityMin: number
   energy: Energy
   place: Place
-  availableNeeds: readonly Need[]
 }
 
 export type NowInput = PersonalNowInput & {

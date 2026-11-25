@@ -44,10 +44,10 @@ describe('who guesses', () => {
 
 describe('asking', () => {
   it('sends a batch in one request and reads the guesses back by task', async () => {
-    const createMessage = vi.fn<ChatClient['createMessage']>(async () => ({ id: 'm', stop_reason: 'end_turn', content: [{ type: 'text', text: '{"tasks":[{"n":1,"minutes":15,"priority":3,"energy":"shallow","where":[],"needs":["phone"],"store":"none"}]}' }] }))
+    const createMessage = vi.fn<ChatClient['createMessage']>(async () => ({ id: 'm', stop_reason: 'end_turn', content: [{ type: 'text', text: '{"tasks":[{"n":1,"minutes":15,"priority":3,"energy":"shallow","where":[],"store":"none"}]}' }] }))
     const task: Task = { id: 'a', taskId: 'a', domain: 'personal', title: 'call the dentist', completed: false, estimateMin: 30, originalEstimateMin: 30, priority: 3, energy: 'shallow', pinned: false, carries: 0, metadataComplete: false }
     const guesses = await guessTasks([task], 'personal', [], { client: { createMessage }, model: 'claude-haiku-5-5', effort: 'low' })
-    expect(guesses).toEqual({ a: { estimateMin: 15, priority: 3, energy: 'shallow', needs: ['phone'] } })
+    expect(guesses).toEqual({ a: { estimateMin: 15, priority: 3, energy: 'shallow' } })
     expect(createMessage).toHaveBeenCalledTimes(1)
     expect(createMessage.mock.calls[0][0]).toMatchObject({ model: 'claude-haiku-5-5', output_config: { effort: 'low' } })
     expect(createMessage.mock.calls[0][0].tools).toBeUndefined()

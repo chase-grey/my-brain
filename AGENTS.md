@@ -98,8 +98,9 @@ An unsorted To Do task created more than 30 days ago (`oldAfterDays` in `src/dom
 
 ## sorting tasks
 
-Chase, 2026-11-25. A task new to sort arrives with the ai's guess at its time, priority, energy, where, needs, store and project (`src/domain/taskGuess.ts`, `src/companion/taskGuesses.ts`). `taskGuess.test.ts` and `taskGuesses.test.ts` hold these.
+Chase, 2026-11-25. A task new to sort arrives with the ai's guess at its time, priority, energy, where, store and project (`src/domain/taskGuess.ts`, `src/companion/taskGuesses.ts`). `taskGuess.test.ts` and `taskGuesses.test.ts` hold these.
 
+- A task has no "needs" (Chase, 2026-11-25): where it can be done (at home, at work, out) is the only filter of that kind, and anything else goes in its notes. Do not bring back a computer, phone, tools or car choice.
 - A guess is only an offer. Nothing is written to the task until Chase confirms it: `confirm` on its row under new to sort takes the guess as it stands, and opening the task shows the sort form filled with it, where any value can be changed before `save`.
 - Confirming a guess writes exactly what saving the untouched form would (`sortedTask`).
 - Sorting carries on (Chase, 2026-11-25): a task dealt with from the sort form (save, mark done, not mine, delete) opens the next one to sort (`nextToSort`), and today comes back only when none are left or on back or cancel. `confirm` on a row stays on today.

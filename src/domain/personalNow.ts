@@ -63,7 +63,6 @@ function isEligible(task: Task, input: NowInput): boolean {
   if (isThisWeekCommitment(task, input.today, input.domain)) return false
   if (task.energy !== input.energy) return false
   if (task.place?.length && !task.place.includes(input.place)) return false
-  if (task.needs?.some((need) => !input.availableNeeds.includes(need))) return false
   return surfaces(task, input.today, input.weeklyCapacityMin)
 }
 

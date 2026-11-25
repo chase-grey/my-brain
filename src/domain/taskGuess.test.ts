@@ -25,10 +25,10 @@ describe('guessing what a task is', () => {
 
   it('reads a reply by task number, even with words around the json', () => {
     const tasks = [unsorted('a', 'call the dentist'), unsorted('b', 'stain the deck boards')]
-    const reply = 'Here you go:\n{"tasks":[{"n":2,"minutes":120,"priority":3,"energy":"deep","where":["home"],"needs":["tools"],"store":"none","project":1},{"n":1,"minutes":5,"priority":2,"energy":"shallow","where":[],"needs":["phone"],"store":"none","project":0}]}'
+    const reply = 'Here you go:\n{"tasks":[{"n":2,"minutes":120,"priority":3,"energy":"deep","where":["home"],"store":"none","project":1},{"n":1,"minutes":5,"priority":2,"energy":"shallow","where":[],"store":"none","project":0}]}'
     expect(parseGuesses(reply, tasks, 'personal', projects)).toEqual({
-      a: { estimateMin: 5, priority: 2, energy: 'shallow', needs: ['phone'] },
-      b: { estimateMin: 120, priority: 3, energy: 'deep', place: ['home'], needs: ['tools'], projectId: 'p-deck' },
+      a: { estimateMin: 5, priority: 2, energy: 'shallow' },
+      b: { estimateMin: 120, priority: 3, energy: 'deep', place: ['home'], projectId: 'p-deck' },
     })
   })
 
@@ -38,19 +38,19 @@ describe('guessing what a task is', () => {
     expect(parseGuesses(reply, tasks, 'personal', projects)).toEqual({ a: { estimateMin: 45, priority: 3, energy: 'shallow', place: ['out'] } })
   })
 
-  it('gives a store its place, need and energy, as picking one on the form does', () => {
+  it('gives a store its place and energy, as picking one on the form does', () => {
     const tasks = [unsorted('a', 'buy milk'), unsorted('b', 'order hdmi cable')]
-    const reply = '{"tasks":[{"n":1,"minutes":15,"priority":3,"energy":"shallow","where":["home"],"needs":[],"store":"grocery"},{"n":2,"minutes":5,"priority":3,"energy":"errand","where":["out"],"needs":[],"store":"amazon"}]}'
+    const reply = '{"tasks":[{"n":1,"minutes":15,"priority":3,"energy":"shallow","where":["home"],"store":"grocery"},{"n":2,"minutes":5,"priority":3,"energy":"errand","where":["out"],"store":"amazon"}]}'
     const guesses = parseGuesses(reply, tasks, 'personal', [])
-    expect(guesses.a).toMatchObject({ storeType: 'grocery', energy: 'errand', place: ['out'], needs: ['store'] })
-    expect(guesses.b).toMatchObject({ storeType: 'amazon', energy: 'shallow', place: ['home'], needs: ['computer'] })
+    expect(guesses.a).toMatchObject({ storeType: 'grocery', energy: 'errand', place: ['out'] })
+    expect(guesses.b).toMatchObject({ storeType: 'amazon', energy: 'shallow', place: ['home'] })
   })
 
-  it('never lowers a task flagged important, and leaves work its fixed place and needs', () => {
+  it('never lowers a task flagged important, and leaves work its fixed place', () => {
     const task = unsorted('w', 'send the release notes', { domain: 'work', priority: 1 })
     const guess = parseGuesses('{"tasks":[{"n":1,"minutes":30,"priority":4,"where":["home"],"store":"grocery"}]}', [task], 'work', [])
     expect(guess.w).toEqual({ estimateMin: 30, priority: 1, energy: 'shallow' })
-    expect(sortedTask(task, guess.w, '2026-11-25')).toMatchObject({ priority: 1, place: ['office'], needs: ['computer'], storeType: undefined, metadataComplete: true, planDate: '2026-11-25' })
+    expect(sortedTask(task, guess.w, '2026-11-25')).toMatchObject({ priority: 1, place: ['office'], storeType: undefined, metadataComplete: true, planDate: '2026-11-25' })
   })
 
   it('returns nothing for a reply that is not the json asked for', () => {
@@ -69,8 +69,8 @@ describe('guessing what a task is', () => {
   it('writes nothing to a task until the guess is confirmed', () => {
     const task = unsorted('a', 'call the dentist')
     const before = structuredClone(task)
-    const sorted = sortedTask(task, { estimateMin: 5, priority: 2, energy: 'shallow', needs: ['phone'] }, '2026-11-25')
+    const sorted = sortedTask(task, { estimateMin: 5, priority: 2, energy: 'shallow', place: ['home'] }, '2026-11-25')
     expect(task).toEqual(before)
-    expect(sorted).toMatchObject({ title: 'call the dentist', estimateMin: 5, originalEstimateMin: 30, priority: 2, needs: ['phone'], planDate: '2026-11-25', metadataComplete: true })
+    expect(sorted).toMatchObject({ title: 'call the dentist', estimateMin: 5, originalEstimateMin: 30, priority: 2, place: ['home'], planDate: '2026-11-25', metadataComplete: true })
   })
 })
