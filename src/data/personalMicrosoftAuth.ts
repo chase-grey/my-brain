@@ -6,6 +6,7 @@ import {
 } from '@azure/msal-browser'
 import { isNativeApp } from '../native/platform'
 import { keepSignIn, signInReturnUrl } from '../site'
+import { keptSignInResponse, rememberPlace, signInWindowMs } from '../signInReturn'
 
 export const personalGraphScopes = [
   'Tasks.ReadWrite',
@@ -28,11 +29,13 @@ export class PersonalMicrosoftAuth {
         redirectUri,
       },
       cache: { cacheLocation: BrowserCacheLocation.LocalStorage },
+      system: { popupBridgeTimeout: signInWindowMs },
     })
     await client.initialize()
     keepSignIn()
-    // Coming back from a redirect sign-in (the android shell signs in this way) lands here with the result in the hash.
-    const redirected = await client.handleRedirectPromise()
+    // Coming back from a redirect sign-in (the android shell signs in this way), with the result taken out of the address before the app started.
+    const returned = keptSignInResponse()
+    const redirected = await client.handleRedirectPromise(returned ? { hash: returned, navigateToLoginRequestUrl: false } : undefined)
     if (redirected) client.setActiveAccount(redirected.account)
     return new PersonalMicrosoftAuth(client)
   }
@@ -48,6 +51,7 @@ export class PersonalMicrosoftAuth {
 
   async signIn(): Promise<AccountInfo> {
     if (this.byRedirect) {
+      rememberPlace()
       await this.client.loginRedirect({ scopes: [...personalGraphScopes] })
       return new Promise<AccountInfo>(() => {}) // the page is leaving; the account arrives through create() on return
     }
@@ -79,6 +83,7 @@ export class PersonalMicrosoftAuth {
     } catch (error) {
       if (!interactive || !(error instanceof InteractionRequiredAuthError)) throw error
       if (this.byRedirect) {
+        rememberPlace()
         await this.client.acquireTokenRedirect({ account, scopes: [...personalGraphScopes] })
         return new Promise<string>(() => {})
       }

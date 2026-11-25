@@ -51,6 +51,15 @@ Chase, 2026-11-25. Epic's network blocks `chase-grey.github.io`, so on the work 
 - The bridge allows that origin (`$AllowedOrigins` in `work/bridge/work-bridge.ps1`).
 - `site.test.ts` holds these; my-mail carries the same file.
 
+## signing in to microsoft
+
+Chase, 2026-11-25. `signInReturn.test.ts` holds these.
+
+- Connecting leaves him on the screen he connected from. In a browser the sign-in is a popup and the page never moves. In the android shell the whole page goes to microsoft, so the screen is remembered before it leaves (`rememberPlace`) and put back before the app starts (`takeSignInResponse`). A new redirect to microsoft calls `rememberPlace` first.
+- Microsoft's answer is taken out of the address before the app starts and handed to msal from memory. Never leave it for msal to read from the address: the app writes its own hash there first.
+- A popup or a hidden renewal frame hands its answer to the window that asked, in the shell too (`signInArrival`). Only the shell's own top page keeps it.
+- A sign-in window may stay open ten minutes (`signInWindowMs`; my-mail sets the same). msal's default minute ends while a password and a code are still being typed, and shows as `timed_out`.
+
 ## restarting the bridge
 
 `npm run bridge` runs `work/bridge/work-bridge.ps1` (the work side is a separate private repo checked out at `work/`), a PowerShell HttpListener on port 47321. To restart it after an edit, stop only that process, by PID:

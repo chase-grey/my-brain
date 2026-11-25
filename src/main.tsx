@@ -7,18 +7,16 @@ import { followReminderTaps } from './native/reminders'
 import { APP_COMMIT, watchForUpdates } from './appUpdate'
 import { shellUpdates } from './native/update'
 import { applyAccent, loadAccent } from './accent'
+import { isSignInResponse, signInArrival, takeSignInResponse } from './signInReturn'
 
-/** Microsoft sends the sign-in popup, and the hidden frame that renews a sign-in, back to this page with the result in the url. */
-function isSignInResponse(): boolean {
-  const params = new URLSearchParams(window.location.hash.slice(1) || window.location.search)
-  return params.has('state') && (params.has('code') || params.has('error'))
-}
-
-// The android shell signs in by redirecting the whole page, and the app picks that result up itself when it starts.
-if (isSignInResponse() && !isNativeApp()) {
+// Microsoft sends the sign-in popup, and the hidden frame that renews a sign-in, back to this page with the result in the url.
+const arrival = signInArrival(isSignInResponse(), window.parent !== window || Boolean(window.opener), isNativeApp())
+if (arrival === 'pass') {
   // msal 5 no longer reads the popup or frame from the opener: this page has to hand the result back itself. Without it a renewal waits until it times out.
   void import('@azure/msal-browser/redirect-bridge').then((bridge) => bridge.broadcastResponseToMainFrame())
 } else {
+  // The android shell signs in by sending the whole page to microsoft, and the app finishes that sign-in itself as it starts.
+  if (arrival === 'keep') takeSignInResponse()
   startApp()
 }
 
