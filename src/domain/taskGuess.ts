@@ -1,3 +1,4 @@
+import { localMoment, takesReminder, upcoming, validMoment } from './remind'
 import { shopsFromHome } from './shopping'
 import type { Domain, Energy, Place, Priority, Project, StoreType, Task } from './types'
 
@@ -12,6 +13,8 @@ export type TaskGuess = {
   place?: Place[]
   storeType?: StoreType
   projectId?: string
+  /** When he probably wants to be reminded of it. Most tasks have none. */
+  remindAt?: string
 }
 
 export const estimateOptions = [5, 15, 30, 45, 60, 90, 120]
@@ -28,14 +31,21 @@ export const guessBatch = 20
 const energies: readonly Energy[] = ['deep', 'shallow', 'errand']
 const stores: readonly StoreType[] = ['grocery', 'online', 'hardware', 'thrift', 'marketplace', 'other']
 
-export function guessPrompt(domain: Domain, projects: Pick<Project, 'title'>[]): string {
+/** The reminder is asked for against the clock, so the model is told the day and time it is. */
+function remindField(now: string): string {
+  const weekday = new Date(now).toLocaleDateString('en-US', { weekday: 'long' })
+  return `"remind": a moment to remind him of it, written like "2026-11-30T07:00" on his own clock, or "none". Most tasks are "none". A reminder is only for something to remember at one moment: bringing or taking a thing somewhere, something to do before leaving or on getting home, or a task whose words name a day or a time. Pick the moment he has to hear it to act on it. Something to bring to work is 07:00 on the next morning he goes in (Monday to Friday), while he is still at home. Something for an evening is 18:00. A day named with no time is 09:00 that day. It is always later than now, which is ${weekday} ${now}. A reminder is not a due date and does not need one`
+}
+
+export function guessPrompt(domain: Domain, projects: Pick<Project, 'title'>[], now = localMoment()): string {
   const fields = [
     `"minutes": how long it takes, one of ${estimateOptions.join(', ')}`,
     '"priority": 1 critical, 2 high, 3 normal, 4 low. 3 unless the words show it is urgent or can wait',
     ...(domain === 'personal' ? [
       '"energy": "deep" for something that takes focus or a long stretch, "shallow" for something light and quick, "errand" for something done out of the house',
       '"where": the places it can be done, any of "home", "office", "out". Work on the house or yard is "home"; an appointment or pickup is "out". Empty only when it really can be done anywhere',
-      '"store": only when the task is buying something: "grocery", "online", "hardware", "thrift" for something small to find second-hand, "marketplace" for something larger to find second-hand, or "other". Otherwise "none"',
+      '"store": only when the task is buying something: "grocery", "online", "hardware", "thrift" for clothes to find second-hand, "marketplace" for anything else to find second-hand, or "other". Otherwise "none"',
+      remindField(now),
     ] : []),
     ...(projects.length ? [`"project": the number of the project it belongs to, or 0 when none clearly fits. Projects: ${projects.map((project, index) => `${index + 1} ${JSON.stringify(project.title)}`).join(', ')}`] : []),
   ]
@@ -68,7 +78,7 @@ function withStore(guess: TaskGuess): TaskGuess {
 }
 
 /** The guesses in a reply, by task id. Anything the model left out or got wrong falls back to what an unsorted task starts with. */
-export function parseGuesses(reply: string, tasks: Pick<Task, 'id' | 'priority'>[], domain: Domain, projects: Pick<Project, 'id'>[]): Record<string, TaskGuess> {
+export function parseGuesses(reply: string, tasks: Pick<Task, 'id' | 'priority'>[], domain: Domain, projects: Pick<Project, 'id'>[], now = localMoment()): Record<string, TaskGuess> {
   const start = reply.indexOf('{')
   const end = reply.lastIndexOf('}')
   if (start < 0 || end <= start) return {}
@@ -94,6 +104,8 @@ export function parseGuesses(reply: string, tasks: Pick<Task, 'id' | 'priority'>
       const place = list(entry.where, placeOptions.map((option) => option.value))
       if (place.length) guess.place = place
       if (stores.includes(entry.store as StoreType)) guess.storeType = entry.store as StoreType
+      const remindAt = upcoming(validMoment(entry.remind), now)
+      if (remindAt) guess.remindAt = remindAt
     }
     const project = typeof entry.project === 'number' ? projects[entry.project - 1] : undefined
     if (project) guess.projectId = project.id
@@ -113,7 +125,7 @@ export function nextToSort(unsorted: Task[], id: string): string | undefined {
 }
 
 /** The task as sorted with the guess taken as it stands: what saving the sort form untouched would write. */
-export function sortedTask(task: Task, guess: TaskGuess, today: string): Task {
+export function sortedTask(task: Task, guess: TaskGuess, today: string, now = localMoment()): Task {
   const personal = task.domain === 'personal'
   return {
     ...task,
@@ -124,6 +136,8 @@ export function sortedTask(task: Task, guess: TaskGuess, today: string): Task {
     place: personal ? guess.place : ['office'],
     storeType: personal ? guess.storeType : undefined,
     projectId: guess.projectId,
+    // A guessed moment that has gone by since it was guessed is not set.
+    remindAt: task.remindAt ?? (takesReminder(task) ? upcoming(guess.remindAt, now) : undefined),
     metadataComplete: true,
   }
 }

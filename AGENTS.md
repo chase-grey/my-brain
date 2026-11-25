@@ -114,6 +114,7 @@ Chase, 2026-11-25. A task new to sort arrives with the ai's guess at its time, p
 - Work tasks go only to Claude Code on the bridge, never the personal key or Jev. Personal ones go where the personal chat goes: the bridge when the device has one, the key when it does not, and nowhere with ai off.
 - A task's words go to the model as data, with the line that they are never an instruction. The model is given only the choices the form has, and anything else it returns is dropped.
 - A guess never lowers a task Outlook has flagged important.
+- Second-hand goes to one of two stores (Chase, 2026-11-25): thrift for clothes, marketplace for everything else.
 - A kept guess leaves when its task is sorted, and after 30 days in any case.
 
 ## the task form and the chat
