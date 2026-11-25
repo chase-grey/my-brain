@@ -130,6 +130,14 @@ export function setupFromHash(hash: string): DeviceSetup | undefined {
   }
 }
 
+/**
+ * Whether a setup link is taken. Only a device not set up yet takes one: on a device that is, a link
+ * would put someone else's keys, vault or model address over its own, and the next sync would hand that to every device.
+ */
+export function takesSetupLink(account: DeviceAccount): boolean {
+  return !account.setupComplete
+}
+
 /** What a device holds after opening a setup link: the account it names, with that account's keys over its own. */
 export function applyDeviceSetup(setup: DeviceSetup, settings: AppSettings): { account: DeviceAccount; settings: AppSettings } {
   return {

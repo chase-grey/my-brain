@@ -64,3 +64,11 @@ it('shows one button beside the message box: voice until there is something to s
   expect(composerButton({ ...idle, voiceOn: true, hasText: true })).toBe('voice')
   expect(composerButton({ ...idle, voiceSupported: false })).toBe('send')
 })
+
+it('never draws a picture from an address in a reply', () => {
+  const html = renderToStaticMarkup(<Thread turns={[{ role: 'assistant', text: 'here it is ![chart](https://example.com/p.png?d=secret) and [a link](https://example.com/page)', at: '2026-11-04T10:00:00.000Z' }]} />)
+  expect(html).toContain('here it is')
+  expect(html).toContain('href="https://example.com/page"')
+  expect(html).not.toContain('<img')
+  expect(html).not.toContain('p.png')
+})

@@ -20,7 +20,7 @@ import type { Domain, Energy, Goal, Place, Priority, StoreType, Task } from './d
 import { loadProductState, saveProductState, withMoneyReading, type ProductState } from './productState'
 import { fetchTrackerSummary, newerSummary, readTrackerSummary, readTrackerToken, type TrackerSummary } from './domain/bodyTracker'
 import { loadSettings, saveSettings, type AppSettings } from './settings'
-import { applyDeviceSetup, loadAccount, saveAccount, setupFromHash, showsWork, type DeviceAccount } from './account'
+import { applyDeviceSetup, loadAccount, saveAccount, setupFromHash, showsWork, takesSetupLink, type DeviceAccount } from './account'
 import { accountFile, accountFileFrom, mergeAccountFile, type AccountFile } from './settingsSync'
 import { GitHubVault, normalizeBranch, normalizeRepo, vaultConfigured } from './companion/githubVault'
 import type { Attachment } from './companion/attachments'
@@ -171,6 +171,11 @@ let openedFromSetupLink = false
 function initialAccount(): DeviceAccount {
   const setup = typeof location === 'undefined' ? undefined : setupFromHash(location.hash)
   if (!setup) return loadAccount()
+  const current = loadAccount()
+  if (!takesSetupLink(current)) {
+    history.replaceState(null, '', `${location.pathname}${location.search}#today`)
+    return current
+  }
   openedFromSetupLink = true
   const applied = applyDeviceSetup(setup, loadSettings('personal'))
   saveSettings(applied.settings, 'personal')

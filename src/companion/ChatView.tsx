@@ -106,8 +106,14 @@ export function UserMessage() {
   return <MessagePrimitive.Root className="turn user"><MessagePrimitive.Content components={{ Image: AttachedImage, File: AttachedFile }} /></MessagePrimitive.Root>
 }
 
+/**
+ * A reply never draws a picture from an address. The browser would fetch it the moment it is drawn, so an email or a
+ * document the model had read could have it send what it knows away inside the address.
+ */
+export const replyMarkdown = { img: () => null }
+
 function MarkdownText() {
-  return <MarkdownTextPrimitive className="md" />
+  return <MarkdownTextPrimitive className="md" components={replyMarkdown} />
 }
 
 export function AssistantMessage() {

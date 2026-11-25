@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { accountStorageKey, applyDeviceSetup, deviceSetupFrom, loadAccount, newAccount, setupFromHash, setupLink, showsWork } from './account'
+import { accountStorageKey, applyDeviceSetup, deviceSetupFrom, loadAccount, newAccount, setupFromHash, setupLink, showsWork, takesSetupLink } from './account'
 import { defaultSettings } from './settings'
 
 function fakeStorage(initial: Record<string, string> = {}) {
@@ -64,4 +64,10 @@ describe('setup link', () => {
     expect(friend.settings).toMatchObject({ anthropicApiKey: 'sk-ant-2', mailAppUrl: '' })
     expect(applyDeviceSetup({ owner: true, name: '', workSpace: true, settings: {} }, defaultSettings).settings.mailAppUrl).toBe(defaultSettings.mailAppUrl)
   })
+})
+
+it('takes a setup link only on a device that is not set up yet', () => {
+  expect(takesSetupLink(newAccount)).toBe(true)
+  expect(takesSetupLink({ setupComplete: true, owner: true, name: 'Chase', workSpace: true })).toBe(false)
+  expect(takesSetupLink({ setupComplete: true, owner: false, name: 'Sam', workSpace: false })).toBe(false)
 })

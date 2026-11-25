@@ -91,8 +91,8 @@ beside the content.
 **personal** calls Anthropic directly from the browser with your own key, and reads the
 HomeBase vault from a private GitHub repo, so it works on the phone and at home without VPN.
 In settings fill in the anthropic api key, the github repo as `owner/name`, the branch, and a
-fine-grained GitHub token with Contents read and write on that one repo. Keys stay in this
-browser's local storage and are never synced.
+fine-grained GitHub token with Contents read and write on that one repo. Keys are kept in this
+browser's local storage, and ride to your other devices in `settings.json` in your OneDrive app folder.
 
 **work** uses Claude Code on the work PC through the bridge, under your Epic login. Nothing
 from the Hivemind vault leaves the machine except through that sanctioned session. Run

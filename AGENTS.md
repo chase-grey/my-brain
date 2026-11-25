@@ -195,3 +195,11 @@ Chat is told how much time there is right now only when it is known: a length pi
 The work calendar comes from classic Outlook through the bridge (`GET /calendar`). The work space shows it on today and uses it for the picker and the time line; the events themselves are never given to chat.
 
 Time for tasks ends at 9pm (`dayEndHour`; Chase, 2026-11-25). A clear stretch runs to 9pm, not midnight. Past 9pm the picker starts with nothing chosen, no tasks are suggested, and chat is told the day is over, in both spaces, until a length is picked after 9pm. A length picked earlier does not carry past 9pm or into the next day. Anything new that offers work to do applies the same end. `calendar.test.ts` and `companion.test.ts` hold these.
+
+## keeping things in
+
+From the security scan of 2026-11-25. `account.test.ts` and `ChatView.test.tsx` hold the first two.
+
+- A setup link (`#setup=`) is taken only by a device that is not set up yet (`takesSetupLink` in `src/account.ts`). On a device that is, it is dropped: a link must never put keys, a vault or a model address over the ones already there.
+- A reply never draws a picture from an address (`replyMarkdown` in `ChatView.tsx`). Anything new that draws model output must not fetch from an address the model wrote.
+- The bridge lets in only the localhost copies of the app, and only requests addressed to itself (the Host check in `work/bridge/work-bridge.ps1`). The published site is not on its list, since the work pc cannot load it. The work chat is given no way to run a program.

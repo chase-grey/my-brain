@@ -2,8 +2,7 @@
 
 Record a conversation on the phone and get a speaker-labeled transcript back as a markdown note,
 in HomeBase for personal and in Hivemind for work. The recorder is Mark Zakharov's Transcribe
-app ([gitlab.epic.com/mzakhar/Android-transcription](https://gitlab.epic.com/mzakhar/Android-transcription)),
-unmodified. My Brain does the filing.
+app, unmodified. My Brain does the filing.
 
 Written 2026-11-04 after reading Mark's repo and interviewing Chase.
 
