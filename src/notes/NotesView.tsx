@@ -11,7 +11,8 @@ import { Empty, Menu } from '../ui'
 import { dictate, recognitionSupported, voiceAllowed } from '../voice/speech'
 import { endMessage } from '../voice/useVoice'
 import { NoteEditor } from './NoteEditor'
-import { findNotes, folderName, inJournal, keepUnsaved, listFolder, loadUnsaved, mergeNote, newNotePath, noteAttachment, notesFolder, noteTitle } from './notes'
+import { findNotes, folderLabel, folderName, folderPath, inJournal, keepUnsaved, listFolder, loadOps, loadUnsaved, mergeNote, movedPath, newNotePath, noteAttachment, noteFolders, notesFolder, noteTitle, renamedPath, withPending } from './notes'
+import { moveNote, offlineNotes, openNotes, removeNote, syncNotes, unreachable, waitingCount, type OfflineVault } from './offline'
 import { tidy, tidyModel, tidyTools, type TidyTool } from './tidy'
 
 type EditableStore = JournalStore & Pick<VaultStore, 'writeNote'>
@@ -21,6 +22,10 @@ const missing = (error: unknown) => (error as { status?: number } | undefined)?.
 
 /** How long after the last change a note is sent to the vault. */
 const saveAfterMs = 3000
+/** How long before trying again when the vault cannot be reached. */
+const retryAfterMs = 15000
+/** How long a rename or move is waited on before the note reopens from this device's copy. */
+const moveWaitMs = 5000
 
 /**
  * The ai's tidying of a note. What it returns is shown in place of the note as an offer: `before` holds the note
@@ -63,8 +68,13 @@ function TidyBar({ working, offered, onKeep, onUndo }: { working: boolean; offer
 }
 
 /** One note, always editable: type or talk straight into it. It saves itself. */
-function NotePage({ path, newEntry, domain, vault, settings, onBack, onChat, onSaved }: {
+function NotePage({ path, newEntry, notes, domain, vault, settings, onBack, onChat, onSaved, onMove, onDelete }: {
   path: string
+  /** Every note, for the names already taken and the folders there are. */
+  notes: VaultNote[]
+  /** Rename or move: the note is at this path from now on. */
+  onMove: (to: string) => Promise<void>
+  onDelete: () => Promise<void>
   /** Start a new journal entry at the end: the time as a heading and the cursor under it. */
   newEntry?: boolean
   domain: Domain
@@ -78,6 +88,12 @@ function NotePage({ path, newEntry, domain, vault, settings, onBack, onChat, onS
   const [problem, setProblem] = useState<string>()
   const [waiting, setWaiting] = useState(false)
   const [listening, setListening] = useState(false)
+  const [offline, setOffline] = useState(false)
+  const [asking, setAsking] = useState<'rename' | 'move'>()
+  const [name, setName] = useState('')
+  const [moving, setMoving] = useState(false)
+  // The note was renamed, moved or deleted: nothing more is written to this path.
+  const gone = useRef(false)
   const text = useRef('')
   // The vault's copy as last seen, which every change here is measured against.
   const base = useRef('')
@@ -100,8 +116,9 @@ function NotePage({ path, newEntry, domain, vault, settings, onBack, onChat, onS
 
   const push = useCallback(async () => {
     clearTimeout(timer.current)
-    if (busy.current || !dirty.current || offer.current !== undefined) return
+    if (busy.current || gone.current || !dirty.current || offer.current !== undefined) return
     busy.current = true
+    let wait = saveAfterMs
     const mine = text.current
     try {
       const theirs = await vault.readNote(path).then(({ content }) => content, (error: unknown) => { if (missing(error)) return ''; throw error })
@@ -121,12 +138,18 @@ function NotePage({ path, newEntry, domain, vault, settings, onBack, onChat, onS
         keepUnsaved(path, { content: text.current, base: mine })
       }
       setProblem(undefined)
+      setOffline(false)
       onSaved()
-    } catch {
-      setProblem("couldn't save · your words are kept on this device")
+    } catch (error) {
+      // With no connection the words wait on the device and go up on their own later; that is not a problem to report.
+      if (unreachable(error)) {
+        wait = retryAfterMs
+        setProblem(undefined)
+        setOffline(true)
+      } else setProblem("couldn't save · your words are kept on this device")
     } finally {
       busy.current = false
-      if (dirty.current) timer.current = setTimeout(() => { void push() }, saveAfterMs)
+      if (dirty.current && !gone.current) timer.current = setTimeout(() => { void push() }, wait)
     }
   }, [domain, newEntry, offer, onSaved, path, show, vault])
   const pushRef = useRef(push)
@@ -163,9 +186,20 @@ function NotePage({ path, newEntry, domain, vault, settings, onBack, onChat, onS
       text.current = source
       setShown({ source, key: 0, atEnd: Boolean(newEntry) })
       changed()
-    }).catch(() => { if (live) setProblem("couldn't open that note") })
+    }).catch((error: unknown) => { if (live) setProblem(unreachable(error) ? 'offline · this note is not on this device yet' : "couldn't open that note") })
     return () => { live = false }
   }, [changed, domain, newEntry, path, vault])
+
+  // While the note is open it saves itself, and a sync of what is waiting leaves it alone.
+  useEffect(() => {
+    openNotes.add(path)
+    const online = () => { void pushRef.current() }
+    window.addEventListener('online', online)
+    return () => {
+      openNotes.delete(path)
+      window.removeEventListener('online', online)
+    }
+  }, [path])
 
   const stop = useCallback(() => {
     cancel.current()
@@ -235,7 +269,7 @@ function NotePage({ path, newEntry, domain, vault, settings, onBack, onChat, onS
   }, [leave, stop])
 
   // A reload would stop the listening and drop an offer; the words themselves are already kept on the device.
-  const held = waiting || listening || tidying.working || tidying.before !== undefined
+  const held = waiting || listening || moving || tidying.working || tidying.before !== undefined
   useEffect(() => (held ? holdUpdates() : undefined), [held])
 
   function keep() {
@@ -251,17 +285,62 @@ function NotePage({ path, newEntry, domain, vault, settings, onBack, onChat, onS
     changed()
   }
 
+  const settled = async () => {
+    for (let tries = 0; busy.current && tries < 100; tries += 1) await new Promise((resolve) => setTimeout(resolve, 100))
+  }
+  /** What is on the page goes to the vault first, then nothing more is written here: the note is leaving this path. */
+  async function moveTo(to: string | undefined) {
+    setAsking(undefined)
+    if (!to || moving) return
+    stop()
+    setMoving(true)
+    await settled()
+    await pushRef.current()
+    gone.current = true
+    clearTimeout(timer.current)
+    await onMove(to)
+  }
+  async function remove() {
+    if (moving || !confirm(`delete ${noteTitle(path)}?`)) return
+    stop()
+    setMoving(true)
+    await settled()
+    gone.current = true
+    clearTimeout(timer.current)
+    await onDelete()
+  }
+  const ask = (what: 'rename' | 'move') => {
+    setName(what === 'rename' ? noteTitle(path) : '')
+    setAsking(asking === what ? undefined : what)
+  }
+  const pending = tidying.working || tidying.before !== undefined || moving
+  const folder = path.slice(0, path.lastIndexOf('/'))
+
   return <section className="chat notes" aria-label={noteTitle(path)}>
     <header className="view-head">
       <button className="icon-button" type="button" aria-label="back" onClick={onBack}><Icon name="back" /></button>
       <h1>{noteTitle(path)}</h1>
       {canListen && shown && <button className={`icon-button notes-mic${listening ? ' is-listening' : ''}`} type="button" aria-pressed={listening} aria-label={listening ? 'stop' : 'talk'} onClick={() => (listening ? stop() : listen())}><Icon name="waveform" size={20} /></button>}
       {shown && <Menu items={[
-        ...tidyTools.map((tool) => ({ label: tool.label, onSelect: () => { stop(); void tidying.run(tool.id) }, disabled: tidying.working || tidying.before !== undefined })),
+        ...tidyTools.map((tool) => ({ label: tool.label, onSelect: () => { stop(); void tidying.run(tool.id) }, disabled: pending })),
         { label: 'add to chat', onSelect: () => onChat(noteAttachment(path, text.current)) },
+        ...(inJournal(path) ? [] : [{ label: 'rename', onSelect: () => ask('rename'), disabled: pending }, { label: 'move', onSelect: () => ask('move'), disabled: pending }]),
+        { label: 'delete', onSelect: () => { void remove() }, disabled: pending },
       ]} />}
     </header>
-    <TidyBar working={tidying.working} offered={tidying.before !== undefined} onKeep={keep} onUndo={undo} />
+    <TidyBar working={tidying.working || moving} offered={tidying.before !== undefined} onKeep={keep} onUndo={undo} />
+    {asking === 'rename' && <form className="add-line" onSubmit={(event) => { event.preventDefault(); void moveTo(renamedPath(notes, path, name)) }}>
+      <input autoFocus aria-label="note name" placeholder="note name" value={name} onChange={(event) => setName(event.target.value)} onFocus={(event) => event.target.select()} />
+      <button className="primary" type="submit" disabled={!name.trim()}>rename</button>
+    </form>}
+    {asking === 'move' && <div className="notes-move">
+      <div className="notes-folders" role="group" aria-label="folder">{noteFolders(notes).map((item) => <button key={item} className="pill" type="button" aria-pressed={item === folder} disabled={item === folder} onClick={() => { void moveTo(movedPath(notes, path, item)) }}>{folderLabel(item)}</button>)}</div>
+      <form className="add-line" onSubmit={(event) => { event.preventDefault(); const to = folderPath(name); void moveTo(to && movedPath(notes, path, to)) }}>
+        <input aria-label="new folder" placeholder="new folder" value={name} onChange={(event) => setName(event.target.value)} />
+        <button className="primary" type="submit" disabled={!name.trim()}>move</button>
+      </form>
+    </div>}
+    {offline && !problem && <p className="notes-bar">offline · kept on this device</p>}
     {problem && <p className="journal-problem" role="alert">{problem}</p>}
     <div className="chat-history notes-page">
       {shown
@@ -368,19 +447,41 @@ export function NotesView({ domain, vault, settings, onSettings, onChat }: {
   const [naming, setNaming] = useState(false)
   const [newName, setNewName] = useState('')
   const [problem, setProblem] = useState<string>()
+  const [sync, setSync] = useState({ offline: false, waiting: 0 })
+  // Notes that can be changed are also kept on the device, so they are there with no connection. The work journal is not.
+  const kept = useMemo<OfflineVault | undefined>(() => (vault && editable ? offlineNotes(vault as VaultStore) : undefined), [editable, vault])
+  const store: JournalStore | undefined = kept ?? vault
 
   const load = useCallback(() => {
-    if (!vault) return
-    vault.listNotes().then(setNotes).catch(() => { setNotes((current) => current ?? []); setProblem(`couldn't load the ${name}`) })
-  }, [name, vault])
+    if (!store) return
+    const list = () => store.listNotes().then((all) => {
+      setNotes([...all])
+      setProblem(undefined)
+      if (kept) setSync({ offline: kept.offline, waiting: waitingCount() })
+    }).catch((error: unknown) => {
+      setNotes((current) => current ?? [])
+      if (kept && unreachable(error)) setSync({ offline: true, waiting: waitingCount() })
+      else setProblem(`couldn't load the ${name}`)
+    })
+    void list()
+    // What was written, renamed, moved or deleted with no connection goes up now, and the list is read again after it.
+    if (kept) void syncNotes(kept).then((state) => {
+      setSync({ offline: state.offline, waiting: state.waiting })
+      if (state.sent) void list()
+    })
+  }, [kept, name, store])
   useEffect(() => {
     // Notes made on the pc or by the ai since this was last open are picked up.
-    ;(vault as { invalidate?: () => void } | undefined)?.invalidate?.()
+    ;(store as { invalidate?: () => void } | undefined)?.invalidate?.()
     load()
-  }, [load, vault])
+    window.addEventListener('online', load)
+    return () => window.removeEventListener('online', load)
+  }, [load, store])
 
-  const listing = useMemo(() => listFolder(notes ?? [], folder), [notes, folder])
-  const found = useMemo(() => (query.trim() ? findNotes(notes ?? [], root, query) : undefined), [notes, query, root])
+  // The list as it stands here: what is waiting to go up already shows.
+  const shown = useMemo(() => (notes && kept ? withPending(notes, Object.keys(loadUnsaved()), loadOps()) : notes), [kept, notes])
+  const listing = useMemo(() => listFolder(shown ?? [], folder), [shown, folder])
+  const found = useMemo(() => (query.trim() ? findNotes(shown ?? [], root, query) : undefined), [shown, query, root])
 
   if (!vault) return <section className="chat notes" aria-label={name}>
     <header className="view-head"><h1>{name}</h1></header>
@@ -389,12 +490,26 @@ export function NotesView({ domain, vault, settings, onSettings, onChat }: {
 
   const close = () => { setOpen(undefined); load() }
   if (open === 'draft') return <DraftPage domain={domain} vault={vault} settings={settings} onBack={close} onSaved={close} />
-  if (open && editable) return <NotePage key={`${open.path} ${open.newEntry ? 'new' : ''}`} path={open.path} newEntry={open.newEntry} domain={domain} vault={vault as EditableStore} settings={settings} onBack={close} onChat={onChat} onSaved={load} />
+  if (open && kept) {
+    const from = open.path
+    return <NotePage key={`${from} ${open.newEntry ? 'new' : ''}`} path={from} newEntry={open.newEntry} notes={shown ?? []} domain={domain} vault={kept} settings={settings} onBack={close} onChat={onChat} onSaved={load}
+      onMove={async (to) => {
+        await moveNote(kept, from, to)
+        // Online this is over in a moment. With no connection the note reopens from this device and the vault follows later.
+        await Promise.race([syncNotes(kept), new Promise((resolve) => setTimeout(resolve, moveWaitMs))])
+        setOpen({ path: to })
+        load()
+      }}
+      onDelete={async () => {
+        await removeNote(kept, from)
+        close()
+      }} />
+  }
   if (open) return <EntryPage key={open.path} path={open.path} vault={vault} onBack={close} onChat={onChat} />
 
   function addNote(event: FormEvent) {
     event.preventDefault()
-    const path = newNotePath(notes ?? [], inJournal(folder) ? root : folder, newName)
+    const path = newNotePath(shown ?? [], inJournal(folder) ? root : folder, newName)
     if (!path) return
     setNaming(false)
     setNewName('')
@@ -412,6 +527,7 @@ export function NotesView({ domain, vault, settings, onSettings, onChat }: {
       {naming && <form className="add-line" onSubmit={addNote}><input autoFocus aria-label="note name" placeholder="note name" value={newName} onChange={(event) => setNewName(event.target.value)} /><button className="primary" type="submit" disabled={!newName.trim()}>add</button></form>}
       <input className="notes-search" type="search" aria-label="search" placeholder="search" value={query} onChange={(event) => setQuery(event.target.value)} />
       {problem && <p className="journal-problem" role="alert">{problem}</p>}
+      {(sync.offline || sync.waiting > 0) && <p className="notes-bar">{[sync.offline && 'offline', sync.waiting > 0 && `${sync.waiting} waiting`].filter(Boolean).join(' · ')}</p>}
       {!notes
         ? <Empty>loading</Empty>
         : found

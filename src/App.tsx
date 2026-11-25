@@ -27,6 +27,7 @@ import { useWifi } from './native/wifi'
 import { applyDeviceSetup, loadAccount, saveAccount, setupFromHash, showsWork, takesSetupLink, type DeviceAccount } from './account'
 import { accountFile, accountFileFrom, mergeAccountFile, type AccountFile } from './settingsSync'
 import { GitHubVault, normalizeBranch, normalizeRepo, vaultConfigured } from './companion/githubVault'
+import { offlineNotes, syncNotes, waitingCount } from './notes/offline'
 import type { Attachment } from './companion/attachments'
 import { WorkJournal } from './journal/workJournal'
 import { buildPlanSummary, companionGoal, companionTask, summarizeGoal, summarizeProject, summarizeTask, type CompanionActions, type GoalChanges } from './companion/companionTools'
@@ -927,6 +928,20 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
   // An old link to the journal lands on notes in personal, and notes on the journal in work.
   const spaceView: View = view === 'journal' && activeDomain === 'personal' ? 'notes' : view === 'notes' && activeDomain === 'work' ? 'journal' : view
   const shownView: View = docked && spaceView === 'chat' ? 'today' : spaceView
+  // Notes written, renamed, moved or deleted with no connection go up when the app opens and when the connection comes back.
+  // The notes screen itself is fetched ahead, so it is there to open with no connection.
+  const notesVault = activeDomain === 'personal' ? tripVault ?? (connectionStatus === 'connected' ? personalData?.notes : undefined) : undefined
+  useEffect(() => {
+    if (!notesVault) return
+    const send = () => { if (waitingCount()) void syncNotes(offlineNotes(notesVault)) }
+    send()
+    const warm = setTimeout(() => { void import('./notes/NotesView').catch(() => {}) }, 5000)
+    window.addEventListener('online', send)
+    return () => {
+      clearTimeout(warm)
+      window.removeEventListener('online', send)
+    }
+  }, [notesVault])
   const reviews = useReviews({ domain: activeDomain, currentDay, tasks, product, onProduct: setProduct, settings, notesVault: connectionStatus === 'connected' ? personalData?.notes : undefined, userName: account.name })
   const untriaged = tasks.filter((task) => task.domain === activeDomain && toSort(task))
   const activeProjects = product.projects.filter((project) => project.domain === activeDomain && project.status === 'active')

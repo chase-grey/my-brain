@@ -57,9 +57,11 @@ export function findNotes(notes: VaultNote[], root: string, query: string): { pa
     .slice(0, maxFound)
 }
 
+const cleanName = (name: string) => name.replace(/[\\/:*?"<>|#^[\]]/g, ' ').replace(/\s+/g, ' ').replace(/^\.+/, '').trim()
+
 /** Where a new note with this name goes. A name already taken in the folder gets a number; no usable name, no path. */
 export function newNotePath(notes: VaultNote[], folder: string, name: string): string | undefined {
-  const clean = name.replace(/[\\/:*?"<>|#^[\]]/g, ' ').replace(/\s+/g, ' ').replace(/^\.+/, '').trim()
+  const clean = cleanName(name)
   if (!clean) return undefined
   const taken = new Set(notes.map((note) => note.path.toLowerCase()))
   for (let count = 1; ; count += 1) {
@@ -141,4 +143,74 @@ export function keepUnsaved(path: string, entry: Unsaved[string] | undefined, st
   } catch {
     // The words still sit on screen.
   }
+}
+
+/** A rename, move or delete made here that the vault does not have yet. */
+export type NoteOp = { kind: 'delete'; path: string } | { kind: 'move'; from: string; to: string }
+
+export const opsKey = 'my-brain.personal.notes.ops.v1'
+
+export function loadOps(store: StorageLike | undefined = storage()): NoteOp[] {
+  try {
+    const value = JSON.parse(store?.getItem(opsKey) ?? '[]') as NoteOp[]
+    return Array.isArray(value) ? value : []
+  } catch {
+    return []
+  }
+}
+
+export function keepOps(ops: NoteOp[], store: StorageLike | undefined = storage()): void {
+  try {
+    if (ops.length) store?.setItem(opsKey, JSON.stringify(ops))
+    else store?.removeItem(opsKey)
+  } catch {
+    // Nothing to keep it in: the change still shows until the app is closed.
+  }
+}
+
+/** The list as it stands on this device: the vault's, with what was renamed, moved, deleted or newly written here and not yet sent. */
+export function withPending(notes: VaultNote[], unsaved: string[], ops: NoteOp[]): VaultNote[] {
+  let list = notes
+  for (const op of ops) {
+    if (op.kind === 'delete') list = list.filter((note) => note.path !== op.path)
+    else list = list.some((note) => note.path === op.to) ? list.filter((note) => note.path !== op.from) : list.map((note) => note.path === op.from ? { ...note, path: op.to } : note)
+  }
+  const have = new Set(list.map((note) => note.path))
+  return [...list, ...unsaved.filter((path) => !have.has(path)).map((path) => ({ path, sha: '' }))]
+}
+
+const parent = (path: string) => path.slice(0, path.lastIndexOf('/'))
+
+/** The folders a note can be moved to: notes itself and every folder under it, the journal left out. */
+export function noteFolders(notes: VaultNote[]): string[] {
+  const folders = new Set([notesFolder])
+  for (const { path } of notes) {
+    if (!inFolder(path, notesFolder) || inJournal(path)) continue
+    for (let folder = parent(path); folder.length > notesFolder.length; folder = parent(folder)) folders.add(folder)
+  }
+  return [...folders].filter((folder) => !folder.split('/').some((part) => part.startsWith('.'))).sort((a, b) => a === notesFolder ? -1 : b === notesFolder ? 1 : byName(a, b))
+}
+
+/** What a folder is called where one is picked: `notes`, or its path under notes. */
+export const folderLabel = (folder: string) => folder === notesFolder ? notesFolder : folder.slice(notesFolder.length + 1)
+
+/** A typed folder name as a folder under notes. The journal cannot be moved into. */
+export function folderPath(name: string): string | undefined {
+  const parts = name.split('/').map(cleanName).filter(Boolean)
+  if (parts[0]?.toLowerCase() === notesFolder) parts.shift()
+  const folder = [notesFolder, ...parts].join('/')
+  return inJournal(folder.toLowerCase()) ? undefined : folder
+}
+
+/** Where a note goes under a new name, or nothing when the name is not usable or not a change. A journal entry is named by its day and keeps it. */
+export function renamedPath(notes: VaultNote[], path: string, name: string): string | undefined {
+  if (inJournal(path)) return undefined
+  const to = newNotePath(notes.filter((note) => note.path !== path), parent(path), name)
+  return to === path ? undefined : to
+}
+
+/** Where a note goes in another folder, or nothing when it is already there. A journal entry stays in its year. */
+export function movedPath(notes: VaultNote[], path: string, folder: string): string | undefined {
+  if (inJournal(path) || inJournal(folder) || parent(path) === folder) return undefined
+  return newNotePath(notes, folder, noteTitle(path))
 }
