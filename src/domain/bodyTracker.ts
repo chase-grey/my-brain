@@ -11,8 +11,6 @@ export const TRACKER_SHARE_KEY = 'wt.share.body'
 
 /** The tracker's goals screen, where the goals the slice quotes are charted. */
 export const TRACKER_GOALS_LINK = '/workout-tracker/?tab=progress'
-/** The tracker's own today screen, where a workout is started. */
-export const TRACKER_LINK = '/workout-tracker/'
 
 export type TrackerWeek = { week: string; result: 'hit' | 'froze' | 'missed'; inProgress?: boolean }
 
@@ -25,13 +23,7 @@ export type TrackerSummary = {
   weeks: TrackerWeek[]
   /** `met` is every goal reached; `open` and `onPace` are the committed ones still being chased. `list` names them, reached first. */
   goals: { open: number; onPace: number; met: number; list?: TrackerGoal[] }
-  /** The week being lived against the tracker's weekly goals, counted by the tracker. */
-  thisWeek?: { week: string; rows: TrackerWeekRow[] }
 }
-
-export type TrackerWeekRow = { kind: 'workouts' | 'stretches' | 'calorieDays' | 'cardio'; done: number; goal: number }
-const weekKinds = ['workouts', 'stretches', 'calorieDays', 'cardio']
-export const weekRowLabels: Record<TrackerWeekRow['kind'], string> = { workouts: 'workouts', stretches: 'stretches', calorieDays: 'calorie days', cardio: 'cardio' }
 
 export type TrackerGoal = { title: string; state: 'met' | 'onPace' | 'behind' }
 
@@ -68,15 +60,11 @@ export function parseTrackerSummary(raw: string | null | undefined): TrackerSumm
     const list = Array.isArray(goals.list)
       ? goals.list.filter((item): item is TrackerGoal => !!item && typeof item.title === 'string' && ['met', 'onPace', 'behind'].includes(item.state)).map((item) => ({ title: item.title, state: item.state }))
       : undefined
-    const thisWeek = value.thisWeek && isDay(value.thisWeek.week) && Array.isArray(value.thisWeek.rows)
-      ? { week: value.thisWeek.week, rows: value.thisWeek.rows.filter((row): row is TrackerWeekRow => !!row && weekKinds.includes(row.kind) && isCount(row.done) && isCount(row.goal)).map((row) => ({ kind: row.kind, done: row.done, goal: row.goal })) }
-      : undefined
     return {
       v: 1, asOf: value.asOf, streak: value.streak, freezes: value.freezes,
       weeksTracked: isCount(value.weeksTracked) ? value.weeksTracked : weeks.length,
       weeks: weeks.map((item) => ({ week: item.week, result: item.result, ...(item.inProgress ? { inProgress: true } : {}) })),
       goals: { open: goals.open, onPace: goals.onPace, met: goals.met, ...(list ? { list } : {}) },
-      ...(thisWeek?.rows.length ? { thisWeek } : {}),
     }
   } catch {
     return undefined
@@ -155,14 +143,6 @@ export async function signInToTracker(email: string, password: string): Promise<
 
 const dayMs = 86_400_000
 const ms = (day: string) => new Date(`${day}T00:00:00Z`).getTime()
-
-/** The tracker's count for the week `today` falls in, or nothing once that week is over: a new week it has not reported is not known. */
-export function trackerThisWeek(summary: TrackerSummary | undefined, today: string): TrackerWeekRow[] | undefined {
-  const week = summary?.thisWeek
-  if (!week) return undefined
-  const into = ms(today) - ms(week.week)
-  return into >= 0 && into < 7 * dayMs ? week.rows : undefined
-}
 const iso = (time: number) => new Date(time).toISOString().slice(0, 10)
 
 /**
