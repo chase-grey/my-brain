@@ -97,6 +97,9 @@ jobs:
             if [ "$new" != "$(certificate "$RUNNER_TEMP/published/my-brain.apk")" ]; then
               echo "::error::The apk is signed with a different key from the one published, so it would not install over it."; exit 1
             fi
+            echo "Same certificate as the published apk."
+          else
+            echo "::warning::Could not download the published apk to compare certificates."
           fi
       # One release, replaced on every build, so the phone always downloads from the same address.
       # update.json and its signature go up last: they are what the installed app reads, and what they name has to be there already.
