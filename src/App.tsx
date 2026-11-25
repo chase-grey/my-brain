@@ -35,7 +35,7 @@ import { syncPhoneRest } from './native/health'
 import { moneyBriefing } from './domain/money'
 import { moneyReader } from './companion/moneyRead'
 import { useTaskGuesses } from './companion/taskGuesses'
-import { sortedTask } from './domain/taskGuess'
+import { nextToSort, sortedTask } from './domain/taskGuess'
 import { minuteOptions, TodayView } from './views/TodayView'
 import { ProgressView } from './views/ProgressView'
 import { bumpsBetween, recordBumps } from './review/bumpLog'
@@ -95,6 +95,11 @@ export function mailIdFromHash(hash: string): string | undefined {
   } catch {
     return undefined
   }
+}
+
+/** A task still under new to sort. */
+function toSort(task: Task): boolean {
+  return task.metadataComplete === false && !task.completed && !task.storeType
 }
 
 function hashFor(view: View, taskId?: string): string {
@@ -360,6 +365,9 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
     return () => document.removeEventListener('visibilitychange', onVisible)
   }, [activeDomain])
 
+  /** Set when the sort form moves on to the next task, for the address to follow without a new step back. */
+  const sortingOn = useRef(false)
+
   function startAddingTask() {
     setEditingTaskId(undefined)
     setView('task')
@@ -376,7 +384,16 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
 
   useEffect(() => {
     const desired = hashFor(view, editingTaskId)
-    if (location.hash !== desired) history.pushState(null, '', desired)
+    if (location.hash !== desired) {
+      // The next task to sort takes the place of the one just dealt with, so back leaves sorting in one step.
+      if (sortingOn.current) history.replaceState(null, '', desired)
+      else history.pushState(null, '', desired)
+    }
+    if (sortingOn.current) {
+      contentRef.current?.scrollTo(0, 0)
+      window.scrollTo(0, 0)
+    }
+    sortingOn.current = false
   }, [view, editingTaskId])
 
   useEffect(() => {
@@ -790,21 +807,39 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
     setView('task')
   }
 
-  function deleteTask(id: string) {
-    if (!removeTask(id)) return
+  /** Where the sort form goes once its task is dealt with, read before the task leaves the list. */
+  function afterTask(id: string): string | undefined {
+    if (view !== 'task') return undefined
+    return nextToSort(tasksRef.current.filter((task) => task.domain === activeDomain && toSort(task)), id)
+  }
+
+  /** Leaves a task that is dealt with: on to the next one to sort while sorting, back to today otherwise. */
+  function leaveTask(next: string | undefined) {
+    if (next) {
+      sortingOn.current = true
+      setEditingTaskId(next)
+      return
+    }
     setEditingTaskId(undefined)
     setView('today')
   }
 
+  function deleteTask(id: string) {
+    const next = afterTask(id)
+    if (!removeTask(id)) return
+    leaveTask(next)
+  }
+
   function finishTask(id: string) {
+    const next = afterTask(id)
     completeTask(id)
-    setEditingTaskId(undefined)
-    setView('today')
+    leaveTask(next)
   }
 
   function delegateTask(id: string): void {
     const source = tasksRef.current.find((task) => task.id === id)
     if (!source) return
+    const after = afterTask(id)
     const next = tasksRef.current.map((task) => task.id === id ? { ...task, kind: 'delegated' as const, metadataComplete: true } : task)
     commitTasks(next)
     void persistPersonalMetadata(next)
@@ -812,13 +847,13 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
       id: crypto.randomUUID(), domain: source.domain, title: source.title, assignee: '', askedOn: currentDay,
       checkBackOn: currentDay, status: 'asked',
     }] }))
-    setEditingTaskId(undefined)
-    setView('today')
+    leaveTask(after)
   }
 
   function updateTask(updated: Task) {
     if (updated.domain !== activeDomain) return
     const previous = tasksRef.current.find((task) => task.id === updated.id)
+    const after = afterTask(updated.id)
     const next = tasksRef.current.map((task) => task.id === updated.id ? updated : task)
     commitTasks(next)
     void persistPersonalMetadata(next)
@@ -828,8 +863,7 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
       void remote.updateTask(previous, activeDomain === 'work' ? { ...changes, notes: updated.notes ?? '' } : changes)
         .catch((error: unknown) => reportSync(error))
     }
-    setEditingTaskId(undefined)
-    setView('today')
+    leaveTask(after)
   }
 
   function toggleComplete(id: string) {
@@ -861,7 +895,7 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
 
   const shownView: View = docked && view === 'chat' ? 'today' : view
   const reviews = useReviews({ domain: activeDomain, currentDay, tasks, product, onProduct: setProduct, settings, notesVault: connectionStatus === 'connected' ? personalData?.notes : undefined, userName: account.name })
-  const untriaged = tasks.filter((task) => task.domain === activeDomain && task.metadataComplete === false && !task.completed && !task.storeType)
+  const untriaged = tasks.filter((task) => task.domain === activeDomain && toSort(task))
   const activeProjects = product.projects.filter((project) => project.domain === activeDomain && project.status === 'active')
   const guesses = useTaskGuesses({ domain: activeDomain, tasks: untriaged, projects: activeProjects, settings })
   function confirmGuess(id: string): void {
@@ -887,14 +921,14 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
   const chat = <Suspense fallback={<header className="view-head"><h1>chat</h1></header>}><ChatView key={activeDomain} domain={activeDomain} settings={settings} actions={companionActions} summary={companionActions.todaySummary()} hasCalendar={activeDomain === 'personal' && connectionStatus === 'connected'} onSettings={() => setView('settings')} onChangeSettings={(change) => changeSettings((current) => ({ ...current, ...change }))} notesVault={connectionStatus === 'connected' ? personalData?.notes : undefined} userName={account.name} prefill={kickoff} onPrefilled={onKickoffUsed} attach={chatAttachment} onAttached={() => setChatAttachment(undefined)} docked={docked} talk={talk} onTalkStarted={() => setTalk(false)} mail={activeDomain === 'personal' && connectionStatus === 'connected' ? personalData?.mail : undefined} mailId={activeDomain === 'personal' ? mailId : undefined} mailOff={connectionStatus !== 'connected' && (connectionStatus === 'unconfigured' || Boolean(personalData) || Boolean(syncError))} onMailTaken={() => setMailId(undefined)} /></Suspense>
 
   function navButton(item: { view: View; icon: IconName }) {
-    return <button key={item.view} className={shownView === item.view ? 'active' : ''} onClick={() => setView(item.view)} type="button" aria-current={shownView === item.view ? 'page' : undefined}><Icon name={item.icon} /><span>{item.view}</span>{updateReady && item.view === 'settings' && <i className="nav-dot" aria-hidden="true" />}</button>
+    return <button key={item.view} className={shownView === item.view ? 'active' : ''} onClick={() => setView(item.view)} type="button" aria-current={shownView === item.view ? 'page' : undefined}><Icon name={item.icon} /><span>{item.view}</span>{settingsDot && item.view === 'settings' && <i className="nav-dot" aria-hidden="true" />}</button>
   }
 
   return <div className={`app${docked ? ' is-docked' : ''}`}>
     <nav className="rail" aria-label="primary">
       {railPrimary.map(navButton)}
       {rail.onRail.map(navButton)}
-      {railMenu.length > 0 && <div className="rail-more"><Menu label="more" align="start" items={railMenu}><Icon name="more" /><span>more</span>{updateReady && <i className="nav-dot" aria-hidden="true" />}</Menu></div>}
+      {railMenu.length > 0 && <div className="rail-more"><Menu label="more" align="start" items={railMenu}><Icon name="more" /><span>more</span>{settingsDot && <i className="nav-dot" aria-hidden="true" />}</Menu></div>}
     </nav>
 
     <div className="main">
@@ -938,7 +972,7 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
 
       {shownView !== 'task' && <nav className="tabbar" aria-label="primary">
         {primaryViews.map(navButton)}
-        <Menu label="more" items={moreItems}><Icon name="more" /><span>more</span>{updateReady && <i className="nav-dot" aria-hidden="true" />}</Menu>
+        <Menu label="more" items={moreItems}><Icon name="more" /><span>more</span>{settingsDot && <i className="nav-dot" aria-hidden="true" />}</Menu>
       </nav>}
     </div>
 

@@ -111,6 +111,16 @@ export function parseGuesses(reply: string, tasks: Pick<Task, 'id' | 'priority'>
   return guesses
 }
 
+/**
+ * The task the sort form moves to once the one it had open is dealt with: the one below it in the list, or the
+ * first of the rest when it was the last. Nothing when it was the only one left, or was not one to sort.
+ */
+export function nextToSort(unsorted: Task[], id: string): string | undefined {
+  const at = unsorted.findIndex((task) => task.id === id)
+  if (at < 0) return undefined
+  return (unsorted[at + 1] ?? unsorted.find((task) => task.id !== id))?.id
+}
+
 /** The task as sorted with the guess taken as it stands: what saving the sort form untouched would write. */
 export function sortedTask(task: Task, guess: TaskGuess, today: string): Task {
   const personal = task.domain === 'personal'

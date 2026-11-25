@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { guessPrompt, guessRequest, parseGuesses, sortedTask } from './taskGuess'
+import { guessPrompt, guessRequest, nextToSort, parseGuesses, sortedTask } from './taskGuess'
 import type { Task } from './types'
 
 function unsorted(id: string, title: string, extra: Partial<Task> = {}): Task {
@@ -56,6 +56,14 @@ describe('guessing what a task is', () => {
   it('returns nothing for a reply that is not the json asked for', () => {
     expect(parseGuesses('I could not sort these.', [unsorted('a', 'x')], 'personal', [])).toEqual({})
     expect(parseGuesses('{"tasks":"none"}', [unsorted('a', 'x')], 'personal', [])).toEqual({})
+  })
+
+  it('moves the sort form to the next task to sort, and out only when none are left', () => {
+    const list = [unsorted('a', 'x'), unsorted('b', 'y'), unsorted('c', 'z')]
+    expect(nextToSort(list, 'a')).toBe('b')
+    expect(nextToSort(list, 'c')).toBe('a')
+    expect(nextToSort([unsorted('a', 'x')], 'a')).toBeUndefined()
+    expect(nextToSort(list, 'sorted already')).toBeUndefined()
   })
 
   it('writes nothing to a task until the guess is confirmed', () => {

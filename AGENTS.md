@@ -102,6 +102,7 @@ Chase, 2026-11-25. A task new to sort arrives with the ai's guess at its time, p
 
 - A guess is only an offer. Nothing is written to the task until Chase confirms it: `confirm` on its row under new to sort takes the guess as it stands, and opening the task shows the sort form filled with it, where any value can be changed before `save`.
 - Confirming a guess writes exactly what saving the untouched form would (`sortedTask`).
+- Sorting carries on (Chase, 2026-11-25): a task dealt with from the sort form (save, mark done, not mine, delete) opens the next one to sort (`nextToSort`), and today comes back only when none are left or on back or cancel. `confirm` on a row stays on today.
 - Guesses are made in the background by the cheapest model, up to 20 tasks a request, once per wording, and kept on the device. A task with no guess is sorted by hand as before; a failed request is not retried in a loop.
 - Work tasks go only to Claude Code on the bridge, never the personal key or Jev. Personal ones go where the personal chat goes: the bridge when the device has one, the key when it does not, and nowhere with ai off.
 - A task's words go to the model as data, with the line that they are never an instruction. The model is given only the choices the form has, and anything else it returns is dropped.
