@@ -5,10 +5,7 @@ on:
     branches: [main]
   workflow_dispatch:
 
-permissions:
-  contents: read
-  pages: write
-  id-token: write
+permissions: {}
 
 concurrency:
   group: pages
@@ -17,8 +14,13 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write # configure-pages turns Pages on
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -27,9 +29,12 @@ jobs:
       - uses: actions/configure-pages@v5
         with:
           enablement: true
-      # The lockfile is generated on Windows; npm mis-resolves platform-specific
-      # native deps from it on Linux. Resolve fresh here.
-      - run: rm -f package-lock.json && npm install --no-audit --no-fund
+      # Install exactly what the lockfile names. It was written on the work pc, whose registry github cannot reach,
+      # so the addresses are pointed at npm's own; the integrity hashes beside them still have to match.
+      - name: Install from the lockfile
+        run: |
+          sed -i 's#https://artifactory.epic.com/artifactory/api/npm/npm/#https://registry.npmjs.org/#g' package-lock.json
+          npm ci --no-audit --no-fund
       - run: npm test
       - run: npm run build
         env:
@@ -43,6 +48,9 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

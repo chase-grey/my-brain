@@ -5,8 +5,7 @@ on:
     branches: [main]
   workflow_dispatch:
 
-permissions:
-  contents: write
+permissions: {}
 
 concurrency:
   group: android
@@ -15,8 +14,12 @@ concurrency:
 jobs:
   apk:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # the release the phone downloads from
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -24,9 +27,13 @@ jobs:
         with:
           distribution: temurin
           java-version: 21
-      - uses: gradle/actions/setup-gradle@v4
-      # Same as the Pages build: the Windows lockfile mis-resolves native deps on Linux.
-      - run: rm -f package-lock.json && npm install --no-audit --no-fund
+      - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4.4.3
+      # Install exactly what the lockfile names. It was written on the work pc, whose registry github cannot reach,
+      # so the addresses are pointed at npm's own; the integrity hashes beside them still have to match.
+      - name: Install from the lockfile
+        run: |
+          sed -i 's#https://artifactory.epic.com/artifactory/api/npm/npm/#https://registry.npmjs.org/#g' package-lock.json
+          npm ci --no-audit --no-fund
       - run: npm test
       - run: npm run build:android
         env:
