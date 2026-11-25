@@ -20,6 +20,7 @@ android {
         }
     }
     // The github build signs with the key kept in the repo's secrets. Without it, a build uses the local debug key.
+    // The same key signs update.json (scripts/SignUpdate.java), which is how the app knows a web update is ours.
     def sharedKeystore = System.getenv('ANDROID_KEYSTORE_FILE')
     signingConfigs {
         shared {
@@ -38,7 +39,10 @@ android {
                 signingConfig signingConfigs.shared
             }
         }
+        // The apk that is published. It cannot be debugged, so a cable cannot read what the app keeps.
+        // Signed with the same key as every build before it, so it installs over them.
         release {
+            signingConfig sharedKeystore ? signingConfigs.shared : signingConfigs.debug
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }

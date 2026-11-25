@@ -9,6 +9,8 @@ const config: CapacitorConfig = {
   android: {
     // msal signs in by redirect inside the webview and comes back to https://localhost, which the shell serves itself.
     allowMixedContent: false,
+    // the webview cannot be inspected from a computer, whatever kind of build it is.
+    webContentsDebuggingEnabled: false,
   },
   server: {
     androidScheme: 'https',

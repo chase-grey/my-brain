@@ -63,9 +63,9 @@ jobs:
             echo "::warning::No signing key in the repo secrets. This apk will not install over an earlier one."
           fi
           chmod +x gradlew
-          ./gradlew assembleDebug -PversionCode=${{ github.run_number }} -PversionName=1.0.${{ github.run_number }} -PnativeStamp="$NATIVE_STAMP"
+          ./gradlew assembleRelease -PversionCode=${{ github.run_number }} -PversionName=1.0.${{ github.run_number }} -PnativeStamp="$NATIVE_STAMP"
           rm -f "$RUNNER_TEMP/my-brain.p12"
-          cp app/build/outputs/apk/debug/app-debug.apk "$RUNNER_TEMP/my-brain.apk"
+          cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/my-brain.apk"
       - name: Pack the web part
         run: |
           cd dist && zip -qr "$RUNNER_TEMP/web-$WEB_COMMIT.zip" .
