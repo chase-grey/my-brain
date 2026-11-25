@@ -9,6 +9,7 @@ import { rungs } from '../companion/route'
 import type { Domain, Task } from '../domain/types'
 import type { ProductState } from '../productState'
 import type { AppSettings } from '../settings'
+import { AreaCheckIn } from '../views/AreaSlices'
 import { ReviewView } from '../views/ReviewView'
 import { loadBumps } from './bumpLog'
 import { loadDigest } from './digest'
@@ -42,11 +43,13 @@ const reviewRung = (kind: ReviewKind) => rungs[kind === 'week' ? 1 : 2]
 
 type Shown = { period: Period; review: Review; writing: boolean; error?: string; owed: boolean }
 
-export function useReviews({ domain, currentDay, tasks, product, settings, notesVault, userName }: {
+export function useReviews({ domain, currentDay, tasks, product, onProduct, settings, notesVault, userName }: {
   domain: Domain
   currentDay: string
   tasks: Task[]
   product: ProductState
+  /** Lets the month review save the check-in answers. */
+  onProduct?: React.Dispatch<React.SetStateAction<ProductState>>
   settings: AppSettings
   /** The onedrive notes folder, used when no github vault is set. */
   notesVault?: VaultStore
@@ -121,6 +124,7 @@ export function useReviews({ domain, currentDay, tasks, product, settings, notes
   }
 
   const overlay = shown && <ReviewView key={`${shown.period.kind}:${shown.period.key}`} period={shown.period} review={shown.review} writing={shown.writing} error={shown.error}
+    checkIn={domain === 'personal' && shown.period.kind === 'month' && onProduct ? <AreaCheckIn product={product} today={currentDay} onProduct={onProduct} /> : undefined}
     onRetry={() => show(shown.period, shown.owed)} onAnswer={answer} onClose={close} />
   return { open: (kind) => show(lastCompleted(kind, currentDay), false), overlay }
 }

@@ -1,3 +1,4 @@
+import { isCheckArea } from '../domain/areas'
 import { useState } from 'react'
 import type { CalendarBlock } from '../data/calendarGraphProvider'
 import { timeRange } from '../domain/calendar'
@@ -159,7 +160,7 @@ export function GoalsView({ domain, product, tasks, currentDay, heldEvents, canH
     {domain === 'personal' && <Card title="life ring · per 28 days">
       <div className="stack">
       <Chips label="areas" options={RING_DOMAINS.map((area) => ({ value: area, label: area }))} values={areasOn} onToggle={toggleArea} />
-      <div className="grid-2">{areasOn.filter((area) => !(area === 'body' && product.bodyTracker) && !(area === 'money' && product.moneyGoals.length) && !(area === 'rest' && restReading(product.restDays, product.restGoals, currentDay))).map((ringDomain) => <Field key={ringDomain} label={ringDomain}><input inputMode="numeric" min="0" type="number" value={product.ringCommitments.find((item) => item.domain === ringDomain)?.commitment28 ?? 0} onChange={(event) => setRing(ringDomain, Number(event.target.value))} /></Field>)}</div>
+      <div className="grid-2">{areasOn.filter((area) => !isCheckArea(area) && !(area === 'body' && product.bodyTracker) && !(area === 'money' && product.moneyGoals.length) && !(area === 'rest' && restReading(product.restDays, product.restGoals, currentDay))).map((ringDomain) => <Field key={ringDomain} label={ringDomain}><input inputMode="numeric" min="0" type="number" value={product.ringCommitments.find((item) => item.domain === ringDomain)?.commitment28 ?? 0} onChange={(event) => setRing(ringDomain, Number(event.target.value))} /></Field>)}</div>
       </div>
     </Card>}
 

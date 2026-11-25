@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import type { Period } from '../review/period'
 import { reviewTitle, type Question, type Review } from '../review/review'
 import { Card, Empty } from '../ui'
@@ -29,12 +29,14 @@ function QuestionRow({ question, onAnswer }: { question: Question; onAnswer: (an
   </li>
 }
 
-export function ReviewView({ period, review, writing, error, onRetry, onAnswer, onClose }: {
+export function ReviewView({ period, review, writing, error, checkIn, onRetry, onAnswer, onClose }: {
   period: Period
   review: Review
   /** The counted half is on screen and the written half is on its way. */
   writing: boolean
   error?: string
+  /** The month's check-in: the answers the life areas are judged by, asked again. */
+  checkIn?: ReactNode
   onRetry: () => void
   onAnswer: (index: number, answer: string) => Promise<void>
   onClose: () => void
@@ -64,6 +66,8 @@ export function ReviewView({ period, review, writing, error, onRetry, onAnswer, 
           <ul className="review-list">{review.questions.map((question, index) => <QuestionRow key={question.text} question={question} onAnswer={(answer) => onAnswer(index, answer)} />)}</ul>
         </Card>}
       </>}
+
+      {checkIn}
 
       {review.next.length > 0 && <Card title="next up">
         <ul className="review-list">{review.next.map((line) => <li key={line}>{line}</li>)}</ul>

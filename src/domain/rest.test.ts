@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { buildLifeRing } from './lifeRing'
-import { mergeRestDays, restReading, type RestDay } from './rest'
+import { bedClock, bedFromTime, bedToTime, mergeRestDays, restReading, type RestDay } from './rest'
 
 const goals = { sleepMin: 420, screenMaxMin: 180 }
 
@@ -63,5 +63,26 @@ describe('rest slice from the phone', () => {
     const merged = mergeRestDays(kept, [], '2026-11-25')
     expect(merged.length).toBe(392)
     expect(merged[0].day).toBe('2025-10-22')
+  })
+})
+
+describe('bedtime', () => {
+  it('counts the nights asleep by the time set, as a third equal part of the slice', () => {
+    // 690 is 11:30pm, 750 is 12:30am.
+    const days: RestDay[] = [{ day: '2026-11-23', sleepMin: 450, bedMin: 660 }, { day: '2026-11-24', sleepMin: 450, bedMin: 750 }]
+    const reading = restReading(days, { sleepMin: 420, bedByMin: 690 }, '2026-11-25')!
+    expect(reading.bed).toEqual({ met: 1, judged: 2, averageMin: 705, goalMin: 690 })
+    expect(reading.fill).toBeCloseTo(0.75)
+  })
+
+  it('says nothing about bedtime until the phone sends one', () => {
+    expect(restReading([{ day: '2026-11-24', sleepMin: 450 }], { sleepMin: 420, bedByMin: 690 }, '2026-11-25')!.bed).toBeUndefined()
+    expect(mergeRestDays([], [{ day: '2026-11-24', sleepMin: 450, bedMin: 700 }], '2026-11-25')[0].bedMin).toBe(700)
+  })
+
+  it('reads minutes after noon as a clock time and back', () => {
+    expect([bedClock(690), bedClock(750), bedClock(600)]).toEqual(['11:30pm', '12:30am', '10pm'])
+    expect(bedFromTime('23:30')).toBe(690)
+    expect(bedToTime(750)).toBe('00:30')
   })
 })

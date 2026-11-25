@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { CalendarBlock } from '../data/calendarGraphProvider'
+import type { VaultStore } from '../companion/githubVault'
+import { areaReadings } from '../domain/areas'
 import { bodyReading, TRACKER_GOALS_LINK } from '../domain/bodyTracker'
 import { timeRange } from '../domain/calendar'
 import { goalProgress } from '../domain/goals'
@@ -8,16 +10,18 @@ import { moneyReading } from '../domain/money'
 import { buildWeekReceipt } from '../domain/receipt'
 import { restReading } from '../domain/rest'
 import type { MoneyRead } from '../companion/moneyRead'
-import type { Domain, Goal, LifeDomain, RestCheckIn } from '../domain/types'
-import { hours, newId, shortDate, today } from '../format'
-import type { ProductState } from '../productState'
+import type { Domain, Goal, LifeDomain, Task } from '../domain/types'
+import { hours, shortDate, today } from '../format'
+import { useJournalDays } from '../journal/days'
+import { withRestCheckIn, type ProductState } from '../productState'
 import { reviewKinds, type ReviewKind } from '../review/period'
 import { Icon } from '../navIcons'
 import { Card, Empty, Field, Menu, Sheet } from '../ui'
+import { AreaDetail, AreaLogSheet, SawSomeoneSheet } from './AreaSlices'
 import { LifeWheel, wheelHue } from './LifeWheel'
 import { hasPhoneRest, MoneyDetail, MoneySheet, RestDetail } from './MoneyRest'
 
-type LogKind = 'connection' | 'money' | 'rest'
+type LogKind = 'connection' | 'did' | 'money' | 'rest'
 
 function sliceFromHash(): LifeDomain | undefined {
   if (typeof location === 'undefined') return undefined
@@ -59,9 +63,11 @@ function GoalRow({ goal, product, currentDay, held, onOpen }: { goal: Goal; prod
   </li>
 }
 
-export function ProgressView({ domain, product, currentDay, heldEvents, onProduct, onGoals, onReview, readMoney }: {
+export function ProgressView({ domain, product, tasks, currentDay, heldEvents, onProduct, onGoals, onReview, readMoney, journalVault }: {
   domain: Domain
   product: ProductState
+  /** For what is left on each project in the projects slice. */
+  tasks?: Task[]
   currentDay: string
   heldEvents: Record<string, CalendarBlock>
   onProduct: React.Dispatch<React.SetStateAction<ProductState>>
@@ -69,7 +75,10 @@ export function ProgressView({ domain, product, currentDay, heldEvents, onProduc
   onReview?: (kind: ReviewKind) => void
   /** Reads money screenshots with the person's own key; left out when the chat has none. */
   readMoney?: (files: File[]) => Promise<MoneyRead>
+  /** Where the journal is kept; the mind slice counts its days and never opens one. */
+  journalVault?: Pick<VaultStore, 'listNotes'>
 }) {
+  const journalDays = useJournalDays(domain === 'personal' ? journalVault : undefined)
   const [log, setLog] = useState<LogKind>()
   const [slice, setSlice] = useState<LifeDomain | undefined>(sliceFromHash)
   const pushed = useRef(false)
@@ -95,7 +104,7 @@ export function ProgressView({ domain, product, currentDay, heldEvents, onProduc
   const commitment = [...product.commitments].reverse().find((item) => item.domain === domain)
   const receipt = commitment ? buildWeekReceipt(commitment, product.activities.filter((item) => item.domain === domain), product.dayOverrides) : undefined
   const waiting = product.delegations.filter((item) => item.domain === domain && item.status !== 'delivered')
-  const ring = domain === 'personal' ? buildLifeRing(product.ringEvidence, product.ringCommitments, currentDay, product.ringOff, product.bodyTracker && bodyReading(product.bodyTracker, currentDay), { money: moneyReading(product.moneyGoals, product.moneySnapshots, currentDay), rest: restReading(product.restDays, product.restGoals, currentDay) }) : []
+  const ring = domain === 'personal' ? buildLifeRing(product.ringEvidence, product.ringCommitments, currentDay, product.ringOff, product.bodyTracker && bodyReading(product.bodyTracker, currentDay), { money: moneyReading(product.moneyGoals, product.moneySnapshots, currentDay), rest: restReading(product.restDays, product.restGoals, currentDay), areas: areaReadings(product, currentDay, { projects: product.projects, activities: product.activities, journalDays }) }) : []
   const open = domain === 'personal' ? ring.find((arc) => arc.domain === slice) : undefined
 
   return <>
@@ -108,6 +117,7 @@ export function ProgressView({ domain, product, currentDay, heldEvents, onProduc
       {(domain === 'personal' || onReview) && <Menu items={[
         ...(domain === 'personal' ? [
           { label: 'saw someone', onSelect: () => setLog('connection') },
+          { label: 'did something', onSelect: () => setLog('did') },
           { label: 'money numbers', onSelect: () => setLog('money') },
           { label: 'rest check-in', onSelect: () => setLog('rest') },
         ] : []),
@@ -116,8 +126,9 @@ export function ProgressView({ domain, product, currentDay, heldEvents, onProduc
     </header>
 
     {open?.domain === 'money' && <MoneyDetail arc={open} product={product} day={currentDay} onProduct={onProduct} readMoney={readMoney} />}
-    {open?.domain === 'rest' && hasPhoneRest(product) && <RestDetail arc={open} product={product} day={currentDay} onProduct={onProduct} />}
-    {open && !open.money && !open.rest && <SliceDetail key={open.domain} arc={open} onGoals={onGoals} />}
+    {open?.domain === 'rest' && hasPhoneRest(product) && <RestDetail arc={open} product={product} day={currentDay} onProduct={onProduct} onCheckIn={() => setLog('rest')} />}
+    {open?.area && <AreaDetail key={open.domain} arc={open} product={product} tasks={tasks} today={currentDay} journalDays={journalDays} onProduct={onProduct} onGoals={onGoals} />}
+    {open && !open.money && !open.rest && !open.area && <SliceDetail key={open.domain} arc={open} onGoals={onGoals} />}
 
     {!open && <Card title="this week" aside={receipt && <span className="count">{receipt.paid ? 'paid' : `${hours(receipt.remainingMin)} left`}</span>}>
       {receipt
@@ -136,7 +147,9 @@ export function ProgressView({ domain, product, currentDay, heldEvents, onProduc
     </Card>}
 
     {log === 'money' && <MoneySheet day={currentDay} onClose={() => setLog(undefined)} onProduct={onProduct} />}
-    {log && log !== 'money' && <LogSheet kind={log} onClose={() => setLog(undefined)} onProduct={onProduct} />}
+    {log === 'connection' && <SawSomeoneSheet product={product} today={currentDay} onClose={() => setLog(undefined)} onProduct={onProduct} />}
+    {log === 'did' && <AreaLogSheet product={product} today={currentDay} journalDays={journalDays} onClose={() => setLog(undefined)} onProduct={onProduct} />}
+    {log === 'rest' && <RestSheet onClose={() => setLog(undefined)} onProduct={onProduct} />}
   </>
 }
 
@@ -185,36 +198,12 @@ function SliceDetail({ arc, onGoals }: { arc: RingArc; onGoals: () => void }) {
   </Card>
 }
 
-function LogSheet({ kind, onClose, onProduct }: { kind: Exclude<LogKind, 'money'>; onClose: () => void; onProduct: React.Dispatch<React.SetStateAction<ProductState>> }) {
-  const [person, setPerson] = useState('')
+function RestSheet({ onClose, onProduct }: { onClose: () => void; onProduct: React.Dispatch<React.SetStateAction<ProductState>> }) {
   const [rating, setRating] = useState(5)
-  const day = today()
-
-  function submit(event: React.FormEvent) {
-    event.preventDefault()
-    if (kind === 'connection') {
-      const name = person.trim()
-      if (!name) return
-      onProduct((current) => ({ ...current,
-        people: [...current.people.filter((item) => item.displayName !== name), { id: newId('person'), displayName: name, lastSeenOn: day }],
-        ringEvidence: [...current.ringEvidence, { domain: 'connection', on: day, value: 1 }],
-        activities: [...current.activities, { id: newId('activity'), domain: 'personal', kind: 'connection', occurredAt: new Date().toISOString(), withPeople: [name] }],
-      }))
-    } else {
-      const start = new Date(`${day}T00:00:00`)
-      start.setDate(start.getDate() - 27)
-      const checkIn: RestCheckIn = { id: newId('rest'), periodStart: start.toLocaleDateString('en-CA'), periodEnd: day, rating: rating as RestCheckIn['rating'], createdAt: new Date().toISOString() }
-      onProduct((current) => ({ ...current, restCheckIns: [...current.restCheckIns, checkIn], ringEvidence: [...current.ringEvidence, { domain: 'rest', on: day, value: rating }] }))
-    }
-    onClose()
-  }
-
-  const title = kind === 'connection' ? 'saw someone' : 'rest check-in'
-  return <Sheet title={title} onClose={onClose}>
-    <form onSubmit={submit}>
-      {kind === 'connection' && <Field label="who"><input autoFocus value={person} onChange={(event) => setPerson(event.target.value)} /></Field>}
-      {kind === 'rest' && <Field label={`rested enough this month · ${rating} of 10`}><input min="1" max="10" type="range" value={rating} onChange={(event) => setRating(Number(event.target.value))} /></Field>}
-      <div className="actions"><button className="primary" type="submit" disabled={kind === 'connection' && !person.trim()}>save</button><button className="plain" type="button" onClick={onClose}>cancel</button></div>
+  return <Sheet title="rest check-in" onClose={onClose}>
+    <form onSubmit={(event) => { event.preventDefault(); onProduct((current) => withRestCheckIn(current, rating, today())); onClose() }}>
+      <Field label={`rested enough this month · ${rating} of 10`}><input min="1" max="10" type="range" value={rating} onChange={(event) => setRating(Number(event.target.value))} /></Field>
+      <div className="actions"><button className="primary" type="submit">save</button><button className="plain" type="button" onClick={onClose}>cancel</button></div>
     </form>
   </Sheet>
 }

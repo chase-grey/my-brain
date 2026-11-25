@@ -47,3 +47,29 @@ it('reads the body slice from workout-tracker when it has left a summary', () =>
   expect(html).toContain('href="/workout-tracker/?tab=progress"')
   expect(html).not.toContain('of target')
 })
+
+it('opens a slice judged by answers on its things, with no 28-day target', () => {
+  vi.stubGlobal('location', { hash: '#progress/creativity' })
+  const state = {
+    ...emptyProductState,
+    ringCommitments: [{ domain: 'creativity' as const, commitment28: 4 }],
+    areaThings: [{ id: 'guitar', area: 'creativity' as const, title: 'guitar', happy: 'happy' as const, happyOn: '2026-11-01', streak: 12, streakOn: '2026-11-01' }],
+    areaChallenges: [{ id: 'c', area: 'creativity' as const, title: 'songs learned', target: 5, counts: 'logs' as const, startOn: '2026-10-01', taps: 2 }],
+  }
+  const html = renderToStaticMarkup(<ProgressView domain="personal" product={state} currentDay="2026-11-04" heldEvents={{}} onProduct={() => {}} onGoals={() => {}} />)
+  expect(html).toContain('<strong>1 of 1</strong> happy')
+  expect(html).toContain('could be more')
+  expect(html).toContain('streak 12')
+  expect(html).toContain('2 of 5')
+  expect(html).toContain('aria-label="creativity · 70%"')
+  expect(html).not.toContain('of target')
+})
+
+it('dims a slice whose answer is more than 35 days old and says the check-in is due', () => {
+  vi.stubGlobal('location', { hash: '#progress/purpose' })
+  const state = { ...emptyProductState, areaThings: [{ id: 'm', area: 'purpose' as const, title: 'mentoring', happy: 'happy' as const, happyOn: '2026-09-01' }] }
+  const html = renderToStaticMarkup(<ProgressView domain="personal" product={state} currentDay="2026-11-04" heldEvents={{}} onProduct={() => {}} onGoals={() => {}} />)
+  expect(html).toContain('is-stale')
+  expect(html).toContain('purpose · 100% · check-in due')
+  expect(html).toContain('>due</span>')
+})

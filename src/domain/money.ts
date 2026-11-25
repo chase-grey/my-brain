@@ -158,6 +158,26 @@ export function moneyReading(goals: MoneyGoal[], snapshots: MoneySnapshot[], tod
   }
 }
 
+/** What is kept of each month's income, from the newest income and spending. Nothing when either is missing. */
+export function savingRate(snapshots: MoneySnapshot[]): { rate: number; kept: number; on: string } | undefined {
+  const latest = latestFigures(snapshots)
+  const income = latest.incomeMonthly
+  const spending = latest.spendingMonthly
+  if (!income || !spending || income.value <= 0) return undefined
+  return { rate: (income.value - spending.value) / income.value, kept: income.value - spending.value, on: income.on > spending.on ? income.on : spending.on }
+}
+
+/** Numbers older than this read as old: goals judge against today, so they look behind until new ones arrive. */
+export const MONEY_STALE_DAYS = 31
+
+/** How many days old the newest numbers are, once that is more than a month. */
+export function numbersAge(snapshots: MoneySnapshot[], today: string): number | undefined {
+  const newest = snapshots.map(snapshotDay).sort().pop()
+  if (!newest) return undefined
+  const days = Math.round((ms(today) - ms(newest)) / 86_400_000)
+  return days > MONEY_STALE_DAYS ? days : undefined
+}
+
 /** A goal as it is saved: the starting figure is whatever the latest reading says today. */
 export function newMoneyGoal(input: Omit<MoneyGoal, 'startOn' | 'startValue'>, snapshots: MoneySnapshot[], today: string): MoneyGoal {
   const start = figureHistory(snapshots, input.figure).pop()
@@ -188,6 +208,8 @@ export function standingText(standing: MoneyStanding): string {
 export function moneyBriefing(goals: MoneyGoal[], snapshots: MoneySnapshot[], today: string): string[] {
   const latest = latestFigures(snapshots)
   const lines = MONEY_FIGURES.filter((figure) => latest[figure]).map((figure) => `- ${moneyFigureLabels[figure]}: $${Math.round(latest[figure]!.value).toLocaleString('en-US')} (as of ${latest[figure]!.on})`)
+  const saving = savingRate(snapshots)
+  if (saving) lines.push(`- saving rate: ${Math.round(saving.rate * 100)}% of income ($${Math.round(saving.kept).toLocaleString('en-US')} a month)`)
   const newest = [...snapshots].reverse().find((item) => item.accounts?.length)
   for (const account of newest?.accounts ?? []) lines.push(`- account ${account.name}: $${Math.round(account.balance).toLocaleString('en-US')} (as of ${snapshotDay(newest!)})`)
   for (const standing of moneyReading(goals, snapshots, today)?.standings ?? []) {

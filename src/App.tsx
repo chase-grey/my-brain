@@ -846,7 +846,7 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
   }
 
   const shownView: View = docked && view === 'chat' ? 'today' : view
-  const reviews = useReviews({ domain: activeDomain, currentDay, tasks, product, settings, notesVault: connectionStatus === 'connected' ? personalData?.notes : undefined, userName: account.name })
+  const reviews = useReviews({ domain: activeDomain, currentDay, tasks, product, onProduct: setProduct, settings, notesVault: connectionStatus === 'connected' ? personalData?.notes : undefined, userName: account.name })
   const untriaged = tasks.filter((task) => task.domain === activeDomain && task.metadataComplete === false && !task.completed && !task.storeType)
   const floorToday = product.dayOverrides.some((item) => item.domain === activeDomain && item.date === currentDay && item.kind === 'floor')
   const strategicTodayMin = product.activities.filter((item) => item.domain === activeDomain && item.kind === 'strategic' && item.occurredAt.slice(0, 10) === currentDay).reduce((sum, item) => sum + (item.minutes ?? 0), 0)
@@ -906,7 +906,7 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
           untriaged={untriaged} openCount={openTasks.length} openMin={openEstimate} onToggle={toggleComplete} onOpen={editTask}
           calendar={eventsOn(calendarEvents, currentDay)} inbox={activeDomain === 'personal' ? inboxCounts : undefined} mailAppUrl={activeDomain === 'personal' ? settings.mailAppUrl : ''} />}
         {shownView === 'dashboard' && <WorkScreens currentDay={currentDay} />}
-        {shownView === 'progress' && <ProgressView domain={activeDomain} product={product} currentDay={currentDay} heldEvents={heldEvents} onProduct={setProduct} onGoals={() => setView('goals')} onReview={reviews.open} readMoney={activeDomain === 'personal' ? moneyReader(settings) : undefined} />}
+        {shownView === 'progress' && <ProgressView domain={activeDomain} product={product} tasks={tasks} journalVault={activeDomain === 'personal' ? tripVault ?? (connectionStatus === 'connected' ? personalData?.notes : undefined) : undefined} currentDay={currentDay} heldEvents={heldEvents} onProduct={setProduct} onGoals={() => setView('goals')} onReview={reviews.open} readMoney={activeDomain === 'personal' ? moneyReader(settings) : undefined} />}
         {shownView === 'chat' && chat}
         {shownView === 'goals' && <GoalsView domain={activeDomain} product={product} tasks={tasks} currentDay={currentDay} heldEvents={heldEvents} canHold={activeDomain === 'personal' && connectionStatus === 'connected'} holdError={syncError} onProduct={setProduct} onEditGoal={(id, changes) => { updateGoal(id, changes) }} onHold={(id) => holdAction(() => holdGoal(id))} onRelease={(id) => holdAction(() => releaseGoal(id))} />}
         {shownView === 'stores' && <StoresView activeStore={activeStore} tasks={tasks} onStore={setActiveStore} onToggle={toggleComplete} onAdd={addTask} />}

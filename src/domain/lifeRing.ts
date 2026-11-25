@@ -1,3 +1,4 @@
+import { isCheckArea, type AreaReading, type CheckArea } from './areas'
 import type { BodyReading } from './bodyTracker'
 import type { MoneyReading } from './money'
 import type { RestReading } from './rest'
@@ -26,6 +27,10 @@ export type RingArc = {
   money?: MoneyReading
   /** Set on the rest slice when the phone's sleep or screen time has a goal to be read against. */
   rest?: RestReading
+  /** Set on purpose, connection, mind, creativity and projects: the slice reads the answers and challenges there. */
+  area?: AreaReading
+  /** An answer is due again: the slice keeps its last fill and dims. */
+  stale?: boolean
 }
 
 // Chase's order, 2026-11-24. Lists read it top to bottom; the wheel runs it clockwise starting at 9 o'clock.
@@ -40,9 +45,10 @@ function median(values: number[]): number | undefined {
 
 /**
  * Areas in `off` are left out of the ring altogether. With `body`, the body slice is workout-tracker's reading and needs no target;
- * money with goals and rest with phone readings work the same way.
+ * money with goals and rest with phone readings work the same way. With `areas`, the five areas judged by answers
+ * read those and never a 28-day target.
  */
-export function buildLifeRing(evidence: RingEvidence[], commitments: RingCommitment[], today: string, off: LifeDomain[] = [], body?: BodyReading, more: { money?: MoneyReading; rest?: RestReading } = {}): RingArc[] {
+export function buildLifeRing(evidence: RingEvidence[], commitments: RingCommitment[], today: string, off: LifeDomain[] = [], body?: BodyReading, more: { money?: MoneyReading; rest?: RestReading; areas?: Record<CheckArea, AreaReading> } = {}): RingArc[] {
   const todayMs = new Date(`${today}T00:00:00Z`).getTime()
   return RING_DOMAINS.filter((domain) => !off.includes(domain)).map((domain) => {
     if (domain === 'body' && body) {
@@ -56,6 +62,11 @@ export function buildLifeRing(evidence: RingEvidence[], commitments: RingCommitm
     if (domain === 'rest' && more.rest) {
       const days = more.rest.daysTracked
       return { domain, fill: more.rest.fill, state: days < 84 ? 'establishing' : days < 182 ? 'early-signal' : 'ready', focus: false, rest: more.rest }
+    }
+    if (isCheckArea(domain) && more.areas) {
+      const area = more.areas[domain]
+      if (area.fill === undefined) return { domain, state: area.things.length ? 'unknown' : 'dormant', focus: false, area }
+      return { domain, fill: area.fill, state: 'ready', focus: area.drifting, area, ...(area.due ? { stale: true } : {}) }
     }
     const commitment = commitments.find((item) => item.domain === domain)?.commitment28 ?? 0
     if (commitment === 0) return { domain, state: 'dormant', focus: false }

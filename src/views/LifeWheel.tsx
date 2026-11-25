@@ -70,10 +70,10 @@ export function LifeWheel({ arcs, selected, compact, onSelect }: { arcs: RingArc
         const label = arc.domain
         const anchor = mid < 10 || mid > 350 || Math.abs(mid - 180) < 10 ? 'middle' : mid < 180 ? 'start' : 'end'
         const [lx, ly] = point(LABEL, mid).split(' ').map(Number)
-        return <g key={arc.domain} className={`slice${dim ? ' is-dim' : ''}${selected === arc.domain ? ' is-selected' : ''}${arc.state === 'dormant' ? ' is-dormant' : ''}`} style={{ '--hue': hue } as React.CSSProperties}>
+        return <g key={arc.domain} className={`slice${dim ? ' is-dim' : ''}${selected === arc.domain ? ' is-selected' : ''}${arc.state === 'dormant' ? ' is-dormant' : ''}${arc.stale ? ' is-stale' : ''}`} style={{ '--hue': hue } as React.CSSProperties}>
           <path className="slice-track" d={wedge(from, to, INNER, OUTER)} />
           {extent > 0 && <path className="slice-fill" d={wedge(from, to, INNER, extent)} style={{ fill: `color-mix(in oklch, ${hue} ${Math.round(25 + 75 * health)}%, var(--muted))` }} />}
-          <path className="slice-hit" d={wedge(from - GAP / 2, to + GAP / 2, INNER - 4, OUTER + 4)} role="button" tabIndex={0} aria-label={`${label}${arc.fill === undefined ? ` · ${arc.state}` : ` · ${Math.round(arc.fill * 100)}%`}`} aria-pressed={selected === arc.domain}
+          <path className="slice-hit" d={wedge(from - GAP / 2, to + GAP / 2, INNER - 4, OUTER + 4)} role="button" tabIndex={0} aria-label={`${label}${arc.fill === undefined ? ` · ${arc.state}` : ` · ${Math.round(arc.fill * 100)}%`}${arc.stale ? ' · check-in due' : ''}`} aria-pressed={selected === arc.domain}
             onClick={() => onSelect(arc.domain)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onSelect(arc.domain) } }} />
           <text className="slice-label" x={lx} y={ly} textAnchor={anchor} dominantBaseline="middle">{label}</text>
         </g>

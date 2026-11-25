@@ -45,7 +45,7 @@ import java.util.TreeMap;
 
 /**
  * What the rest slice reads from the phone: sleep from Health Connect and screen time from the usage record.
- * It only reads. Each day comes back as {day, sleepMin?, screenMin?} and the web app keeps them, because the
+ * It only reads. Each day comes back as {day, sleepMin?, screenMin?, bedMin?} and the web app keeps them, because the
  * phone itself holds daily screen time for about a week.
  *
  * Sleep needs Android 14, where Health Connect is part of the system; on older phones it answers "unavailable".
@@ -179,7 +179,10 @@ public class HealthPlugin extends Plugin {
         }
     }
 
-    /** Sleep sessions from every source, overlaps counted once, each put on the local day it ended. */
+    /**
+     * Sleep sessions from every source, overlaps counted once, each put on the local day it ended.
+     * bedMin is when the day's longest stretch began, in minutes after noon the evening before.
+     */
     @RequiresApi(api = Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     private void readSleep(int days, Map<String, JSObject> byDay, PluginCall call) {
         Context context = getContext();
@@ -208,11 +211,18 @@ public class HealthPlugin extends Plugin {
                     else merged.add(new long[] { span[0], span[1] });
                 }
                 Map<String, Long> totals = new TreeMap<>();
+                Map<String, long[]> longest = new TreeMap<>();
                 ZoneId zone = ZoneId.systemDefault();
                 for (long[] span : merged) {
                     String day = Instant.ofEpochMilli(span[1]).atZone(zone).toLocalDate().toString();
                     Long sum = totals.get(day);
                     totals.put(day, (sum == null ? 0L : sum) + (span[1] - span[0]));
+                    long[] main = longest.get(day);
+                    if (main == null || span[1] - span[0] > main[1] - main[0]) longest.put(day, span);
+                }
+                for (Map.Entry<String, long[]> entry : longest.entrySet()) {
+                    java.time.LocalTime began = Instant.ofEpochMilli(entry.getValue()[0]).atZone(zone).toLocalTime();
+                    dayOf(byDay, entry.getKey()).put("bedMin", (began.getHour() * 60 + began.getMinute() + 720) % 1440);
                 }
                 for (Map.Entry<String, Long> entry : totals.entrySet()) {
                     dayOf(byDay, entry.getKey()).put("sleepMin", Math.round(entry.getValue() / 60_000.0));

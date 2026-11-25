@@ -2,12 +2,12 @@ import { useEffect, useRef, useState } from 'react'
 import { holdUpdates } from '../appUpdate'
 import type { MoneyRead } from '../companion/moneyRead'
 import type { RingArc } from '../domain/lifeRing'
-import { MONEY_FIGURES, goalFigures, latestFigures, money, moneyFigureLabels, newMoneyGoal, standingText, type MoneyAccount, type MoneyFigure, type MoneyGoal, type MoneyGoalKind, type MoneyStanding } from '../domain/money'
-import { restReading, type RestGoals, type RestMeasure } from '../domain/rest'
+import { MONEY_FIGURES, goalFigures, latestFigures, money, moneyFigureLabels, newMoneyGoal, numbersAge, savingRate, standingText, type MoneyAccount, type MoneyFigure, type MoneyGoal, type MoneyGoalKind, type MoneyStanding } from '../domain/money'
+import { bedClock, bedFromTime, bedToTime, restReading, type RestGoals, type RestMeasure } from '../domain/rest'
 import { duration, newId, shortDate } from '../format'
 import { openScreenTimeAccess, phoneRestStatus, requestSleepAccess, syncPhoneRest, type PhoneRestStatus } from '../native/health'
 import { isNativeApp } from '../native/platform'
-import { withMoneyReading, type ProductState } from '../productState'
+import { latestRestCheckIn, withMoneyReading, type ProductState } from '../productState'
 import { Card, Field, Segmented, Sheet } from '../ui'
 import { wheelHue } from './LifeWheel'
 import { Bar } from './ProgressView'
@@ -126,6 +126,8 @@ export function MoneyDetail({ arc, product, day, onProduct, readMoney }: { arc: 
   const reading28 = arc.money
   const latest = latestFigures(product.moneySnapshots)
   const shown = MONEY_FIGURES.filter((figure) => latest[figure])
+  const saving = savingRate(product.moneySnapshots)
+  const age = numbersAge(product.moneySnapshots, day)
   const onPace = reading28?.standings.filter((item) => item.state === 'on pace' || item.state === 'met').length ?? 0
 
   return <>
@@ -142,8 +144,9 @@ export function MoneyDetail({ arc, product, day, onProduct, readMoney }: { arc: 
 
     <Card className="slice-detail" title="numbers" aside={reading28?.asOf || shown.length ? <span className="count">{shortDate(reading28?.asOf ?? latest[shown[0]]!.on)}</span> : undefined}>
       {shown.length
-        ? <ul className="slice-facts">{shown.map((figure) => <li key={figure}><span>{moneyFigureLabels[figure]}</span><small>{money(latest[figure]!.value)}</small></li>)}</ul>
+        ? <ul className="slice-facts">{shown.map((figure) => <li key={figure}><span>{moneyFigureLabels[figure]}</span><small>{money(latest[figure]!.value)}</small></li>)}{saving && <li><span>saving rate</span><small>{Math.round(saving.rate * 100)}% · {money(saving.kept)} a month</small></li>}</ul>
         : null}
+      {age !== undefined && <p className="note is-error">numbers are {age >= 60 ? `${Math.round(age / 30)} months` : `${Math.round(age / 7)} weeks`} old</p>}
       {problem && <p className="note is-error" role="alert">{problem}</p>}
       <div className="actions">
         {readMoney && <button className="primary" type="button" disabled={reading} onClick={() => picker.current?.click()}>{reading ? 'reading' : 'add screenshots'}</button>}
@@ -166,7 +169,7 @@ export function hasPhoneRest(product: ProductState): boolean {
   return isNativeApp() || product.restDays.length > 0
 }
 
-export function RestDetail({ arc, product, day, onProduct }: { arc: RingArc; product: ProductState; day: string; onProduct: SetProduct }) {
+export function RestDetail({ arc, product, day, onProduct, onCheckIn }: { arc: RingArc; product: ProductState; day: string; onProduct: SetProduct; onCheckIn?: () => void }) {
   const [status, setStatus] = useState<PhoneRestStatus>()
   const check = () => void phoneRestStatus().then(setStatus)
   useEffect(() => {
@@ -183,6 +186,9 @@ export function RestDetail({ arc, product, day, onProduct }: { arc: RingArc; pro
     const minutes = Math.round(Number(event.target.value) * 60)
     onProduct((current) => ({ ...current, restGoals: { ...current.restGoals, [key]: minutes > 0 ? minutes : undefined } }))
   }
+  const felt = latestRestCheckIn(product, day)
+  // Bedtime shows once the phone has sent one; an older build of the shell does not.
+  const hasBed = goals.bedByMin !== undefined || product.restDays.some((item) => item.bedMin !== undefined)
   const hoursOf = (minutes?: number) => minutes ? String(Math.round(minutes / 6) / 10) : ''
 
   return <Card className="slice-detail" title="last 28 days">
@@ -192,11 +198,14 @@ export function RestDetail({ arc, product, day, onProduct }: { arc: RingArc; pro
       <ul className="slice-facts">
         {reading.sleep && <li><span>sleep</span><small>{measureText(reading.sleep, 'nights')}</small></li>}
         {reading.screen && <li><span>screen time</span><small>{measureText(reading.screen, 'days')}</small></li>}
+        {reading.bed && <li><span>asleep by {bedClock(reading.bed.goalMin)}</span><small>{bedClock(reading.bed.averageMin)} average · {reading.bed.met} of {reading.bed.judged} nights</small></li>}
       </ul>
     </>}
+    {onCheckIn && <ul className="slice-facts"><li><button className="slice-fact-button" type="button" onClick={onCheckIn}><span>rested enough</span><small className={felt.due ? 'is-loud' : ''}>{felt.due ? 'check-in due' : `${felt.checkIn!.rating} of 10 · ${shortDate(felt.checkIn!.periodEnd)}`}</small></button></li></ul>}
     <div className="grid-2 rest-goals">
       <Field label="sleep goal · hours"><input inputMode="decimal" min="0" step="0.5" type="number" value={hoursOf(goals.sleepMin)} onChange={setGoal('sleepMin')} /></Field>
       <Field label="screen limit · hours"><input inputMode="decimal" min="0" step="0.5" type="number" value={hoursOf(goals.screenMaxMin)} onChange={setGoal('screenMaxMin')} /></Field>
+      {hasBed && <Field label="asleep by"><input type="time" value={bedToTime(goals.bedByMin)} onChange={(event) => { const bedByMin = bedFromTime(event.target.value); onProduct((current) => ({ ...current, restGoals: { ...current.restGoals, bedByMin } })) }} /></Field>}
     </div>
     {(status?.sleep === 'denied' || status?.screen === 'denied') && <div className="actions">
       {status.sleep === 'denied' && <button className="secondary" type="button" onClick={() => void requestSleepAccess().then(() => { check(); void syncPhoneRest(onProduct, day) })}>connect sleep</button>}

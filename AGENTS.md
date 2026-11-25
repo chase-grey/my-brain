@@ -97,6 +97,27 @@ The week, month and year reviews (`src/review/`) follow these rules. `review.tes
 
 The order is Chase's (2026-11-24): purpose, connection, body, mind, creativity, projects, money, rest. It lives once, in `RING_DOMAINS` in `src/domain/lifeRing.ts`. Lists show it top to bottom, the wheel runs it clockwise with the first slice starting at 9 o'clock (four slices a side, a seam at the top and bottom, never a slice centred there), and reviews read it as importance. Do not reorder it or give any screen its own order without asking.
 
+## slices judged by answers
+
+Chase, 2026-11-25. Purpose, connection, mind, creativity and projects are judged by him, not counted (`src/domain/areas.ts`). `areas.test.ts` holds these.
+
+- Each area holds the things he names (guitar, spanish, mentoring); in projects they are the personal projects still open. Each thing carries his answer to "happy with how often": happy, could be more, or not happy, filling 1, a half and nothing.
+- Logging is never required. A slice fills from the answers alone. A log is optional and moves any open challenge on the same thing.
+- A thing can carry a streak he types in when he likes (Duolingo). Nothing asks him to tick a practice daily.
+- A challenge is a count toward a target ("see friends 4 times this month"), with or without a date. With a date it stays in the slice until the date and then moves to past, met or missed; without one it is never behind and leaves when met. In mind a challenge can count journal days or books finished on its own.
+- The fill is the average of the answers; with challenges open, the answers are half and the challenges the other half, the split body uses.
+- An answer older than 35 days is due: the slice dims, keeps its last fill, and the month review asks again. An old answer never counts as fresh.
+- A slice is flagged when a thing is "not happy" or a challenge is behind.
+- These five areas take no 28-day target. Body, money and rest keep their own readings.
+- Journal days are counted from file names. An entry is never opened for this.
+- Logs, finished challenges and finished books are kept 400 days.
+
+## money and rest extras
+
+- Money shows the saving rate (newest income minus newest spending) and says when the newest numbers are more than a month old.
+- Rest keeps the monthly felt rating beside the phone's numbers; it is quoted in reviews and asked at the month review, and never changes the fill. One rating per 28 days: a second replaces the first.
+- Bedtime is a third rest measure: nights asleep by a time he sets, read from the phone's sleep record (`bedMin`, minutes after noon). It shows only once the phone has sent one.
+
 ## body slice
 
 The body slice follows workout-tracker (Chase, 2026-11-24), on every device (2026-11-25). The tracker posts a summary to its backend's `share` route (its side is `src/lib/brainShare.ts` there) and `src/domain/bodyTracker.ts` reads it with the tracker account key. `bodyTracker.test.ts` holds the rules.

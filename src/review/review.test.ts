@@ -333,3 +333,19 @@ describe('running a review', () => {
     expect((await answerQuestion(store, answered, 0, ' ', '2026-11-25')).questions[0]).toEqual({ text: 'what is the deck waiting on?' })
   })
 })
+
+describe('life areas judged by answers', () => {
+  it('gives the review his own answer, the challenge count and the words he logged, in plain dates', () => {
+    const month = periodOf('month', '2026-11')
+    const product = state({
+      areaThings: [{ id: 'm', area: 'purpose', title: 'mentoring', happy: 'more', happyOn: '2026-11-20' }],
+      areaChallenges: [{ id: 'c', area: 'purpose', title: 'organizing meetings', target: 2, counts: 'logs', startOn: '2026-11-01', by: '2026-11-30', taps: 0 }],
+      areaLogs: [{ id: 'l', area: 'purpose', on: '2026-11-12', note: 'tenant union' }],
+    })
+    const line = buildFacts({ domain: 'personal', period: month, today: '2026-12-01', tasks: [], product, bumps: [] }).lines.find((item) => item.startsWith('life area purpose'))!
+    expect(line).toContain('mentoring: could be more with how often, said nov 20')
+    expect(line).toContain('challenge "organizing meetings" 1 of 2 · behind, by nov 30')
+    expect(line).toContain('logged 1 time: "tenant union" nov 12')
+    expect(line).not.toMatch(/\d{4}-\d{2}-\d{2}/)
+  })
+})

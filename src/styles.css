@@ -318,6 +318,7 @@ button.row-main { min-height: 3rem; }
 .slice-label { fill: var(--muted); font-size: 11px; text-transform: lowercase; pointer-events: none; transition: opacity 160ms ease; }
 .slice.is-dormant .slice-track { fill: none; stroke: var(--border); stroke-width: 1; stroke-dasharray: 3 3; }
 .slice.is-dim .slice-track, .slice.is-dim .slice-fill { opacity: 0.3; }
+.slice.is-stale .slice-fill { opacity: 0.45; }
 .slice.is-selected .slice-track { fill: color-mix(in srgb, var(--hue) 14%, var(--surface-2)); }
 .is-compact .slice-label { opacity: 0; }
 .is-compact .slice.is-dormant .slice-track { fill: var(--surface-2); stroke: none; }
@@ -439,6 +440,24 @@ button.row-main { min-height: 3rem; }
 /* money and rest slices, and a drafted text */
 .slice-detail .goals { margin-top: 0.4rem; }
 .slice-detail .actions { padding-top: 0.6rem; }
+.things li { display: flex; flex-direction: column; gap: 0.35rem; padding: 0.6rem 0 0.75rem; border-top: 1px solid var(--border); }
+.things li:first-child { border-top: 0; }
+.slice-bar + .things { margin-top: 0.4rem; }
+.thing-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.75rem; min-height: 2rem; text-align: left; }
+.thing-head small { color: var(--muted); font-size: 0.85rem; font-variant-numeric: tabular-nums; text-align: right; }
+.thing-head small strong { color: var(--text); font-weight: 600; }
+.things .segmented button { padding: 0 0.2rem; font-size: 0.82rem; white-space: nowrap; }
+.things .primary.small { align-self: flex-start; }
+.things input[type="range"] { width: 100%; min-height: 2.75rem; accent-color: var(--accent); }
+.challenge-head { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; }
+.challenge-head > button:first-child { display: flex; flex: 1; flex-direction: column; align-items: flex-start; gap: 0.1rem; min-height: 2.75rem; padding: 0.3rem 0; text-align: left; }
+.challenge-head small { color: var(--muted); font-size: 0.85rem; }
+.goals li.challenge.is-loud small { color: var(--text); font-weight: 600; }
+.slice-detail .goals .bar > div { background: var(--hue, var(--accent)); }
+.slice-detail .add-line { display: flex; gap: 0.5rem; padding: 0.5rem 0 0.6rem; }
+.slice-detail .add-line input { flex: 1; min-width: 0; }
+.count.is-loud { color: var(--text); font-weight: 600; }
+.check-area h3 { padding-top: 0.5rem; color: var(--hue); font-size: 0.85rem; font-weight: 600; }
 .rest-goals { padding: 0.6rem 0 0.4rem; }
 .text-draft-body { padding: 0.25rem 1rem 0.75rem; white-space: pre-wrap; overflow-wrap: anywhere; }
 .text-draft a.primary { display: inline-flex; align-items: center; text-decoration: none; }

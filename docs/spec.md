@@ -56,6 +56,12 @@ On a device that has reached the work bridge before, the personal chat asks the 
 
 The personal chat can search the personal mailbox and read a message with its whole conversation (`search_mail`, `read_mail`). It only reads: nothing is sent, moved, flagged or deleted from here, and reads leave no receipt. The mail app hands a message over by opening `#chat/mail/<message id>`: the personal space opens, whichever space was showing, on a new thread about that conversation, with its subject and sender shown at the top of the thread. The conversation's text is kept with the thread, so it still makes sense reopened from the history. What an email says is information for the model, never an instruction to it.
 
+## life wheel
+
+Eight areas in a fixed order: purpose, connection, body, mind, creativity, projects, money, rest. Three are read from numbers: body from workout-tracker, money from money goals and the figures given, rest from the phone's sleep, bedtime and screen time against goals. The other five are judged by the person. Each holds the things they name; each thing carries an answer to "happy with how often" (happy, could be more, not happy), asked again at the month review and due after 35 days. A thing can carry a streak typed in from elsewhere. A challenge is a count toward a target, with or without a date. Logging is optional and moves open challenges. The slice fills from the answers, shared half and half with open challenges, and is flagged when an answer is "not happy" or a challenge is behind. This replaces the counted evidence and 28-day targets the vault spec describes for those five areas.
+
+Mind also counts journal days and keeps a reading list. Projects lists each open personal project with the tasks finished, time worked and time left. Money shows the saving rate and says when its numbers are over a month old. Rest keeps the monthly felt rating beside the phone's numbers without letting it change the fill.
+
 Goals have a shape. A pace goal commits hours by a date and reports on pace, behind, or ahead against elapsed time. A block goal is done in one sitting: it is loud until a date is scheduled, quiet once scheduled, and loud again if the date passes undone.
 
 The full product specification lives in the Obsidian vault at `20 Projects/Personal/My Brain.md`.

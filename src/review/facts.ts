@@ -1,9 +1,11 @@
+import { areaReading, challengeText, happyLabels, isCheckArea } from '../domain/areas'
 import { goalProgress } from '../domain/goals'
 import { dueParts, habitDone } from '../domain/habits'
 import { RING_DOMAINS } from '../domain/lifeRing'
-import { moneyReading, standingText } from '../domain/money'
+import { moneyReading, savingRate, snapshotDay, standingText } from '../domain/money'
 import { buildWeekReceipt } from '../domain/receipt'
-import { restReading } from '../domain/rest'
+import { bedClock, restReading } from '../domain/rest'
+import { cachedJournalDays } from '../journal/days'
 import type { Domain, Task } from '../domain/types'
 import type { ProductState } from '../productState'
 import type { Bump } from './bumpLog'
@@ -125,6 +127,8 @@ export function buildFacts({ domain, period, today, tasks, product, bumps }: Fac
       const money = moneyReading(product.moneyGoals, product.moneySnapshots, lastDay)!
       const read = product.moneySnapshots.some((item) => item.on && inPeriod(period, item.on))
       const said = money.standings.map((standing) => `"${standing.goal.title}" ${standingText(standing)}`)
+      const saving = savingRate(product.moneySnapshots.filter((item) => snapshotDay(item) <= lastDay))
+      if (saving) said.push(`saving ${Math.round(saving.rate * 100)}% of income`)
       lines.push(`life area money (importance ${index + 1} of ${areas.length}): ${read ? '' : `no new numbers this ${unit}; `}${said.join('; ')}`)
       return
     }
@@ -133,9 +137,34 @@ export function buildFacts({ domain, period, today, tasks, product, bumps }: Fac
       const said = [
         ...(rest.sleep ? [`${rest.sleep.met} of ${rest.sleep.judged} nights reached the ${round1(rest.sleep.goalMin / 60)}h sleep goal, averaging ${round1(rest.sleep.averageMin / 60)}h`] : []),
         ...(rest.screen ? [`${rest.screen.met} of ${rest.screen.judged} days stayed under the ${round1(rest.screen.goalMin / 60)}h screen time limit, averaging ${round1(rest.screen.averageMin / 60)}h`] : []),
+        ...(rest.bed ? [`${rest.bed.met} of ${rest.bed.judged} nights asleep by ${bedClock(rest.bed.goalMin)}, averaging ${bedClock(rest.bed.averageMin)}`] : []),
       ]
       lines.push(`life area rest (importance ${index + 1} of ${areas.length}): ${said.join('; ')}`)
       return
+    }
+    if (isCheckArea(area)) {
+      // His own answers, his challenges, and what he chose to log. Nothing here is scored again.
+      const journalDays = cachedJournalDays()
+      const reading = areaReading(area, product, lastDay, { projects: product.projects, activities: product.activities, journalDays })
+      const said = [
+        ...reading.things.filter((item) => item.thing.happy).map(({ thing, due }) => `${thing.title}: ${happyLabels[thing.happy!]} with how often, said ${shortDay(thing.happyOn!)}${due ? ' and not asked since' : ''}${thing.streak !== undefined ? `, streak ${thing.streak}` : ''}`),
+        ...reading.things.filter((item) => !item.thing.happy).map(({ thing }) => `${thing.title}: never answered`),
+        ...[...reading.challenges, ...reading.past.filter((item) => inPeriod(period, item.challenge.by ?? item.challenge.metOn ?? ''))].map((item) => `challenge "${item.challenge.title}" ${challengeText(item)}${item.challenge.by ? `, by ${shortDay(item.challenge.by)}` : ''}`),
+      ]
+      const logs = product.areaLogs.filter((log) => log.area === area && inPeriod(period, log.on))
+      if (logs.length) said.push(`logged ${logs.length} ${logs.length === 1 ? 'time' : 'times'}${logs.some((log) => log.note) ? `: ${logs.filter((log) => log.note).slice(-5).map((log) => `"${log.note}" ${shortDay(log.on)}`).join(', ')}` : ''}`)
+      if (area === 'mind') {
+        const journaled = journalDays.filter((day) => inPeriod(period, day)).length
+        const read = new Set(product.books.flatMap((book) => book.readOn).filter((day) => inPeriod(period, day))).size
+        const finished = product.books.filter((book) => book.finishedOn && inPeriod(period, book.finishedOn))
+        if (journaled) said.push(`journaled ${plural(journaled, 'day')}`)
+        if (read) said.push(`read on ${plural(read, 'day')}`)
+        if (finished.length) said.push(`finished ${finished.map((book) => `"${book.title}"`).join(', ')}`)
+      }
+      if (said.length) {
+        lines.push(`life area ${area} (importance ${index + 1} of ${areas.length}): ${said.join('; ')}`)
+        return
+      }
     }
     const promised = product.ringCommitments.find((item) => item.domain === area)?.commitment28 ?? 0
     if (!promised) return

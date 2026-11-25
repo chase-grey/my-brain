@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { buildLifeRing } from './lifeRing'
-import { addMoneyReading, latestFigures, money, moneyBriefing, moneyReading, moneyStanding, newMoneyGoal, parseMoneyRead, standingText, type MoneyGoal, type MoneySnapshot } from './money'
+import { addMoneyReading, latestFigures, money, moneyBriefing, moneyReading, moneyStanding, newMoneyGoal, numbersAge, parseMoneyRead, savingRate, standingText, type MoneyGoal, type MoneySnapshot } from './money'
 
 const reading = (on: string, figures: Partial<MoneySnapshot>): MoneySnapshot => ({ month: on.slice(0, 7), on, ...figures })
 const reach: MoneyGoal = { id: 'a', title: 'a million', kind: 'reach', figure: 'netWorth', amount: 1_000_000, by: '2030-01-01', startOn: '2026-01-01', startValue: 200_000 }
@@ -103,5 +103,19 @@ describe('money numbers', () => {
       '- goal "a million" (net worth of $1,000,000 by 2030-01-01): $400k of $1m · behind; should be at $600,000 today',
     ])
     expect(moneyBriefing([], [], '2028-01-01')).toEqual([])
+  })
+})
+
+describe('saving rate and old numbers', () => {
+  it('reads the saving rate off the newest income and spending, and says nothing with one missing', () => {
+    expect(savingRate([reading('2026-10-01', { incomeMonthly: 8000 }), reading('2026-11-01', { spendingMonthly: 6000 })])).toEqual({ rate: 0.25, kept: 2000, on: '2026-11-01' })
+    expect(savingRate([reading('2026-11-01', { spendingMonthly: 6000 })])).toBeUndefined()
+    expect(moneyBriefing([], [reading('2026-11-01', { incomeMonthly: 8000, spendingMonthly: 6000 })], '2026-11-25').join('\n')).toContain('saving rate: 25% of income')
+  })
+
+  it('calls the numbers old once the newest are more than a month back', () => {
+    expect(numbersAge([reading('2026-11-01', { netWorth: 1 })], '2026-11-25')).toBeUndefined()
+    expect(numbersAge([reading('2026-10-01', { netWorth: 1 })], '2026-11-25')).toBe(55)
+    expect(numbersAge([], '2026-11-25')).toBeUndefined()
   })
 })
