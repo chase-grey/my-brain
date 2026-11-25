@@ -21,7 +21,7 @@ export const placeOptions: { value: Place; label: string }[] = [
   { value: 'out', label: 'out' },
 ]
 export const needOptions: { value: Need; label: string }[] = [
-  { value: 'computer', label: 'laptop' },
+  { value: 'computer', label: 'computer' },
   { value: 'phone', label: 'phone' },
   { value: 'tools', label: 'tools' },
   { value: 'car', label: 'car' },
