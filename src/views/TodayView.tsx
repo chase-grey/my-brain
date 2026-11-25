@@ -9,7 +9,7 @@ import { placeOptions, priorityLabels, type TaskGuess } from '../domain/taskGues
 import { storeOptions } from '../domain/shopping'
 import type { Domain, Energy, Habit, HabitEntry, Place, Project, Task } from '../domain/types'
 import { duration, weekday } from '../format'
-import { Card, Empty, TaskRow, Toggle } from '../ui'
+import { Card, Done, TaskRow, Toggle } from '../ui'
 import { ExtraTimeCard } from './ExtraTime'
 
 export const energyOptions: { value: Energy; label: string }[] = [
@@ -125,7 +125,7 @@ export function TodayView({ domain, currentDay, place, placeOverride, onPlaceOve
     <Card title="today" aside={commitments.length > 0 && <span className="count">{done}/{commitments.length}</span>}>
       {commitments.length
         ? <ul className="rows">{commitments.map((task) => <TaskRow key={task.id} task={task} done={isDoneToday(task, currentDay)} hint={commitmentHint(task, currentDay, place)} onToggle={() => onToggle(task.id)} onOpen={() => onOpen(task.id)} />)}</ul>
-        : <Empty>nothing due today</Empty>}
+        : <Done label="nothing due today" />}
     </Card>
 
     <CalendarCard events={calendar} />
@@ -135,7 +135,7 @@ export function TodayView({ domain, currentDay, place, placeOverride, onPlaceOve
     <Card title="this week" aside={weeklyCommitments.length > 0 && <span className="count">{weeklyCommitments.length}</span>}>
       {weeklyCommitments.length
         ? <ul className="rows">{weeklyCommitments.map((task) => <TaskRow key={task.id} task={task} done={false} hint={task.dueDate ? `due ${weekday(task.dueDate)}` : undefined} onToggle={() => onToggle(task.id)} onOpen={() => onOpen(task.id)} />)}</ul>
-        : <Empty>nothing else due this week</Empty>}
+        : <Done label="nothing else due this week" />}
     </Card>
 
     <ExtraTimeCard plan={plan} pickedMin={pickedMin} energy={energy} energyOptions={energyOptions} onMinutes={onMinutes} onEnergy={onEnergy} weekPaid={weekPaid} floorToday={floorToday} strategicTodayMin={strategicTodayMin} onFloorNight={onFloorNight} onStrategic={onStrategic} onToggle={onToggle} onOpen={onOpen} />

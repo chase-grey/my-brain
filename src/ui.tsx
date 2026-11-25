@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react'
+import { useEffect, useId, useRef, type ReactNode } from 'react'
 import { Icon } from './navIcons'
 import { duration } from './format'
 import type { Task } from './domain/types'
@@ -73,4 +73,15 @@ export function Sheet({ title, onClose, children }: { title: string; onClose: ()
 
 export function Empty({ children }: { children: ReactNode }) {
   return <p className="empty">{children}</p>
+}
+
+/** A list that is empty because everything on it was dealt with: the accent dot with the check cut out, no words (~/.claude/patterns/empty-states.md). */
+export function Done({ label }: { label: string }) {
+  const cut = useId()
+  return <div className="done">
+    <svg viewBox="0 0 100 100" role="img" aria-label={label}>
+      <mask id={cut}><rect width="100" height="100" fill="#fff" /><path d="M29 52.5 43.5 67 72 36" fill="none" stroke="#000" strokeWidth="10" strokeLinecap="round" strokeLinejoin="round" /></mask>
+      <circle cx="50" cy="50" r="50" mask={`url(#${cut})`} />
+    </svg>
+  </div>
 }

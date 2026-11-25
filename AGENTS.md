@@ -19,6 +19,10 @@ The accent is worn, not saved for emphasis alone (Chase, 2026-11-25: use it more
 
 The accent itself can be changed: settings has a swatch for the app's color and one for a color of my own, mixed on three sliders or typed as hex, kept on the device (`src/accent.ts`, `AccentPicker`; the pattern is `~/.claude/patterns/custom-accent.md`). Style against `--accent` and `--on-accent` only, never the default's hex, so everything follows it. The picker's own swatches and slider tracks are written in the component, the one place a color sits outside the tokens.
 
+## nothing left to do
+
+Chase, 2026-11-25. A list that is empty because everything on it was dealt with is celebrated, not reported: the accent dot with the check cut out (`Done` in `src/ui.tsx`), no words, as my-mail's empty inbox. Today and this week on today wear it when nothing is due. The pattern is `~/.claude/patterns/empty-states.md`. An empty list that owes nothing either way (no notes yet, nothing found, loading) keeps its plain words (`Empty`). `done.test.tsx` holds this.
+
 ## updates
 
 A new deploy reaches an open tab or installed window on its own (`src/appUpdate.ts`, the pattern in `~/.claude/patterns/app-update.md`; my-mail carries the same file). The app reloads onto it at a quiet moment: off screen, just reopened and not yet touched, or left alone for five minutes. It never reloads over an open sheet, a draft, or a screen that called `holdUpdates`. Until the reload happens, the more menu wears a dot and offers `update ready · restart`, and the settings button says the same. A new screen whose state a reload would lose calls `holdUpdates()`. Do not reload any other way.
