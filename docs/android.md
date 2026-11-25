@@ -75,10 +75,9 @@ Studio or a signed APK sideloaded is enough; the internal testing track works if
 
 ## one-time manual steps
 
-1. **Entra app registration**: add `https://localhost/` as a redirect URI under the *Single-page application*
-   platform of the app behind `VITE_MICROSOFT_CLIENT_ID`. Inside the shell, sign-in uses the redirect flow in the
-   webview and comes back to that origin. Without it, connecting Microsoft in the shell fails with a redirect
-   mismatch.
+1. **Entra app registration**: `https://localhost/` is a redirect URI under the *Single-page application*
+   platform of the app behind `VITE_MICROSOFT_CLIENT_ID` (added 2026-11-19). Inside the shell, sign-in uses the
+   redirect flow in the webview and comes back to that origin. Nothing to do unless the registration is remade.
 2. **Install the apk** on the phone from the address under building, allowing the browser to install apps the
    first time.
 3. On the phone, long-press the home screen, add the **today** widget, and allow the microphone the first time the
