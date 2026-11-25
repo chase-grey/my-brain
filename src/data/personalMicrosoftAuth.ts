@@ -5,6 +5,7 @@ import {
   type AccountInfo,
 } from '@azure/msal-browser'
 import { isNativeApp } from '../native/platform'
+import { signInReturnUrl } from '../site'
 
 export const personalGraphScopes = [
   'Tasks.ReadWrite',
@@ -18,7 +19,7 @@ export class PersonalMicrosoftAuth {
 
   static async create(
     clientId: string,
-    redirectUri = `${window.location.origin}${import.meta.env.BASE_URL}`,
+    redirectUri = signInReturnUrl(),
   ): Promise<PersonalMicrosoftAuth> {
     const client = new PublicClientApplication({
       auth: {

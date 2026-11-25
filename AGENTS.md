@@ -38,6 +38,16 @@ Chase, 2026-11-25, after two asks. `src/fitColumns.ts` lays out every screen mad
 - The side rail shows the screens from the … menu as buttons of its own while it has the height (`src/rail.ts`, `rail.test.ts`). Only what does not fit stays under …, and with nothing left under it the … is not drawn. A new screen is added to `moreViewsFor` with an icon, never to the rail or the menu alone.
 - The phone is untouched: none of this applies under 48rem.
 
+## localhost on the work pc
+
+Chase, 2026-11-25. Epic's network blocks `chase-grey.github.io`, so on the work pc my-brain, my-mail and workout-tracker are served from `http://localhost:5270/` by `npm run local` (`scripts/local-apps.mjs`), side by side under the paths github pages gives them.
+
+- It serves what is deployed: each app is built from `origin/main` in `<repo>/.worktrees/local`, checked every five minutes. It never serves a working tree. Never `rm -rf` that worktree, its `node_modules` is a junction to the real one.
+- Microsoft knows a localhost copy only by its root (`http://localhost/`, any port), so sign-in returns to the root page, which hands the result back (`signInReturnUrl` in `src/site.ts`). Do not build a redirect address any other way.
+- A link from one app to another goes through `besideThisApp`, so a local copy opens the local sibling. A new link to a sibling app does the same.
+- The bridge allows that origin (`$AllowedOrigins` in `work/bridge/work-bridge.ps1`).
+- `site.test.ts` holds these; my-mail carries the same file.
+
 ## restarting the bridge
 
 `npm run bridge` runs `work/bridge/work-bridge.ps1` (the work side is a separate private repo checked out at `work/`), a PowerShell HttpListener on port 47321. To restart it after an edit, stop only that process, by PID:

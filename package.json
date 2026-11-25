@@ -12,6 +12,7 @@
     "test:watch": "vitest",
     "typecheck": "tsc -b",
     "lint": "oxlint",
+    "local": "node scripts/local-apps.mjs",
     "bridge": "powershell -NoProfile -ExecutionPolicy Bypass -File work/bridge/work-bridge.ps1"
   },
   "dependencies": {

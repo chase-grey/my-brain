@@ -10,6 +10,7 @@ import { WorkBridgeProvider, outlookTaskList } from './data/workBridgeProvider'
 import { mergeWorkTasks } from './data/workTaskSync'
 import { demoProviderTasks, demoTaskMetadata } from './demoData'
 import { useFitColumns } from './fitColumns'
+import { besideThisApp } from './site'
 import { splitRail, useRailSlots } from './rail'
 import { buildNowPlan, isDoneToday, thisWeekCommitments, todayCommitments } from './domain/personalNow'
 import { projectTasks } from './domain/taskProjection'
@@ -918,7 +919,7 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
           onFloorNight={() => setProduct((current) => ({ ...current, dayOverrides: [...current.dayOverrides, { date: currentDay, domain: activeDomain, kind: 'floor' }] }))}
           onStrategic={(minutes) => setProduct((current) => ({ ...current, activities: [...current.activities, { id: newId('activity'), domain: activeDomain, kind: 'strategic', occurredAt: new Date().toISOString(), minutes }] }))}
           untriaged={untriaged} guesses={guesses} projects={activeProjects} onConfirm={confirmGuess} openCount={openTasks.length} openMin={openEstimate} onToggle={toggleComplete} onOpen={editTask}
-          calendar={eventsOn(calendarEvents, currentDay)} inbox={activeDomain === 'personal' ? inboxCounts : undefined} mailAppUrl={activeDomain === 'personal' ? settings.mailAppUrl : ''} />}
+          calendar={eventsOn(calendarEvents, currentDay)} inbox={activeDomain === 'personal' ? inboxCounts : undefined} mailAppUrl={activeDomain === 'personal' ? besideThisApp(settings.mailAppUrl) : ''} />}
         {shownView === 'dashboard' && <WorkScreens currentDay={currentDay} />}
         {shownView === 'progress' && <ProgressView domain={activeDomain} product={product} tasks={tasks} journalVault={activeDomain === 'personal' ? tripVault ?? (connectionStatus === 'connected' ? personalData?.notes : undefined) : undefined} currentDay={currentDay} heldEvents={heldEvents} onProduct={setProduct} onGoals={() => setView('goals')} onReview={reviews.open} readMoney={activeDomain === 'personal' ? moneyReader(settings) : undefined} />}
         {shownView === 'chat' && chat}
