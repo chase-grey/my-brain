@@ -36,6 +36,33 @@ export function busyMinutes(blocks: CalendarBlock[], date: string): number {
   }, 0)
 }
 
+/** What the calendar says about this moment: in an event until a time, or clear for some minutes. */
+export type FreeNow = { busyUntil: string } | { freeMin: number; nextStart?: string }
+
+/** Back-to-back events count as one. With nothing later today, the clear stretch runs to midnight. All-day events hold no time. */
+export function freeNow(blocks: CalendarBlock[], now: Date = new Date()): FreeNow {
+  const at = now.getTime()
+  const timed = blocks.filter((block) => !block.isAllDay).sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime())
+  let busyUntil: CalendarBlock | undefined
+  for (const block of timed) {
+    const cursor = busyUntil ? new Date(busyUntil.end).getTime() : at
+    if (new Date(block.start).getTime() <= cursor && new Date(block.end).getTime() > cursor) busyUntil = block
+  }
+  if (busyUntil) return { busyUntil: busyUntil.end }
+  const midnight = new Date(now)
+  midnight.setHours(24, 0, 0, 0)
+  const next = timed.find((block) => new Date(block.start).getTime() > at && new Date(block.start).getTime() < midnight.getTime())
+  const until = next ? new Date(next.start).getTime() : midnight.getTime()
+  return { freeMin: Math.floor((until - at) / 60_000), nextStart: next?.start }
+}
+
+/** The time-available choice the calendar points at: the longest one that fits before the next event, the shortest during one. */
+export function fittingMinutes(free: FreeNow | undefined, options: readonly number[], fallback: number): number {
+  if (!free) return fallback
+  if ('busyUntil' in free) return options[0]
+  return [...options].reverse().find((minutes) => minutes <= free.freeMin) ?? options[0]
+}
+
 export function clockTime(dateTime: string): string {
   const value = new Date(dateTime)
   const minutes = value.getMinutes()

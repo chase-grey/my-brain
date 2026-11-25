@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { CalendarBlock } from '../data/calendarGraphProvider'
 import type { Goal } from './types'
-import { addDays, blockWindow, busyMinutes, eventsOn, reconcileHeldGoal, timeRange } from './calendar'
+import { addDays, blockWindow, busyMinutes, eventsOn, fittingMinutes, freeNow, reconcileHeldGoal, timeRange } from './calendar'
 
 const block = (id: string, start: string, end: string, isAllDay = false): CalendarBlock => ({ id, subject: id, start, end, isAllDay })
 const goal: Goal = { id: 'g', domain: 'personal', horizon: 'season', title: 'paint the bedroom', funded: true, status: 'active', revisions: [], shape: 'block', scheduledOn: '2026-11-07', calendarEventId: 'e' }
@@ -25,6 +25,36 @@ describe('calendar', () => {
     expect(eventsOn(blocks, '2026-11-02').map((item) => item.id)).toEqual(['dinner', 'trip'])
     expect(eventsOn(blocks, '2026-11-03').map((item) => item.id)).toEqual(['tomorrow'])
     expect(busyMinutes(blocks, '2026-11-02')).toBe(90)
+  })
+
+  it('reads the time free right now from the calendar', () => {
+    const at = (time: string) => new Date(`2026-11-02T${time}:00`)
+    const blocks = [
+      block('trip', '2026-11-01T00:00:00', '2026-11-03T00:00:00', true),
+      block('standup', '2026-11-02T09:00:00', '2026-11-02T09:30:00'),
+      block('review', '2026-11-02T09:30:00', '2026-11-02T10:15:00'),
+      block('dinner', '2026-11-02T18:00:00', '2026-11-02T19:30:00'),
+      block('tomorrow', '2026-11-03T09:00:00', '2026-11-03T10:00:00'),
+    ]
+    expect(freeNow(blocks, at('08:13'))).toEqual({ freeMin: 47, nextStart: '2026-11-02T09:00:00' })
+    // Back-to-back events are one stretch: busy until the last of them ends.
+    expect(freeNow(blocks, at('09:10'))).toEqual({ busyUntil: '2026-11-02T10:15:00' })
+    expect(freeNow(blocks, at('10:15'))).toEqual({ freeMin: 465, nextStart: '2026-11-02T18:00:00' })
+    // Nothing later today: clear to midnight, and tomorrow's events are not today's.
+    expect(freeNow(blocks, at('22:30'))).toEqual({ freeMin: 90, nextStart: undefined })
+    // An all-day event holds no time.
+    expect(freeNow([blocks[0]], at('12:00'))).toEqual({ freeMin: 720, nextStart: undefined })
+  })
+
+  it('starts the time picker on the longest choice that fits', () => {
+    const options = [30, 60, 120] as const
+    expect(fittingMinutes(undefined, options, 60)).toBe(60)
+    expect(fittingMinutes({ busyUntil: '2026-11-02T10:15:00' }, options, 60)).toBe(30)
+    expect(fittingMinutes({ freeMin: 12 }, options, 60)).toBe(30)
+    expect(fittingMinutes({ freeMin: 47 }, options, 60)).toBe(30)
+    expect(fittingMinutes({ freeMin: 60 }, options, 60)).toBe(60)
+    expect(fittingMinutes({ freeMin: 119 }, options, 60)).toBe(60)
+    expect(fittingMinutes({ freeMin: 465 }, options, 60)).toBe(120)
   })
 
   it('formats time ranges without padding', () => {

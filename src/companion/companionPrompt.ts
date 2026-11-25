@@ -1,3 +1,4 @@
+import { clockTime, type FreeNow } from '../domain/calendar'
 import type { Domain } from '../domain/types'
 import type { PlanSummary, TaskSummary } from './companionTools'
 import type { AttachedMail } from './mailTools'
@@ -23,6 +24,18 @@ export const vaultNames: Record<Domain, string> = { personal: 'HomeBase', work: 
 function taskLine(task: TaskSummary): string {
   const due = task.dueDate ? ` · due ${task.dueDate}` : ''
   return `- ${task.title} (id ${task.id}${due}, ${task.estimateMin}m, p${task.priority})`
+}
+
+/** How much time there is right now, said only when it is known: a time the user picked, or what the calendar shows. */
+export function timeNowLine(summary: Pick<PlanSummary, 'availableMin' | 'freeNow'>): string {
+  const picked = summary.availableMin === undefined ? [] : [`The user set ${summary.availableMin} minutes available right now.`]
+  return [...picked, ...(summary.freeNow ? [calendarNowLine(summary.freeNow)] : [])].join(' ')
+}
+
+function calendarNowLine(free: FreeNow): string {
+  if ('busyUntil' in free) return `The calendar has an event on now, until ${clockTime(free.busyUntil)}.`
+  if (free.nextStart) return `The calendar is clear for ${free.freeMin} minutes, until an event at ${clockTime(free.nextStart)}.`
+  return 'Nothing else is on the calendar today.'
 }
 
 function section(title: string, lines: string[]): string {
@@ -71,7 +84,7 @@ export function buildSystemPrompt({ domain, summary, vaultAvailable, memoryIndex
   const parts = [
     `You are the companion inside My Brain, a personal planning app. Space: ${domain}. Today: ${summary.today} (local date).`,
     ...(userName?.trim() ? [`The user's name is ${userName.trim()}.`] : []),
-    `${summary.openCount} open tasks. ${summary.availableMin} minutes available right now.`,
+    [`${summary.openCount} open tasks.`, timeNowLine(summary)].filter(Boolean).join(' '),
     section('Due today:', summary.dueToday.map(taskLine)),
     section('Overdue:', summary.overdue.map(taskLine)),
     section('Rest of this week:', summary.thisWeek.map(taskLine)),

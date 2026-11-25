@@ -4,7 +4,7 @@ import { BridgeCompanionClient } from './bridgeCompanion'
 import { CompanionError, createAnthropicCompanion, createBridgeCompanion, maxModelCalls } from './companion'
 import type { CompanionActions } from './companionTools'
 import { fakeActions } from './companionTools.test'
-import { buildSystemPrompt } from './companionPrompt'
+import { buildSystemPrompt, timeNowLine } from './companionPrompt'
 import { clearHistory, conversationTitle, deleteConversation, historyStorageKey, loadHistory, saveConversation } from './companionStore'
 
 const reply = (content: MessagesResponse['content'], stop_reason = 'end_turn'): MessagesResponse => ({ id: 'm', content, stop_reason })
@@ -165,6 +165,19 @@ describe('companion prompt and store', () => {
     expect(prompt).toContain('70 Goals/')
     expect(prompt).toContain('Never say a task, goal, or note change is done unless the tool returned ok')
     expect(buildSystemPrompt({ domain: 'work', vaultAvailable: false, summary: { today: 'd', openCount: 0, availableMin: 0, dueToday: [], overdue: [], thisWeek: [], suggested: [], goals: [], projects: [] } })).toContain('Hivemind vault is not reachable')
+  })
+
+  it('says how much time there is only when the user picked it or the calendar shows it', () => {
+    const summary = { today: 'd', openCount: 2, dueToday: [], overdue: [], thisWeek: [], suggested: [], goals: [], projects: [] }
+    const untold = buildSystemPrompt({ domain: 'work', vaultAvailable: false, summary })
+    expect(untold).toContain('2 open tasks.')
+    expect(untold).not.toMatch(/minutes available|calendar is clear|on the calendar today/)
+    expect(timeNowLine({})).toBe('')
+    expect(timeNowLine({ availableMin: 30 })).toBe('The user set 30 minutes available right now.')
+    expect(timeNowLine({ freeNow: { freeMin: 47, nextStart: '2026-11-25T15:00:00' } })).toBe('The calendar is clear for 47 minutes, until an event at 3pm.')
+    expect(timeNowLine({ freeNow: { busyUntil: '2026-11-25T15:30:00' } })).toBe('The calendar has an event on now, until 3:30pm.')
+    expect(timeNowLine({ freeNow: { freeMin: 200 } })).toBe('Nothing else is on the calendar today.')
+    expect(buildSystemPrompt({ domain: 'personal', vaultAvailable: false, summary: { ...summary, availableMin: 120, freeNow: { freeMin: 47, nextStart: '2026-11-25T15:00:00' } } })).toContain('2 open tasks. The user set 120 minutes available right now. The calendar is clear for 47 minutes, until an event at 3pm.')
   })
 
   it('tells the model what it remembers and where memory lives', () => {

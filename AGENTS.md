@@ -93,3 +93,7 @@ The body slice follows workout-tracker (Chase, 2026-11-24), on every device (202
 - A week that ended with no word from the tracker counts as missed, and the streak is not shown until the tracker reports again.
 - With a summary, body needs no 28-day target and the targets form does not ask for one. Without one, body works like every other area.
 - Reviews read the body area from the same summary.
+
+## time available
+
+Chat is told how much time there is right now only when it is known: a length picked on today, or what the calendar shows (clear until the next event, in one until it ends, nothing else today). A default is never passed along as a fact. Until a length is picked, the picker starts on the longest choice that fits before the next event, and on the shortest during one (`freeNow` and `fittingMinutes` in `src/domain/calendar.ts`). With no calendar read, as at work, it starts on 1h and chat hears no number. `calendar.test.ts` and `companion.test.ts` hold these.

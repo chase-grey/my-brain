@@ -2,7 +2,7 @@ import { Suspense, lazy, useEffect, useMemo, useRef, useState, type SetStateActi
 import { InteractionRequiredAuthError } from '@azure/msal-browser'
 import type { CalendarBlock } from './data/calendarGraphProvider'
 import type { InboxCounts } from './data/mailGraphProvider'
-import { addDays, blockWindow, eventsOn, reconcileHeldGoal } from './domain/calendar'
+import { addDays, blockWindow, eventsOn, fittingMinutes, freeNow, reconcileHeldGoal } from './domain/calendar'
 import { configuredPersonalClientId, createPersonalGraphData, type PersonalGraphData } from './data/personalGraphData'
 import { mergePersonalTasks, personalTaskMetaFile, taskMetadata } from './data/personalTaskSync'
 import type { TaskProvider } from './data/taskProvider'
@@ -27,7 +27,7 @@ import { newId, today } from './format'
 import { Menu } from './ui'
 import { useKeyboardInset } from './useKeyboardInset'
 import { pushWidget, widgetSnapshot } from './native/widget'
-import { TodayView } from './views/TodayView'
+import { minuteOptions, TodayView } from './views/TodayView'
 import { ProgressView } from './views/ProgressView'
 import { bumpsBetween, recordBumps } from './review/bumpLog'
 import { useReviews } from './review/useReviews'
@@ -186,7 +186,8 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
   const { ready: updateReady } = useAppUpdate()
   const [docked, setDocked] = useState(() => typeof matchMedia === 'function' && matchMedia(dockedQuery).matches)
   const [tasks, setTasks] = useState<Task[]>(() => loadTasks(activeDomain, account.owner))
-  const [availableMin, setAvailableMin] = useState<number>(60)
+  // The time picked on today. Until one is picked the calendar chooses, and chat is told no number.
+  const [pickedMin, setPickedMin] = useState<number>()
   const [energy, setEnergy] = useState<Energy>('shallow')
   const [placeOverride, setPlaceOverride] = useState<Place | undefined>()
   const [activeStore, setActiveStore] = useState<StoreType>('grocery')
@@ -217,6 +218,8 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
   const [syncing, setSyncing] = useState(false)
   const [syncError, setSyncError] = useState<string>()
   const [calendarEvents, setCalendarEvents] = useState<CalendarBlock[]>([])
+  const [calendarRead, setCalendarRead] = useState(false)
+  const [, setMinute] = useState(0)
   const [heldEvents, setHeldEvents] = useState<Record<string, CalendarBlock>>({})
   const [inboxCounts, setInboxCounts] = useState<InboxCounts>()
   const authStarted = useRef(false)
@@ -225,6 +228,13 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
   productRef.current = product
 
   const currentDay = today()
+  // The gap to the next event shrinks as the clock moves, so the calendar's answer is taken again each minute.
+  useEffect(() => {
+    if (!calendarRead) return
+    const timer = setInterval(() => setMinute((value) => value + 1), 60_000)
+    return () => clearInterval(timer)
+  }, [calendarRead])
+  const availableMin = pickedMin ?? fittingMinutes(calendarRead ? freeNow(calendarEvents) : undefined, minuteOptions, 60)
   // Trips read and write the HomeBase vault directly, with the same repo settings the chat uses.
   const tripVault = useMemo(() => {
     const config = { repo: normalizeRepo(settings.githubRepo), token: settings.githubToken.replace(/\s+/g, ''), branch: normalizeBranch(settings.vaultBranch) }
@@ -498,7 +508,7 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
     const start = `${currentDay}T00:00:00`
     const end = `${addDays(currentDay, 7)}T00:00:00`
     const [events, counts] = await Promise.allSettled([data.calendar.events(start, end), data.mail.inboxCounts()])
-    if (events.status === 'fulfilled') setCalendarEvents(events.value)
+    if (events.status === 'fulfilled') { setCalendarEvents(events.value); setCalendarRead(true) }
     if (counts.status === 'fulfilled') setInboxCounts(counts.value)
     const failure = [events, counts].find((result): result is PromiseRejectedResult => result.status === 'rejected')
     if (failure) setSyncError((current) => current ?? errorMessage(failure.reason))
@@ -719,7 +729,7 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
     listCalendar: () => activeDomain === 'personal' ? calendarEvents : [],
     holdGoal: async (id) => { await holdGoal(id); return summarizeGoal(productRef.current.goals.find((goal) => goal.id === id)!) },
     releaseGoal,
-    todaySummary: () => buildPlanSummary({ today: currentDay, domain: activeDomain, tasks: tasksRef.current, commitments, weeklyCommitments, plan, goals: productRef.current.goals, projects: productRef.current.projects, calendar: activeDomain === 'personal' ? eventsOn(calendarEvents, currentDay) : [] }),
+    todaySummary: () => buildPlanSummary({ today: currentDay, domain: activeDomain, tasks: tasksRef.current, commitments, weeklyCommitments, plan, goals: productRef.current.goals, projects: productRef.current.projects, calendar: activeDomain === 'personal' ? eventsOn(calendarEvents, currentDay) : [], pickedMin, freeNow: calendarRead ? freeNow(calendarEvents) : undefined }),
   }
 
   function editTask(id: string) {
@@ -837,7 +847,7 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
         {shownView === 'today' && <TodayView domain={activeDomain} currentDay={currentDay} place={currentPlace} placeOverride={placeOverride} onPlaceOverride={setPlaceOverride}
           commitments={commitments} weeklyCommitments={weeklyCommitments} habits={product.habits} habitEntries={product.habitEntries}
           onHabitPart={(habitId, partId) => setProduct((current) => ({ ...current, habitEntries: toggleHabitPart(current.habitEntries, habitId, partId, currentDay) }))}
-          plan={plan} availableMin={availableMin} energy={energy} onMinutes={setAvailableMin} onEnergy={setEnergy}
+          plan={plan} availableMin={availableMin} energy={energy} onMinutes={setPickedMin} onEnergy={setEnergy}
           weekPaid={weekPaid} floorToday={floorToday} strategicTodayMin={strategicTodayMin}
           onFloorNight={() => setProduct((current) => ({ ...current, dayOverrides: [...current.dayOverrides, { date: currentDay, domain: activeDomain, kind: 'floor' }] }))}
           onStrategic={(minutes) => setProduct((current) => ({ ...current, activities: [...current.activities, { id: newId('activity'), domain: activeDomain, kind: 'strategic', occurredAt: new Date().toISOString(), minutes }] }))}

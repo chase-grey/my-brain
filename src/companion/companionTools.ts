@@ -1,4 +1,5 @@
 import type { CalendarBlock } from '../data/calendarGraphProvider'
+import type { FreeNow } from '../domain/calendar'
 import type { Domain, Goal, Horizon, Plan, Priority, Project, Task } from '../domain/types'
 import type { AnthropicTool } from './anthropicClient'
 import type { VaultStore } from './githubVault'
@@ -18,7 +19,10 @@ export type PlanSummary = {
   overdue: TaskSummary[]
   thisWeek: TaskSummary[]
   suggested: TaskSummary[]
-  availableMin: number
+  /** Only the time the user picked on today. A default is never passed along as theirs. */
+  availableMin?: number
+  /** What the calendar says about right now, once it has been read. */
+  freeNow?: FreeNow
   goals: GoalSummary[]
   projects: ProjectSummary[]
   calendar?: CalendarSummary[]
@@ -367,6 +371,8 @@ export function buildPlanSummary(input: {
   goals: Goal[]
   projects: Project[]
   calendar?: CalendarBlock[]
+  pickedMin?: number
+  freeNow?: FreeNow
 }): PlanSummary {
   const open = input.tasks.filter((task) => task.domain === input.domain && !task.completed && !task.storeType)
   return {
@@ -376,7 +382,8 @@ export function buildPlanSummary(input: {
     overdue: open.filter((task) => task.dueDate && task.dueDate < input.today).map(summarizeTask),
     thisWeek: input.weeklyCommitments.map(summarizeTask),
     suggested: input.plan.tasks.slice(0, 8).map(summarizeTask),
-    availableMin: input.plan.availableMin,
+    availableMin: input.pickedMin,
+    freeNow: input.freeNow,
     goals: input.goals.filter((goal) => goal.domain === input.domain && goal.status === 'active').map(summarizeGoal),
     projects: input.projects.filter((project) => project.domain === input.domain && project.status === 'active').map(summarizeProject),
     calendar: (input.calendar ?? []).map(summarizeEvent),

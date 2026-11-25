@@ -167,7 +167,10 @@ describe('companion tools', () => {
 
     const overdue: Task = { ...task, id: 'late', dueDate: '2026-10-01' }
     const summary = buildPlanSummary({ today: '2026-10-30', domain: 'personal', tasks: [task, overdue], commitments: [], weeklyCommitments: [task], plan: { tasks: [task], totalMin: 30, availableMin: 60 }, goals: [], projects: [] })
-    expect(summary).toMatchObject({ openCount: 2, availableMin: 60 })
+    expect(summary).toMatchObject({ openCount: 2 })
+    // The plan's 60 is the picker's default, not something the user said, so it is not passed along.
+    expect(summary.availableMin).toBeUndefined()
+    expect(buildPlanSummary({ today: '2026-10-30', domain: 'personal', tasks: [], commitments: [], weeklyCommitments: [], plan: { tasks: [], totalMin: 0, availableMin: 30 }, goals: [], projects: [], pickedMin: 30, freeNow: { freeMin: 45, nextStart: '2026-10-30T15:00:00' } })).toMatchObject({ availableMin: 30, freeNow: { freeMin: 45 } })
     expect(summary.overdue.map((item) => item.id)).toEqual(['late'])
     expect(summary.thisWeek[0]).toMatchObject({ id: 'id1', title: 'call plumber' })
   })
