@@ -29,11 +29,12 @@ Never kill powershell.exe by image name (`taskkill /IM`, `Stop-Process -Name`): 
 
 ## chat voice and context
 
-Chase, 2026-11-25. `speech.test.ts`, `stopPhrase.test.ts` and `context.test.ts` hold these.
+Chase, 2026-11-25. `speech.test.ts`, `stopPhrase.test.ts`, `context.test.ts` and `ChatView.test.tsx` hold these.
 
 - A spoken message is never cut off at a breath. The recognizer's stretches are chained (`dictate` in `src/voice/speech.ts`) and the message ends only after two seconds without a new word.
 - Spoken words land in the message box as they are heard, and stay there when listening ends for any reason other than sending.
-- The mic starts a conversation: a pause sends, the reply is read aloud, and it listens again. It ends on a tap, on the words "stop listening", or when the app is hidden. A typed message with the mic off is never read aloud.
+- The waveform button starts a conversation: a pause sends, the reply is read aloud, and it listens again. It ends on a tap, on the words "stop listening", or when the app is hidden, and never on quiet alone. A typed message with voice off is never read aloud.
+- There is one button beside the message box (`composerButton` in `ChatView.tsx`): the waveform, which becomes send once there is typed text or an attached file and voice is off. Model, effort, new chat, past chats and upload live in the … menu at the top right of the chat, not around the message box.
 - There is no context switch. Each message either carries on the thread or starts a new one (`src/companion/context.ts`): Jev decides when there is a key, the clock (15 minutes) when there is not, and a thread reopened from the history is always carried on. What is on screen after a send is what the model was given.
 - What goes along with a message is capped in code (`contextTurns`), newest first. The model is never asked to manage its own context.
 - Work chat is never sent to Jev; its thread goes by the clock.
@@ -62,9 +63,10 @@ The order is Chase's (2026-11-24): purpose, connection, body, mind, creativity, 
 
 ## body slice
 
-The body slice follows workout-tracker (Chase, 2026-11-24). The tracker leaves a summary under the `wt.share.body` storage key (both apps are served from `chase-grey.github.io`; its side is `src/lib/brainShare.ts` there) and `src/domain/bodyTracker.ts` reads it. `bodyTracker.test.ts` holds the rules.
+The body slice follows workout-tracker (Chase, 2026-11-24), on every device (2026-11-25). The tracker posts a summary to its backend's `share` route (its side is `src/lib/brainShare.ts` there) and `src/domain/bodyTracker.ts` reads it with the tracker account key. `bodyTracker.test.ts` holds the rules.
 
 - The tracker judges every week and goal. Nothing is re-scored here.
+- The account key is `trackerToken` in settings and rides to the other devices in settings.json like the other keys. It comes from the sign-in under settings, or on its own on a device that is signed in to the tracker (both apps are served from `chase-grey.github.io`, so they share storage there, and the tracker leaves the same summary under `wt.share.body`).
 - The slice reads the last four weeks: a hit week is 1, a week saved by freezes a half, a missed week nothing. With committed goals open, the weeks are half the fill and the share of goals on pace the other half.
 - A week that ended with no word from the tracker counts as missed, and the streak is not shown until the tracker reports again.
 - With a summary, body needs no 28-day target and the targets form does not ask for one. Without one, body works like every other area.

@@ -10,7 +10,7 @@ import type { AppSettings } from './settings'
  */
 export const accountFile = 'settings.json'
 
-export const syncedFields = ['aiMode', 'aiProvider', 'aiBaseUrl', 'aiModel', 'anthropicApiKey', 'jevApiKey', 'anthropicModel', 'chatEffort', 'githubRepo', 'githubToken', 'vaultBranch', 'mailAppUrl', 'personalWeeklyCeilingMin', 'floors'] as const
+export const syncedFields = ['aiMode', 'aiProvider', 'aiBaseUrl', 'aiModel', 'anthropicApiKey', 'jevApiKey', 'anthropicModel', 'chatEffort', 'githubRepo', 'githubToken', 'vaultBranch', 'mailAppUrl', 'trackerToken', 'personalWeeklyCeilingMin', 'floors'] as const
 export type SyncedSettings = Pick<AppSettings, typeof syncedFields[number]>
 
 export type AccountFile = {

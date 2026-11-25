@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { APP_BUILD_TIME, APP_COMMIT, checkForUpdate, useAppUpdate } from '../appUpdate'
 import { GitHubVault, normalizeBranch, normalizeRepo, vaultConfigured } from '../companion/githubVault'
+import { setTrackerOff, signInToTracker } from '../domain/bodyTracker'
 import type { Domain } from '../domain/types'
 import { exportFileName, exportVault, saveExport } from '../notes/exportNotes'
 import type { DeviceAccount } from '../account'
@@ -51,6 +52,10 @@ export function SettingsView({ domain, accountName, connectionStatus, settings, 
         : <div className="actions"><button className="primary" disabled={syncing || connectionStatus === 'unconfigured'} type="button" onClick={() => void onConnect()}>{syncing ? 'connecting' : connectionStatus === 'unconfigured' ? 'no microsoft app id' : 'connect microsoft'}</button></div>}
       {syncError && <p className="note is-error" role="alert">{syncError}</p>}
       {(account.owner || settings.mailAppUrl) && <Field label="mail app"><input autoComplete="off" inputMode="url" value={settings.mailAppUrl} onChange={set('mailAppUrl')} placeholder="https://" /></Field>}
+    </Card>}
+
+    {domain === 'personal' && <Card title="workout tracker">
+      <TrackerLink settings={settings} onSettings={onSettings} />
     </Card>}
 
     {domain === 'work' && <Card title="outlook tasks">
@@ -113,6 +118,42 @@ export function SettingsView({ domain, accountName, connectionStatus, settings, 
       </div>
     </Card>
   </>
+}
+
+function TrackerLink({ settings, onSettings }: { settings: AppSettings; onSettings: React.Dispatch<React.SetStateAction<AppSettings>> }) {
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string>()
+
+  async function connect(event: React.FormEvent) {
+    event.preventDefault()
+    setBusy(true)
+    setError(undefined)
+    try {
+      const trackerToken = await signInToTracker(email.trim(), password)
+      setTrackerOff(false)
+      setPassword('')
+      onSettings((current) => ({ ...current, trackerToken }))
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : 'sign in failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  function disconnect() {
+    setTrackerOff(true)
+    onSettings((current) => ({ ...current, trackerToken: '' }))
+  }
+
+  if (settings.trackerToken) return <><p className="note">connected</p><div className="actions row-actions"><button className="plain" type="button" onClick={disconnect}>disconnect</button></div></>
+  return <form className="stack" onSubmit={(event) => void connect(event)}>
+    <Field label="email"><input type="email" autoComplete="username" autoCapitalize="off" spellCheck={false} value={email} onChange={(event) => setEmail(event.target.value)} /></Field>
+    <Field label="password"><input type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} /></Field>
+    <div className="actions"><button className="primary" disabled={busy || !email.trim() || !password} type="submit">{busy ? 'connecting' : 'connect'}</button></div>
+    {error && <p className="note is-error" role="alert">{error}</p>}
+  </form>
 }
 
 // Lists the vault with the same client the chat uses, so a wrong repo, branch, or token shows up here instead of mid-conversation.

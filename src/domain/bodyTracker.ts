@@ -1,6 +1,10 @@
 // The body slice reads workout-tracker instead of asking for a 28-day target.
-// Both apps are served from the same site, so the tracker leaves a summary in the storage they share
-// (its src/lib/brainShare.ts) and this reads it. The tracker judges every week and every goal; nothing is re-scored here.
+// The tracker posts a summary to its backend (its src/lib/brainShare.ts) and this reads it with the account's key, on any device.
+// On a device that also runs the tracker the same summary sits in the storage the two apps share, and the key is picked up there.
+// The tracker judges every week and every goal; nothing is re-scored here.
+
+/** The tracker's hosted backend, the address its own app ships with. */
+export const TRACKER_URL = 'https://script.google.com/macros/s/AKfycbxKDeDE9cRmW8eA5TjShq9dmRvJoVxVE4nsx0l43WLpyXBv_TvheDsYLpBCVuZHLL89xA/exec'
 
 /** The key workout-tracker writes. */
 export const TRACKER_SHARE_KEY = 'wt.share.body'
@@ -60,6 +64,68 @@ export function readTrackerSummary(): TrackerSummary | undefined {
   } catch {
     return undefined
   }
+}
+
+const TRACKER_OFF_KEY = 'my-brain.tracker.off'
+
+/** Disconnecting has to stick on a device that is signed in to the tracker, where the key would otherwise be picked straight back up. */
+export function setTrackerOff(off: boolean): void {
+  try {
+    if (off) localStorage.setItem(TRACKER_OFF_KEY, '1')
+    else localStorage.removeItem(TRACKER_OFF_KEY)
+  } catch {
+    // Without storage there is no key to pick up either.
+  }
+}
+
+/** The tracker's account key on a device that is signed in to the tracker, so nobody types it twice. */
+export function readTrackerToken(): string {
+  try {
+    if (localStorage.getItem(TRACKER_OFF_KEY)) return ''
+    const token = (JSON.parse(localStorage.getItem('wt.settings') ?? '{}') as { accountToken?: unknown } | null)?.accountToken
+    return typeof token === 'string' ? token.trim() : ''
+  } catch {
+    return ''
+  }
+}
+
+/** The later of two summaries; the account's on a tie, since every device can reach it. */
+export function newerSummary(local: TrackerSummary | undefined, remote: TrackerSummary | undefined): TrackerSummary | undefined {
+  if (!local || !remote) return remote ?? local
+  return local.asOf > remote.asOf ? local : remote
+}
+
+function trackerUrl(route: string, token?: string): string {
+  const url = new URL(TRACKER_URL)
+  url.searchParams.set('route', route)
+  if (token) url.searchParams.set('user', token)
+  return url.toString()
+}
+
+/** The account's summary, or nothing when none is posted yet or the backend cannot be reached. */
+export async function fetchTrackerSummary(token: string): Promise<TrackerSummary | undefined> {
+  try {
+    const response = await fetch(trackerUrl('share', token), { signal: AbortSignal.timeout(30_000) })
+    if (!response.ok) return undefined
+    return parseTrackerSummary(JSON.stringify(await response.json()))
+  } catch {
+    return undefined
+  }
+}
+
+/** Signs in the way the tracker does and returns the account key. Throws with words a person can read. */
+export async function signInToTracker(email: string, password: string): Promise<string> {
+  let payload: { token?: unknown; error?: unknown } | null
+  try {
+    // text/plain keeps this a simple request; the backend cannot answer a preflight.
+    const response = await fetch(trackerUrl('login'), { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ email, password }), signal: AbortSignal.timeout(30_000) })
+    payload = response.ok ? await response.json() as { token?: unknown; error?: unknown } | null : null
+  } catch {
+    payload = null
+  }
+  if (!payload) throw new Error('could not reach workout tracker')
+  if (typeof payload.token === 'string' && payload.token.trim()) return payload.token.trim()
+  throw new Error(typeof payload.error === 'string' ? payload.error.toLowerCase() : 'that email and password did not work')
 }
 
 const dayMs = 86_400_000

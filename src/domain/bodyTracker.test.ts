@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
-import { bodyReading, parseTrackerSummary, type TrackerSummary } from './bodyTracker'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { bodyReading, fetchTrackerSummary, newerSummary, parseTrackerSummary, signInToTracker, type TrackerSummary } from './bodyTracker'
 import { buildLifeRing } from './lifeRing'
 
 const hit = (week: string, inProgress = false) => ({ week, result: 'hit' as const, ...(inProgress ? { inProgress } : {}) })
@@ -66,5 +66,46 @@ describe('body slice from workout-tracker', () => {
     expect(ring.find((arc) => arc.domain === 'body')).toMatchObject({ fill: 1, state: 'early-signal', focus: false })
     expect(ring.find((arc) => arc.domain === 'mind')).toMatchObject({ state: 'dormant' })
     expect(buildLifeRing([], [], '2026-11-24', ['body'], bodyReading(summary(), '2026-11-24')).some((arc) => arc.domain === 'body')).toBe(false)
+  })
+})
+
+describe('reading the summary across devices', () => {
+  const stub = (body: unknown, ok = true) => vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok, json: async () => body }))
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('asks the tracker for the account the key names', async () => {
+    stub(summary())
+    expect(await fetchTrackerSummary('key-1')).toEqual(summary())
+    const asked = new URL(vi.mocked(fetch).mock.calls[0][0] as string)
+    expect(asked.searchParams.get('route')).toBe('share')
+    expect(asked.searchParams.get('user')).toBe('key-1')
+  })
+
+  it('has nothing when no summary is posted, the backend is older, or it cannot be reached', async () => {
+    stub(null)
+    expect(await fetchTrackerSummary('key-1')).toBeUndefined()
+    stub({ error: 'Unknown route' })
+    expect(await fetchTrackerSummary('key-1')).toBeUndefined()
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')))
+    expect(await fetchTrackerSummary('key-1')).toBeUndefined()
+  })
+
+  it('keeps whichever summary is later, and the account one on a tie', () => {
+    const older = summary({ asOf: '2026-11-20', streak: 10 })
+    const remote = summary({ streak: 12 })
+    expect(newerSummary(older, summary())).toEqual(summary())
+    expect(newerSummary(summary(), older)).toEqual(summary())
+    expect(newerSummary(summary(), remote)).toEqual(remote)
+    expect(newerSummary(summary(), undefined)).toEqual(summary())
+    expect(newerSummary(undefined, undefined)).toBeUndefined()
+  })
+
+  it('signs in for the account key and says why when it cannot', async () => {
+    stub({ saved: 1, token: ' key-1 ', name: 'someone', owner: true })
+    expect(await signInToTracker('a@example.com', 'pw')).toBe('key-1')
+    stub({ error: 'Wrong email or password' })
+    await expect(signInToTracker('a@example.com', 'pw')).rejects.toThrow('wrong email or password')
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')))
+    await expect(signInToTracker('a@example.com', 'pw')).rejects.toThrow('could not reach workout tracker')
   })
 })

@@ -15,7 +15,7 @@ import { buildWeekReceipt } from './domain/receipt'
 import { toggleHabitPart } from './domain/habits'
 import type { Domain, Energy, Goal, Place, Priority, StoreType, Task } from './domain/types'
 import { loadProductState, saveProductState, type ProductState } from './productState'
-import { readTrackerSummary } from './domain/bodyTracker'
+import { fetchTrackerSummary, newerSummary, readTrackerSummary, readTrackerToken, type TrackerSummary } from './domain/bodyTracker'
 import { loadSettings, saveSettings, type AppSettings } from './settings'
 import { applyDeviceSetup, loadAccount, saveAccount, setupFromHash, showsWork, type DeviceAccount } from './account'
 import { accountFile, accountFileFrom, mergeAccountFile, type AccountFile } from './settingsSync'
@@ -279,15 +279,24 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
   // The body slice follows workout-tracker: pick up its summary on open and whenever the app comes back to the front.
   useEffect(() => {
     if (activeDomain !== 'personal') return
+    const token = settings.trackerToken || readTrackerToken()
+    if (token && !settings.trackerToken) setSettings((current) => current.trackerToken ? current : { ...current, trackerToken: token })
+    const take = (summary: TrackerSummary | undefined) => setProduct((current) => {
+      const next = newerSummary(current.bodyTracker, summary)
+      return !next || JSON.stringify(current.bodyTracker) === JSON.stringify(next) ? current : { ...current, bodyTracker: next }
+    })
+    let asked = 0
     const read = () => {
-      const summary = readTrackerSummary()
-      if (summary) setProduct((current) => JSON.stringify(current.bodyTracker) === JSON.stringify(summary) ? current : { ...current, bodyTracker: summary })
+      take(readTrackerSummary())
+      if (!token || Date.now() - asked < 10 * 60_000) return
+      asked = Date.now()
+      void fetchTrackerSummary(token).then(take)
     }
     read()
     const onVisible = () => { if (document.visibilityState === 'visible') read() }
     document.addEventListener('visibilitychange', onVisible)
     return () => document.removeEventListener('visibilitychange', onVisible)
-  }, [])
+  }, [settings.trackerToken])
 
   function startAddingTask() {
     setEditingTaskId(undefined)
