@@ -103,7 +103,7 @@ const rootPage = `<!doctype html>
   const params = new URLSearchParams(location.hash.slice(1) || location.search)
   if (params.has('state') && (params.has('code') || params.has('error'))) msalRedirectBridge.broadcastResponseToMainFrame()
   else addEventListener('DOMContentLoaded', () => {
-    document.body.innerHTML = ${JSON.stringify(apps.map((app) => `<a href="/${app.name}/">${app.name.replace('-', ' ')}</a>`).join(''))}
+    document.body.innerHTML = ${JSON.stringify(apps.map((app) => `<a href="/${app.name}/" target="_blank">${app.name.replace('-', ' ')}</a>`).join(''))}
   })
 </script>
 <body></body>`

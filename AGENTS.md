@@ -44,6 +44,7 @@ Chase, 2026-11-25. Epic's network blocks `chase-grey.github.io`, so on the work 
 
 - It serves what is deployed: each app is built from `origin/main` in `<repo>/.worktrees/local`, checked every five minutes. It never serves a working tree. Never `rm -rf` that worktree, its `node_modules` is a junction to the real one.
 - Microsoft knows a localhost copy only by its root (`http://localhost/`, any port), so sign-in returns to the root page, which hands the result back (`signInReturnUrl` in `src/site.ts`). Do not build a redirect address any other way.
+- A sign-in is kept when the browser closes, on every device (Chase, 2026-11-25): `keepSignIn` gives msal's key cookie a 90 day life, renewed on each open. Without it every browser restart comes back signed out.
 - A link from one app to another goes through `besideThisApp`, so a local copy opens the local sibling. A new link to a sibling app does the same.
 - The bridge allows that origin (`$AllowedOrigins` in `work/bridge/work-bridge.ps1`).
 - `site.test.ts` holds these; my-mail carries the same file.

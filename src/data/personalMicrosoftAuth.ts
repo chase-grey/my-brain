@@ -5,7 +5,7 @@ import {
   type AccountInfo,
 } from '@azure/msal-browser'
 import { isNativeApp } from '../native/platform'
-import { signInReturnUrl } from '../site'
+import { keepSignIn, signInReturnUrl } from '../site'
 
 export const personalGraphScopes = [
   'Tasks.ReadWrite',
@@ -30,6 +30,7 @@ export class PersonalMicrosoftAuth {
       cache: { cacheLocation: BrowserCacheLocation.LocalStorage },
     })
     await client.initialize()
+    keepSignIn()
     // Coming back from a redirect sign-in (the android shell signs in this way) lands here with the result in the hash.
     const redirected = await client.handleRedirectPromise()
     if (redirected) client.setActiveAccount(redirected.account)

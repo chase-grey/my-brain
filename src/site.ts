@@ -13,3 +13,14 @@ export function besideThisApp(url: string, origin: string = typeof window === 'u
   if (base === '/' || origin === PAGES || !url.startsWith(`${PAGES}/`)) return url
   return `${origin}${url.slice(PAGES.length)}`
 }
+
+const SIGN_IN_KEY = 'msal.cache.encryption'
+
+/**
+ * Keeps the sign-in when the browser is closed. msal locks what it saves with a key held in a cookie that ends
+ * with the browser, so every restart came back signed out. This gives that cookie a life, renewed on each open.
+ */
+export function keepSignIn(jar: { cookie: string } = document, days = 90): void {
+  const kept = jar.cookie.split('; ').find((entry) => entry.startsWith(`${SIGN_IN_KEY}=`))
+  if (kept) jar.cookie = `${kept};path=/;SameSite=None;Secure;max-age=${days * 24 * 60 * 60}`
+}

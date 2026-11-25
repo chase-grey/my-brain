@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { besideThisApp, signInReturnUrl } from './site'
+import { besideThisApp, keepSignIn, signInReturnUrl } from './site'
 
 describe('signInReturnUrl', () => {
   it('is the app itself on the published site', () => {
@@ -33,5 +33,19 @@ describe('besideThisApp', () => {
   it('leaves a link to anywhere else alone', () => {
     expect(besideThisApp('https://example.com/mail/', 'http://localhost:5270', '/my-brain/')).toBe('https://example.com/mail/')
     expect(besideThisApp('', 'http://localhost:5270', '/my-brain/')).toBe('')
+  })
+})
+
+describe('keepSignIn', () => {
+  it('gives the key to the saved sign-in a life past the browser closing', () => {
+    const jar = { cookie: 'other=1; msal.cache.encryption=%7B%22id%22%3A%22a%22%7D' }
+    keepSignIn(jar)
+    expect(jar.cookie).toBe('msal.cache.encryption=%7B%22id%22%3A%22a%22%7D;path=/;SameSite=None;Secure;max-age=7776000')
+  })
+
+  it('writes nothing before there is a sign-in to keep', () => {
+    const jar = { cookie: 'other=1' }
+    keepSignIn(jar)
+    expect(jar.cookie).toBe('other=1')
   })
 })
