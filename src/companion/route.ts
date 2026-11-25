@@ -10,12 +10,12 @@ export const rungs = [
 ] as const
 export const topRung = rungs.length - 1
 
-/** Where a message starts, and the tool groups it can do without. */
-export type Route = { rung: number; skip: ToolGroup[] }
+/** Where a message starts, the tool groups it can do without, and the chance it carries on from the exchange before it. */
+export type Route = { rung: number; skip: ToolGroup[]; follows?: number }
 /** Without Jev, or when it cannot be reached: the middle model with every tool. */
 export const defaultRoute: Route = { rung: 1, skip: [] }
 
-export type RouteAsk = { text: string; previousReply?: string; groups: ToolGroup[] }
+export type RouteAsk = { text: string; previousMessage?: string; previousReply?: string; groups: ToolGroup[] }
 
 /** How sure Jev must be before a message starts somewhere other than the middle. A wrong "quick" costs one cheap hand-off; a wrong "deep" costs the dearest model. */
 export const rungConfidence = 0.6
@@ -56,8 +56,18 @@ const groupQuestions: Record<ToolGroup, JevQuestion> = {
   },
 }
 
-export function routeQuestions(groups: ToolGroup[]): Record<string, JevQuestion> {
-  return { depth: depthQuestion, ...Object.fromEntries(groups.map((group) => [group, groupQuestions[group]])) }
+const threadQuestion: JevQuestion = {
+  type: 'choice',
+  instructions: `${preamble} previous_message and previous_reply are the exchange just before it. Does the message carry on from that exchange?`,
+  criteria: yesNo(
+    'It answers, refers to, corrects, or builds on the previous exchange, or cannot be understood without it.',
+    'It stands on its own and is about something else.',
+  ),
+}
+
+/** `thread` is asked only when there is an exchange before the message. */
+export function routeQuestions(groups: ToolGroup[], thread = false): Record<string, JevQuestion> {
+  return { depth: depthQuestion, ...Object.fromEntries(groups.map((group) => [group, groupQuestions[group]])), ...(thread ? { thread: threadQuestion } : {}) }
 }
 
 /** Jev's answers as a route. Anything missing or unsure falls toward the middle model and the full tool list. */
@@ -65,18 +75,20 @@ export function routeFromAnswers(answers: Record<string, JevAnswer>, groups: Too
   const depth = answers.depth
   const sure = (label: string) => depth?.choice === label && (depth.probabilities?.[label] ?? 0) >= rungConfidence
   const rung = sure('quick') ? 0 : sure('deep') ? topRung : defaultRoute.rung
+  const carriesOn = answers.thread?.probabilities?.YES
+  const follows = typeof carriesOn === 'number' ? { follows: carriesOn } : {}
   // Planning touches everything, so the top model always gets every tool.
-  if (rung === topRung) return { rung, skip: [] }
+  if (rung === topRung) return { rung, skip: [], ...follows }
   const skip = groups.filter((group) => {
     const needed = answers[group]?.probabilities?.YES
     return typeof needed === 'number' && needed < skipBelow
   })
-  return { rung, skip }
+  return { rung, skip, ...follows }
 }
 
 export async function routeWithJev(client: JevClient, ask: RouteAsk): Promise<Route> {
-  const state = { message: ask.text, previous_reply: ask.previousReply || undefined }
-  return routeFromAnswers(await client.ask(state, routeQuestions(ask.groups)), ask.groups)
+  const state = { message: ask.text, previous_message: ask.previousMessage || undefined, previous_reply: ask.previousReply || undefined }
+  return routeFromAnswers(await client.ask(state, routeQuestions(ask.groups, Boolean(ask.previousMessage || ask.previousReply))), ask.groups)
 }
 
 /** Offered while a stronger model or a fuller tool list is still available. */

@@ -1,22 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { listen, recognitionSupported, speak, speakable, synthesisSupported, type ListenEnd } from './speech'
+import { dictate, recognitionSupported, speak, speakable, synthesisSupported, type DictationEnd } from './speech'
+import { asksToStopListening } from './stopPhrase'
 
 export type VoiceState = 'idle' | 'listening' | 'speaking'
 
-/** How many empty listens in a row hands-free tolerates before switching itself off. */
-export const silenceLimit = 3
-
-/** What hands-free does when a listen ends without text: try again a few times, then give up quietly. */
-export function afterSilentListen(reason: ListenEnd, silences: number, handsFree: boolean): { listenAgain: boolean; handsFree: boolean; silences: number } {
-  if (!handsFree || reason === 'cancelled') return { listenAgain: false, handsFree, silences: 0 }
-  if (reason === 'silence') {
-    const next = silences + 1
-    return next >= silenceLimit ? { listenAgain: false, handsFree: false, silences: 0 } : { listenAgain: true, handsFree: true, silences: next }
-  }
-  return { listenAgain: false, handsFree: false, silences: 0 }
-}
-
-export function endMessage(reason: ListenEnd): string | undefined {
+export function endMessage(reason: DictationEnd): string | undefined {
   if (reason === 'blocked') return 'microphone blocked · allow it for this site'
   if (reason === 'unavailable') return 'speech recognition needs a microphone and a connection'
   if (reason === 'error') return 'speech recognition failed'
@@ -24,75 +12,90 @@ export function endMessage(reason: ListenEnd): string | undefined {
 }
 
 /**
- * Listening and talking for the chat. One tap on the mic hears one message and sends it. Hands-free keeps going:
- * it listens, sends, speaks the reply, and listens again, until it is turned off or hears nothing a few times.
+ * Talking with the chat. The mic starts a conversation: it listens until the speaker stops, hands the message over to be
+ * sent, reads the reply aloud, and listens again. It ends on a second tap, on the words "stop listening", or when the app is
+ * hidden. Quiet does not end it: it keeps listening.
+ * Words are handed over as they are heard, so they sit in the message box and are never lost when listening ends.
  */
-export function useVoice({ onTranscript, onProblem }: {
-  onTranscript: (text: string) => void
+export function useVoice({ onListen, onText, onSend, onProblem }: {
+  /** Listening is about to start. */
+  onListen: () => void
+  /** Everything heard so far in this message. */
+  onText: (text: string) => void
+  /** The speaker has stopped; the message is ready to go. */
+  onSend: () => void
   onProblem: (message: string) => void
 }) {
   const supported = useMemo(() => recognitionSupported(), [])
   const canSpeak = useMemo(() => synthesisSupported(), [])
-  const [state, setState] = useState<VoiceState>('idle')
-  const [transcript, setTranscript] = useState('')
-  const [handsFree, setHandsFreeState] = useState(false)
-  const handsFreeRef = useRef(false)
-  const silencesRef = useRef(0)
+  const [state, setStateValue] = useState<VoiceState>('idle')
+  const [on, setOnValue] = useState(false)
+  const stateRef = useRef<VoiceState>('idle')
+  const onRef = useRef(false)
   const cancelRef = useRef<() => void>(() => {})
-  const onTranscriptRef = useRef(onTranscript)
-  const onProblemRef = useRef(onProblem)
-  onTranscriptRef.current = onTranscript
-  onProblemRef.current = onProblem
+  const listenAgain = useRef<() => void>(() => {})
+  const handlers = useRef({ onListen, onText, onSend, onProblem })
+  handlers.current = { onListen, onText, onSend, onProblem }
 
-  const stop = useCallback(() => {
+  const setState = useCallback((next: VoiceState) => { stateRef.current = next; setStateValue(next) }, [])
+  const setOn = useCallback((next: boolean) => { onRef.current = next; setOnValue(next) }, [])
+
+  /** Stops listening or speaking without ending the conversation. */
+  const quiet = useCallback(() => {
     cancelRef.current()
     cancelRef.current = () => {}
-    setTranscript('')
     setState('idle')
-  }, [])
+  }, [setState])
 
-  const startListening = useCallback(() => {
+  const stop = useCallback(() => {
+    setOn(false)
+    quiet()
+  }, [quiet, setOn])
+
+  const listenNow = useCallback(() => {
     cancelRef.current()
-    setTranscript('')
     setState('listening')
-    cancelRef.current = listen((event) => {
-      if (event.kind === 'interim') setTranscript(event.text)
-      if (event.kind === 'final') onTranscriptRef.current(event.text)
-      if (event.kind === 'end') {
+    handlers.current.onListen()
+    let heard = ''
+    cancelRef.current = dictate({
+      text: (text) => { heard = text; handlers.current.onText(text) },
+      end: (reason) => {
         cancelRef.current = () => {}
-        setTranscript('')
         setState('idle')
-        if (event.reason === 'done') {
-          silencesRef.current = 0
+        if (reason === 'pause') {
+          if (asksToStopListening(heard)) {
+            handlers.current.onText('')
+            setOn(false)
+          } else handlers.current.onSend()
           return
         }
-        const problem = endMessage(event.reason)
-        if (problem) onProblemRef.current(problem)
-        const next = afterSilentListen(event.reason, silencesRef.current, handsFreeRef.current)
-        silencesRef.current = next.silences
-        if (next.handsFree !== handsFreeRef.current) {
-          handsFreeRef.current = next.handsFree
-          setHandsFreeState(next.handsFree)
+        if (reason === 'silence' && onRef.current) {
+          listenAgain.current()
+          return
         }
-        if (next.listenAgain) startListening()
-      }
+        setOn(false)
+        const problem = endMessage(reason)
+        if (problem) handlers.current.onProblem(problem)
+      },
     })
-  }, [])
+  }, [setOn, setState])
+  listenAgain.current = listenNow
 
-  const setHandsFree = useCallback((next: boolean) => {
-    handsFreeRef.current = next
-    silencesRef.current = 0
-    setHandsFreeState(next)
-    if (next) startListening()
-    else stop()
-  }, [startListening, stop])
+  const start = useCallback(() => {
+    setOn(true)
+    listenNow()
+  }, [listenNow, setOn])
 
-  /** Reads a reply aloud, then in hands-free goes back to listening. Does nothing when hands-free is off. */
-  const say = useCallback((markdown: string) => {
-    if (!handsFreeRef.current) return
+  /** Reads a reply aloud while a conversation is on, then listens again, or ends the conversation after an error. */
+  const say = useCallback((markdown: string, then: 'listen' | 'stop' = 'listen') => {
+    if (!onRef.current) return
+    const next = () => {
+      if (then === 'listen' && onRef.current) listenNow()
+      else stop()
+    }
     const text = canSpeak ? speakable(markdown) : ''
     if (!text) {
-      startListening()
+      next()
       return
     }
     cancelRef.current()
@@ -103,27 +106,24 @@ export function useVoice({ onTranscript, onProblem }: {
     void utterance.done.then(() => {
       if (cancelled) return
       cancelRef.current = () => {}
-      if (handsFreeRef.current) startListening()
-      else setState('idle')
+      next()
     })
-  }, [canSpeak, startListening])
+  }, [canSpeak, listenNow, setState, stop])
 
-  /** The mic button: stop whatever is happening, otherwise hear one message. */
+  /** The mic button: cut a spoken reply short and listen, end the conversation, or start one. */
   const toggle = useCallback(() => {
-    if (state === 'speaking') {
-      stop()
-      if (handsFreeRef.current) startListening()
-      return
-    }
-    if (state === 'listening') {
-      stop()
-      return
-    }
-    startListening()
-  }, [startListening, state, stop])
+    if (stateRef.current === 'speaking') listenNow()
+    else if (onRef.current) stop()
+    else start()
+  }, [listenNow, start, stop])
+
+  /** The message was sent by hand while listening: stop hearing it, and still read the reply. */
+  const sent = useCallback(() => {
+    if (stateRef.current === 'listening') quiet()
+  }, [quiet])
 
   useEffect(() => {
-    const onHide = () => { if (document.visibilityState === 'hidden') { handsFreeRef.current = false; setHandsFreeState(false); stop() } }
+    const onHide = () => { if (document.visibilityState === 'hidden') stop() }
     document.addEventListener('visibilitychange', onHide)
     return () => {
       document.removeEventListener('visibilitychange', onHide)
@@ -131,5 +131,5 @@ export function useVoice({ onTranscript, onProblem }: {
     }
   }, [stop])
 
-  return { supported, canSpeak, state, transcript, handsFree, setHandsFree, say, toggle, stop }
+  return { supported, state, on, start, stop, say, toggle, sent }
 }

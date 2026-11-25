@@ -6,15 +6,17 @@ assistant. GitHub Pages keeps serving the web build for the PC and anyone else.
 
 ## voice
 
-Voice lives in `src/voice/`. The mic button in the chat composer hears one message and sends it. The
-**hands-free** pill in the chat header keeps going: listen, send, speak the reply, listen again, until it is
-turned off, the tab is hidden, or nothing was heard three times in a row. Replies are only spoken in hands-free.
+Voice lives in `src/voice/`. The mic button in the chat composer starts a conversation: it listens, sends when the
+speaker has stopped for two seconds, speaks the reply, and listens again, until it is tapped again, hears
+"stop listening", or the tab is hidden. Words appear in the message box as they are heard and stay there if
+listening ends before they are sent. The recognizer stops at every breath, so `dictate` chains its stretches;
+a breath never sends. Replies are only spoken while a conversation is on.
 
 - In a browser, listening and speaking use the Web Speech API. Chrome on Android needs the network to recognize.
 - In the shell, the webview has no speech recognition, so `src/voice/nativeSpeech.ts` goes through the phone's
   recognizer and text-to-speech engine (`@capacitor-community/speech-recognition`, `@capacitor-community/text-to-speech`).
-  No interim text is shown there; the caption says "listening" until the phrase is done.
-- `#chat/talk` opens the chat already in hands-free. The web manifest shortcut, the android icon shortcut, and the
+  No interim text arrives there; the words show up a phrase at a time.
+- `#chat/talk` opens the chat already listening. The web manifest shortcut, the android icon shortcut, and the
   widget's talk button all go there.
 
 ## widget

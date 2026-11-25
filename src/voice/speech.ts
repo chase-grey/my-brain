@@ -41,8 +41,11 @@ function endReason(code: string): ListenEnd {
   return 'error'
 }
 
-/** Listens for one utterance. Interim text streams in; the final text arrives once, right before `end`. Returns a cancel. */
-export function listen(on: (event: ListenEvent) => void, lang = navigator.language): () => void {
+/**
+ * Listens for one stretch of speech. Interim text streams in; the final text arrives once, right before `end`. Returns a cancel.
+ * The recognizer ends a stretch at the first pause unless `continuous`, so a whole message is heard with `dictate`.
+ */
+export function listen(on: (event: ListenEvent) => void, lang = navigator.language, continuous = false): () => void {
   if (isNativeApp()) return listenNatively(on, lang)
   const Recognition = recognizerClass()
   if (!Recognition) {
@@ -51,7 +54,7 @@ export function listen(on: (event: ListenEvent) => void, lang = navigator.langua
   }
   const recognizer = new Recognition()
   recognizer.lang = lang
-  recognizer.continuous = false
+  recognizer.continuous = continuous
   recognizer.interimResults = true
   let text = ''
   let reason: ListenEnd = 'done'
@@ -82,6 +85,78 @@ export function listen(on: (event: ListenEvent) => void, lang = navigator.langua
     text = ''
     recognizer.abort()
   }
+}
+
+export type DictationEnd = 'pause' | 'silence' | 'stopped' | 'blocked' | 'unavailable' | 'error'
+/** How long the speaker can stop mid-message before it counts as finished. */
+export const pauseMs = 2000
+/** How long to wait for a first word before giving up. */
+export const silenceMs = 8000
+
+// Chrome on android repeats earlier words in every result when left running, so there each stretch ends at a pause and the next one starts.
+function staysOpen(): boolean {
+  return typeof navigator !== 'undefined' && !/android/i.test(navigator.userAgent)
+}
+
+/**
+ * Hears one whole message. The recognizer stops at every breath, so stretches are chained and their words joined;
+ * the message ends only after `pauseMs` without a new word. `text` gets everything heard so far each time it grows.
+ * `end` comes once, with the reason; the words stay with whoever was given them. Returns a cancel, which ends it silently.
+ */
+export function dictate(
+  on: { text: (text: string) => void; end: (reason: DictationEnd) => void },
+  options: { pauseMs?: number; silenceMs?: number; hear?: typeof listen } = {},
+): () => void {
+  const hear = options.hear ?? listen
+  const pause = options.pauseMs ?? pauseMs
+  let committed = ''
+  let stretch = ''
+  let finished = false
+  let cancelStretch = () => {}
+  let pauseTimer: ReturnType<typeof setTimeout> | undefined
+  let restartTimer: ReturnType<typeof setTimeout> | undefined
+  const total = () => [committed, stretch].filter(Boolean).join(' ')
+  const close = () => {
+    finished = true
+    clearTimeout(pauseTimer)
+    clearTimeout(silenceTimer)
+    clearTimeout(restartTimer)
+    cancelStretch()
+  }
+  const finish = (reason: DictationEnd) => {
+    if (finished) return
+    close()
+    on.end(reason)
+  }
+  const silenceTimer = setTimeout(() => finish('silence'), options.silenceMs ?? silenceMs)
+  const heard = () => {
+    clearTimeout(silenceTimer)
+    clearTimeout(pauseTimer)
+    pauseTimer = setTimeout(() => finish('pause'), pause)
+    on.text(total())
+  }
+  const start = () => {
+    const startedAt = Date.now()
+    cancelStretch = hear((event) => {
+      if (finished) return
+      if (event.kind === 'interim') {
+        if (event.text === stretch) return
+        stretch = event.text
+        if (total()) heard()
+      } else if (event.kind === 'final') {
+        stretch = ''
+        committed = [committed, event.text].filter(Boolean).join(' ')
+        heard()
+      } else if (event.reason === 'done' || event.reason === 'silence') {
+        // A stretch that ends at once would otherwise spin; give the recognizer a moment.
+        restartTimer = setTimeout(start, Date.now() - startedAt < 500 ? 300 : 0)
+      } else {
+        finish(event.reason === 'cancelled' ? 'stopped' : event.reason)
+      }
+    }, undefined, staysOpen())
+  }
+  start()
+  return () => { if (!finished) close() }
 }
 
 /** Turns the model's markdown into something worth hearing: no symbols, links read as their text, code skipped. */

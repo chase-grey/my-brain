@@ -4,6 +4,7 @@ import { BridgeUnreachableError, type BridgeCompanionClient } from './bridgeComp
 import { autoModel } from '../settings'
 import { companionTools, executeTool, toolGroups, type CompanionActions, type ToolContext, type Undo } from './companionTools'
 import type { CompanionTurn } from './companionStore'
+import { contextTurns } from './context'
 import { GitHubError, type VaultStore } from './githubVault'
 import { readMemoryIndex } from './memory'
 import { defaultRoute, handOffTool, rungs, topRung, type Route, type RouteAsk } from './route'
@@ -70,9 +71,12 @@ export function createAnthropicCompanion(deps: {
   model: string
   /** low | medium | high | xhigh | max; the api's own default when left out. Auto sets its own. */
   effort?: string
-  /** Auto only. Where a message starts and which tools it can do without; the middle model with every tool when left out or when it fails. */
+  /** Where a message starts, which tools it can do without, and whether it carries on the thread. Only auto uses the first two; the middle model with every tool when left out or when it fails. */
   route?: (ask: RouteAsk) => Promise<Route>
+  /** The thread the message was sent under. */
   history: () => CompanionTurn[]
+  /** Asked once per message, with the route's chance that it carries on: whether the thread goes along. It does when left out. */
+  keep?: (follows?: number) => boolean
   systemPrompt: (memoryIndex?: string) => string
   actions: () => CompanionActions
   vault?: VaultStore
@@ -181,17 +185,21 @@ export function createAnthropicCompanion(deps: {
 
   return {
     async send(text) {
-      const messages = [...historyMessages(deps.history()), { role: 'user', content: text } satisfies AnthropicMessage]
+      const turns = deps.history()
       const available = { hasVault: Boolean(deps.vault), hasCalendar: deps.hasCalendar?.() ?? false }
       const allTools = companionTools(available)
       const auto = deps.model === autoModel
-      const previousReply = [...deps.history()].reverse().find((turn) => turn.role === 'assistant' && !turn.error)?.text.slice(0, 400)
+      const before = [...turns].reverse()
+      const previousReply = before.find((turn) => turn.role === 'assistant' && !turn.error)?.text.slice(0, 400)
+      const previousMessage = before.find((turn) => turn.role === 'user')?.text.slice(0, 400)
       // Neither read may block the turn: a failed route starts in the middle with every tool, and a failed index read
       // leaves the prompt saying so while the tools still work.
       const [route, memoryIndex] = await Promise.all([
-        auto && deps.route ? deps.route({ text, previousReply, groups: toolGroups(available) }).catch(() => defaultRoute) : defaultRoute,
+        deps.route && (auto || turns.length) ? deps.route({ text, previousMessage, previousReply, groups: toolGroups(available) }).catch(() => defaultRoute) : defaultRoute,
         deps.vault ? readMemoryIndex(deps.vault, memoryFolder).catch(() => undefined) : undefined,
       ])
+      const kept = (deps.keep ? deps.keep(route.follows) : true) ? contextTurns(turns) : []
+      const messages = [...historyMessages(kept), { role: 'user', content: text } satisfies AnthropicMessage]
       const start = auto
         ? { ...rungs[route.rung], rung: route.rung, tools: companionTools({ ...available, skip: route.skip }) }
         : { model: deps.model, effort: deps.effort, tools: allTools }

@@ -1,7 +1,7 @@
-import { expect, it } from 'vitest'
-import { chunksForSpeech, speakable } from './speech'
+import { describe, expect, it, vi } from 'vitest'
+import { chunksForSpeech, dictate, pauseMs, silenceMs, speakable, type ListenEnd, type ListenEvent, type listen } from './speech'
 import { nativeEndReason } from './nativeSpeech'
-import { afterSilentListen, endMessage, silenceLimit } from './useVoice'
+import { endMessage } from './useVoice'
 
 it('reads markdown as plain sentences', () => {
   expect(speakable('## today\n\n- **call plumber** · due *today*\n- buy [milk](https://x.y/z)\n\nsee https://example.com for more'))
@@ -25,27 +25,99 @@ it('splits long text at sentence ends', () => {
   expect(chunksForSpeech('no punctuation at all', 5)).toEqual(['no punctuation at all'])
 })
 
-it('hands-free retries silence a few times then switches off', () => {
-  let silences = 0
-  for (let i = 1; i < silenceLimit; i++) {
-    const next = afterSilentListen('silence', silences, true)
-    expect(next).toEqual({ listenAgain: true, handsFree: true, silences: i })
-    silences = next.silences
+describe('hearing a whole message', () => {
+  // A recognizer that hears whatever the test feeds it, one stretch at a time.
+  function recognizer() {
+    const stretches: { on: (event: ListenEvent) => void; cancelled: boolean }[] = []
+    const hear = ((on: (event: ListenEvent) => void) => {
+      const stretch = { on, cancelled: false }
+      stretches.push(stretch)
+      return () => { stretch.cancelled = true }
+    }) as typeof listen
+    const current = () => stretches[stretches.length - 1]
+    return {
+      hear,
+      count: () => stretches.length,
+      cancelled: () => current().cancelled,
+      interim: (text: string) => current().on({ kind: 'interim', text }),
+      // The way a real stretch closes at a breath: its words, then its end.
+      breath: (text: string) => { current().on({ kind: 'final', text }); current().on({ kind: 'end', reason: 'done' }) },
+      end: (reason: ListenEnd) => current().on({ kind: 'end', reason }),
+    }
   }
-  expect(afterSilentListen('silence', silences, true)).toEqual({ listenAgain: false, handsFree: false, silences: 0 })
-})
 
-it('hands-free stops on real problems and never restarts when off or cancelled', () => {
-  expect(afterSilentListen('blocked', 0, true)).toEqual({ listenAgain: false, handsFree: false, silences: 0 })
-  expect(afterSilentListen('cancelled', 2, true)).toEqual({ listenAgain: false, handsFree: true, silences: 0 })
-  expect(afterSilentListen('silence', 0, false)).toEqual({ listenAgain: false, handsFree: false, silences: 0 })
+  function start() {
+    vi.useFakeTimers()
+    const voice = recognizer()
+    const text = vi.fn()
+    const end = vi.fn()
+    const cancel = dictate({ text, end }, { hear: voice.hear })
+    return { voice, text, end, cancel }
+  }
+
+  it('keeps listening through a pause and joins what came before and after it', () => {
+    const { voice, text, end } = start()
+    voice.interim('add milk')
+    voice.breath('add milk to the list')
+    vi.advanceTimersByTime(pauseMs - 500)
+    expect(end).not.toHaveBeenCalled()
+    expect(voice.count()).toBe(2)
+    voice.interim('and also eggs')
+    expect(text).toHaveBeenLastCalledWith('add milk to the list and also eggs')
+    vi.advanceTimersByTime(pauseMs - 500)
+    expect(end).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(500)
+    expect(end).toHaveBeenCalledExactlyOnceWith('pause')
+    expect(voice.cancelled()).toBe(true)
+    vi.useRealTimers()
+  })
+
+  it('gives up when nothing is said, and not before', () => {
+    const { voice, text, end } = start()
+    voice.end('silence')
+    vi.advanceTimersByTime(silenceMs - 1)
+    expect(end).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(1)
+    expect(end).toHaveBeenCalledExactlyOnceWith('silence')
+    expect(text).not.toHaveBeenCalled()
+    vi.useRealTimers()
+  })
+
+  it('does not time out as silent once a word has been heard', () => {
+    const { voice, end } = start()
+    voice.interim('hello')
+    vi.advanceTimersByTime(pauseMs)
+    expect(end).toHaveBeenCalledExactlyOnceWith('pause')
+    vi.advanceTimersByTime(silenceMs)
+    expect(end).toHaveBeenCalledTimes(1)
+    vi.useRealTimers()
+  })
+
+  it('stops on a real problem and says which', () => {
+    const { voice, end } = start()
+    voice.end('blocked')
+    expect(end).toHaveBeenCalledExactlyOnceWith('blocked')
+    vi.advanceTimersByTime(silenceMs)
+    expect(voice.count()).toBe(1)
+    vi.useRealTimers()
+  })
+
+  it('ends without a word when cancelled', () => {
+    const { voice, end, cancel } = start()
+    voice.interim('never mind')
+    cancel()
+    vi.advanceTimersByTime(silenceMs + pauseMs)
+    expect(end).not.toHaveBeenCalled()
+    expect(voice.cancelled()).toBe(true)
+    vi.useRealTimers()
+  })
 })
 
 it('only explains the endings the user can do something about', () => {
   expect(endMessage('blocked')).toContain('microphone')
   expect(endMessage('unavailable')).toContain('connection')
   expect(endMessage('silence')).toBeUndefined()
-  expect(endMessage('done')).toBeUndefined()
+  expect(endMessage('pause')).toBeUndefined()
 })
 
 it('maps the android recognizer messages onto the same endings', () => {

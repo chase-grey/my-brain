@@ -27,6 +27,17 @@ Start-Process powershell -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass',
 
 Never kill powershell.exe by image name (`taskkill /IM`, `Stop-Process -Name`): every Session Runner terminal on this machine is a powershell.exe hosting a Claude session, and one such line killed all of them, twice, on 2026-11-05. A global hook now denies kills by image name; kill by PID.
 
+## chat voice and context
+
+Chase, 2026-11-25. `speech.test.ts`, `stopPhrase.test.ts` and `context.test.ts` hold these.
+
+- A spoken message is never cut off at a breath. The recognizer's stretches are chained (`dictate` in `src/voice/speech.ts`) and the message ends only after two seconds without a new word.
+- Spoken words land in the message box as they are heard, and stay there when listening ends for any reason other than sending.
+- The mic starts a conversation: a pause sends, the reply is read aloud, and it listens again. It ends on a tap, on the words "stop listening", or when the app is hidden. A typed message with the mic off is never read aloud.
+- There is no context switch. Each message either carries on the thread or starts a new one (`src/companion/context.ts`): Jev decides when there is a key, the clock (15 minutes) when there is not, and a thread reopened from the history is always carried on. What is on screen after a send is what the model was given.
+- What goes along with a message is capped in code (`contextTurns`), newest first. The model is never asked to manage its own context.
+- Work chat is never sent to Jev; its thread goes by the clock.
+
 ## old tasks and mail
 
 An unsorted To Do task created more than 30 days ago (`oldAfterDays` in `src/domain/age.ts`) is left in To Do and never brought into the app, and the flagged count on today covers the last 30 days of mail only. Tasks Chase has sorted stay whatever their age. Anything new that pulls items in from Microsoft on its own applies the same check.

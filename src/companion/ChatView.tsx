@@ -15,6 +15,7 @@ import { AnthropicClient } from './anthropicClient'
 import { BridgeCompanionClient } from './bridgeCompanion'
 import { CompanionError, createAnthropicCompanion, createBridgeCompanion, type AssistantReply, type Companion, type PendingApprovals, type Undo } from './companion'
 import { buildSystemPrompt, pastePrompt } from './companionPrompt'
+import { continuesThread } from './context'
 import { memoryFolders } from './memory'
 import { clearHistory, conversationTitle, conversationUpdatedAt, deleteConversation, loadHistory, newConversation, saveConversation, type CompanionConversation, type CompanionTurn } from './companionStore'
 import type { CompanionActions, PlanSummary } from './companionTools'
@@ -29,11 +30,6 @@ type BridgeState = 'checking' | 'ready' | 'offline'
 function compact(value: string): string {
   return value.replace(/\s+/g, '')
 }
-
-// Off by default: each message starts a fresh conversation, so an answer is never coloured by what was asked before.
-// The chat unmounts on every view change, so the choice lives here for the session rather than in the component.
-// It switches itself on when an action card appears, because approving the card resumes the same conversation.
-const keepContextBySpace: Partial<Record<Domain, boolean>> = {}
 
 // For the history list: time of day for today, otherwise the date.
 function when(iso: string): string {
@@ -113,17 +109,18 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
   /** The model and effort pickers write through here. */
   onChangeSettings?: (change: Partial<AppSettings>) => void
   docked?: boolean
-  /** Open already listening, hands-free: the "talk" shortcut and the widget land here. */
+  /** Open already listening: the "talk" shortcut and the widget land here. */
   talk?: boolean
   onTalkStarted?: () => void
   /** Typed into the composer once, unsent: a new account's first request. */
   prefill?: string
   onPrefilled?: () => void
 }) {
-  const [keepContext, setKeepContext] = useState(() => keepContextBySpace[domain] ?? false)
-  // Only a kept thread comes back on its own: with the toggle off, what is on screen has to match what the model was given,
-  // which is nothing yet. Every thread stays in the history either way.
-  const [conversation, setConversation] = useState<CompanionConversation>(() => (keepContextBySpace[domain] ? loadHistory(domain)[0] : undefined) ?? newConversation())
+  // The chat unmounts on every view change. A thread still warm comes back; an older one waits in the history.
+  const [conversation, setConversation] = useState<CompanionConversation>(() => {
+    const last = loadHistory(domain)[0]
+    return last && continuesThread({ turns: last.turns, now: Date.now() }) ? last : newConversation()
+  })
   const [history, setHistory] = useState<CompanionConversation[]>()
   const [sending, setSending] = useState(false)
   // A reload would cut off an answer that is still arriving.
@@ -133,7 +130,9 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
   const [answeredBy, setAnsweredBy] = useState<string>()
   const [bridge, setBridge] = useState<BridgeState>(domain === 'work' ? 'checking' : 'ready')
   const conversationRef = useRef(conversation)
-  const keepContextRef = useRef(keepContext)
+  // A thread reopened from the history is carried on by the next message, whatever its age or topic.
+  const pinnedRef = useRef(false)
+  const keepRef = useRef<(follows?: number) => boolean>(() => true)
   const historyRef = useRef<CompanionTurn[]>([])
   const actionsRef = useRef(actions)
   const hasCalendarRef = useRef(hasCalendar)
@@ -143,7 +142,6 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
   const undosRef = useRef(new Map<string, Undo>())
   const pendingRef = useRef(new Map<string, PendingApprovals>())
   conversationRef.current = conversation
-  keepContextRef.current = keepContext
   actionsRef.current = actions
   summaryRef.current = summary
 
@@ -172,6 +170,7 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
       effort: anthropic ? settings.chatEffort : undefined,
       route: anthropic && jevKey ? (ask) => routeWithJev(new JevClient(jevKey), ask) : undefined,
       history: () => historyRef.current,
+      keep: (follows) => keepRef.current(follows),
       systemPrompt,
       actions: () => actionsRef.current,
       vault: hasGitHubVault ? new GitHubVault(vaultConfig) : fallbackVault,
@@ -189,19 +188,29 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
     return () => { cancelled = true }
   }, [domain])
 
+  // Spoken words land in the message box as they are heard, after whatever was already typed there.
+  const composerRef = useRef<{ getState(): { text: string }; setText(text: string): void } | undefined>(undefined)
+  const typedRef = useRef('')
   const voice = useVoice({
-    onTranscript: (text) => { void sendText(text) },
+    onListen: () => { typedRef.current = composerRef.current?.getState().text.trim() ?? '' },
+    onText: (text) => composerRef.current?.setText([typedRef.current, text].filter(Boolean).join(' ')),
+    onSend: () => {
+      const text = composerRef.current?.getState().text.trim() ?? ''
+      if (!text || sending || !companion) return voiceRef.current.stop()
+      composerRef.current?.setText('')
+      void sendText(text)
+    },
     onProblem: (message) => appendTurn({ role: 'assistant', text: message, at: new Date().toISOString(), error: true }),
   })
   const voiceRef = useRef(voice)
   voiceRef.current = voice
 
-  // Opened from the "talk" shortcut or the widget: go straight into hands-free once the chat can take a message.
+  // Opened from the "talk" shortcut or the widget: start listening once the chat can take a message.
   const talkStarted = useRef(false)
   useEffect(() => {
     if (!talk || talkStarted.current || !companion || bridge === 'checking') return
     talkStarted.current = true
-    voiceRef.current.setHandsFree(true)
+    voiceRef.current.start()
     onTalkStarted?.()
   }, [talk, companion, bridge, onTalkStarted])
 
@@ -209,12 +218,6 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
     conversationRef.current = next
     setConversation(next)
     saveConversation(domain, next)
-  }
-
-  function setKeep(next: boolean) {
-    keepContextBySpace[domain] = next
-    keepContextRef.current = next
-    setKeepContext(next)
   }
 
   function appendTurn(turn: CompanionTurn) {
@@ -225,19 +228,14 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
     const text = error instanceof CompanionError ? error.message : 'something went wrong'
     if (error instanceof CompanionError && error.kind === 'unreachable' && domain === 'work') setBridge('offline')
     appendTurn({ role: 'assistant', text, at: new Date().toISOString(), error: true })
-    if (voiceRef.current.handsFree) {
-      voiceRef.current.say(text)
-      voiceRef.current.setHandsFree(false)
-    }
+    voiceRef.current.say(text, 'stop')
   }
 
-  // One assistant turn per reply: its words, then its receipts and cards. A reply with a card keeps the thread,
-  // because the answer to the card continues this same conversation.
+  // One assistant turn per reply: its words, then its receipts and cards.
   function absorb(reply: AssistantReply) {
     for (const [id, undo] of Object.entries(reply.undos)) undosRef.current.set(id, undo)
     if (reply.pending) {
       for (const id of reply.pending.ids) pendingRef.current.set(id, reply.pending)
-      if (!keepContextRef.current) setKeep(true)
     }
     if (reply.model) setAnsweredBy(reply.model)
     const text = reply.text || (reply.actions.length ? '' : 'done')
@@ -257,20 +255,41 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
   }
 
   async function onNew(message: AppendMessage) {
+    voiceRef.current.sent()
     await sendText(textOf(message))
   }
 
   async function sendText(text: string) {
     if (!text || sending || !companion) return
     expirePending()
-    // Without keep context each send is its own thread, so what is on screen is exactly what the model was given.
-    const prior = keepContextRef.current ? conversationRef.current : newConversation()
-    historyRef.current = prior.turns
-    update({ ...prior, turns: [...prior.turns, { role: 'user', text, at: new Date().toISOString() }] })
+    const before = conversationRef.current
+    const turn: CompanionTurn = { role: 'user', text, at: new Date().toISOString() }
+    const pinned = pinnedRef.current
+    pinnedRef.current = false
+    // Settled once per message: it carries on the thread, or the thread stays in the history and the message starts a new one.
+    // Either way what is on screen afterwards is what the model was given.
+    let kept: boolean | undefined
+    const settle = (follows?: number) => {
+      if (kept !== undefined) return kept
+      kept = continuesThread({ turns: before.turns, follows, pinned, now: Date.now() })
+      if (!kept) undosRef.current.clear()
+      update({ ...(kept ? before : newConversation()), turns: [...(kept ? before.turns : []), turn] })
+      return kept
+    }
+    historyRef.current = before.turns
+    keepRef.current = settle
+    // Shown at once; saved when settled. Work chat is never sent to Jev, so its thread settles on the clock alone.
+    const shown = { ...before, turns: [...before.turns, turn] }
+    conversationRef.current = shown
+    setConversation(shown)
+    if (domain === 'work') settle()
     setSending(true)
     try {
-      absorb(await companion.send(text))
+      const reply = await companion.send(text)
+      settle()
+      absorb(reply)
     } catch (error) {
+      settle()
       failTurn(error)
     } finally {
       setSending(false)
@@ -334,14 +353,14 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
   }
 
   function startNew() {
+    pinnedRef.current = false
     show(newConversation())
   }
 
-  // Continuing an old thread needs its turns sent along, so reopening one switches keep context on.
   function reopen(past: CompanionConversation) {
     expirePending()
     show(past)
-    setKeep(true)
+    pinnedRef.current = true
   }
 
   function remove(id: string) {
@@ -378,6 +397,7 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
     onNew,
     onRespondToToolApproval,
   })
+  composerRef.current = runtime.thread.composer
 
   useEffect(() => {
     if (!prefill || unavailable) return
@@ -388,8 +408,6 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
   return <section className={`chat${docked ? ' is-docked' : ''}`} aria-label="chat">
     <header className="view-head">
       <h1>chat</h1>
-      {!unavailable && <button className="pill" type="button" aria-pressed={keepContext} onClick={() => setKeep(!keepContext)}>keep context</button>}
-      {!unavailable && voice.supported && <button className="pill" type="button" aria-pressed={voice.handsFree} onClick={() => voice.setHandsFree(!voice.handsFree)}>hands-free</button>}
       {!unavailable && domain === 'work' && conversation.sessionId && <button className="pill" type="button" disabled={sending || openedId === conversation.id} onClick={() => { void openInSessionRunner() }}>{openedId === conversation.id ? 'opened in session runner' : 'open in session runner'}</button>}
     </header>
     {unavailable
@@ -409,7 +427,6 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
                 <ThreadPrimitive.Messages components={{ UserMessage, AssistantMessage }} />
                 <ThreadPrimitive.If running><div className="turn assistant is-pending" aria-live="polite">…</div></ThreadPrimitive.If>
               </ThreadPrimitive.Viewport>}
-            {voice.state !== 'idle' && <p className="voice-caption" aria-live="polite">{voice.state === 'speaking' ? 'speaking' : voice.transcript ? `listening · ${voice.transcript}` : 'listening'}</p>}
             <div className="chat-tools">
               <select className="picker" aria-label="model" value={model} onChange={(event) => onChangeSettings?.({ [modelField(domain, settings)]: event.target.value })}>
                 {modelChoices(domain, settings).map((option) => <option key={option} value={option}>{option === autoModel && answeredBy ? `auto · ${modelShortName(answeredBy)}` : anthropic ? modelShortName(option) : option}</option>)}
@@ -422,8 +439,8 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
               <button className="icon-button" type="button" aria-label="new chat" disabled={!conversation.turns.length} onClick={startNew}><Icon name="plus" size={18} /></button>
             </div>
             <ComposerPrimitive.Root className={`composer${voice.supported ? ' has-mic' : ''}`}>
-              <ComposerPrimitive.Input className="composer-input" aria-label="message" placeholder={bridge === 'checking' ? 'checking work pc' : 'message'} rows={1} maxRows={6} />
-              {voice.supported && <button className={`composer-mic${voice.state !== 'idle' ? ` is-${voice.state}` : ''}`} type="button" aria-pressed={voice.state === 'listening'} aria-label={voice.state === 'idle' ? 'talk' : 'stop'} disabled={sending && voice.state === 'idle'} onClick={voice.toggle}><Icon name="mic" size={18} /></button>}
+              <ComposerPrimitive.Input className="composer-input" aria-label="message" placeholder={bridge === 'checking' ? 'checking work pc' : voice.state === 'listening' ? 'listening' : 'message'} rows={1} maxRows={6} />
+              {voice.supported && <button className={`composer-mic${voice.state !== 'idle' ? ` is-${voice.state}` : ''}`} type="button" aria-pressed={voice.on} aria-label={voice.on ? 'stop' : 'talk'} disabled={sending && !voice.on} onClick={voice.toggle}><Icon name="mic" size={18} /></button>}
               <ComposerPrimitive.Send className="composer-send" aria-label="send"><Icon name="send" size={18} /></ComposerPrimitive.Send>
             </ComposerPrimitive.Root>
           </ThreadPrimitive.Root>

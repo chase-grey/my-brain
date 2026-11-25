@@ -117,9 +117,15 @@ cent per thousand messages) and picks the starting rung and which tool groups to
 memory, trips, calendar. It starts on haiku or opus only at 60% or better, and leaves a tool group
 out only under a 20% chance it is needed; a hand-off brings every tool back. Without a key, or
 when Jev cannot be reached, auto starts on sonnet with every tool. The picker shows which model
-answered last. Work chat is never sent to Jev. The clock button lists past
+answered last. Work chat is never sent to Jev.
+
+There is no context switch. In the same call Jev says whether the message carries on from the
+exchange before it; if Jev is 60% sure it stands alone, the old thread stays in the history and the
+message starts a new one. Without a key, and in work chat, a message carries on a thread that was
+active in the last 15 minutes. What goes along is capped at about 8,000 characters, newest first.
+The clock button lists past
 conversations for the space, newest first, with a delete button on each and `delete all` at the
-bottom; tapping one reopens it with keep context on so the next message continues it. The plus
+bottom; tapping one reopens it, and the next message always continues it. The plus
 button starts a new conversation. Every conversation is kept in this browser's local storage, up to
 50 per space and 40 messages each.
 

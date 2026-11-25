@@ -215,8 +215,9 @@ button.row-main { min-height: 3rem; }
 .composer-send { display: grid; place-items: center; width: 2.75rem; height: 2.75rem; border-radius: 50%; background: var(--accent); color: var(--on-accent); }
 .composer.has-mic { grid-template-columns: 1fr auto auto; }
 .composer-mic { display: grid; place-items: center; width: 2.75rem; height: 2.75rem; border: 1px solid var(--border); border-radius: 50%; color: var(--muted); background: var(--surface-2); }
+.composer-mic[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--surface)); }
 .composer-mic.is-listening { border-color: var(--accent); color: var(--accent); animation: listening 1.4s ease-in-out infinite; }
-.composer-mic.is-speaking { border-color: var(--accent); color: var(--text); }
+.composer-mic.is-speaking { background: var(--accent); color: var(--on-accent); }
 .composer-mic:disabled { opacity: 0.5; }
 /* under the thread: model and effort on the left, history and new chat on the right */
 .chat-tools { display: flex; align-items: center; gap: 0.35rem; padding-top: 0.25rem; }
@@ -235,7 +236,6 @@ button.row-main { min-height: 3rem; }
 .history-main small { color: var(--muted); font-size: 0.8rem; }
 .history-delete { display: grid; place-items: center; flex: none; width: 2.5rem; height: 2.5rem; border-radius: 50%; color: var(--muted); }
 .history-delete:hover { background: var(--surface-2); color: var(--danger); }
-.voice-caption { margin: 0; padding: 0 0.25rem; color: var(--muted); font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @keyframes listening { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 40%, transparent); } 50% { box-shadow: 0 0 0 6px transparent; } }
 @media (prefers-reduced-motion: reduce) { .composer-mic.is-listening { animation: none; } }
 /* the chat view is the one screen that does not scroll as a page: the thread scrolls inside it and the composer stays put at the bottom.
