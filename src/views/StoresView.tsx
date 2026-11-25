@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { storeLabel, storeOptions, visibleStoreItems } from '../domain/shopping'
+import { shopsFromHome, storeLabel, storeOptions, visibleStoreItems } from '../domain/shopping'
 import type { StoreType, Task } from '../domain/types'
 import { newId } from '../format'
 import { Card, Empty, Toggle } from '../ui'
@@ -20,7 +20,7 @@ export function StoresView({ activeStore, tasks, onStore, onToggle, onAdd }: {
     const cleanTitle = title.trim()
     if (!cleanTitle) return
     const id = newId('item')
-    const isOnline = activeStore === 'online'
+    const isOnline = shopsFromHome(activeStore)
     onAdd({
       id, taskId: id, domain: 'personal', title: cleanTitle, completed: false,
       estimateMin: 5, originalEstimateMin: 5, priority: 3,

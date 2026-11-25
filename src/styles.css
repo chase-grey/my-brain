@@ -119,8 +119,7 @@ button.row-main { min-height: 3rem; }
 .segmented button { min-height: 2.5rem; padding: 0 0.5rem; border-radius: 8px; color: var(--muted); font-size: 0.9rem; font-variant-numeric: tabular-nums; }
 .segmented button.selected { background: var(--surface); color: var(--text); font-weight: 600; box-shadow: 0 1px 2px rgb(0 0 0 / 0.12); }
 .segmented small { margin-left: 0.3rem; }
-.store-tabs { margin-bottom: 0.1rem; }
-.store-tabs button { padding: 0 0.2rem; white-space: nowrap; }
+.store-tabs { grid-auto-flow: row; grid-template-columns: repeat(3, 1fr); margin-bottom: 0.1rem; }
 .chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
 .chips button { min-height: 2.5rem; padding: 0 0.85rem; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--muted); font-size: 0.9rem; }
 .chips button.selected { border-color: var(--accent); color: var(--text); background: color-mix(in srgb, var(--accent) 12%, var(--surface)); }

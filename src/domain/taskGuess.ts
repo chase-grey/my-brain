@@ -1,3 +1,4 @@
+import { shopsFromHome } from './shopping'
 import type { Domain, Energy, Place, Priority, Project, StoreType, Task } from './types'
 
 /**
@@ -25,7 +26,7 @@ export const priorityLabels: Record<Priority, string> = { 1: 'critical', 2: 'hig
 export const guessBatch = 20
 
 const energies: readonly Energy[] = ['deep', 'shallow', 'errand']
-const stores: readonly StoreType[] = ['grocery', 'online', 'hardware', 'thrift', 'other']
+const stores: readonly StoreType[] = ['grocery', 'online', 'hardware', 'thrift', 'marketplace', 'other']
 
 export function guessPrompt(domain: Domain, projects: Pick<Project, 'title'>[]): string {
   const fields = [
@@ -34,7 +35,7 @@ export function guessPrompt(domain: Domain, projects: Pick<Project, 'title'>[]):
     ...(domain === 'personal' ? [
       '"energy": "deep" for something that takes focus or a long stretch, "shallow" for something light and quick, "errand" for something done out of the house',
       '"where": the places it can be done, any of "home", "office", "out". Work on the house or yard is "home"; an appointment or pickup is "out". Empty only when it really can be done anywhere',
-      '"store": only when the task is buying something: "grocery", "online", "hardware", "thrift" for something to find second-hand, or "other". Otherwise "none"',
+      '"store": only when the task is buying something: "grocery", "online", "hardware", "thrift" for something small to find second-hand, "marketplace" for something larger to find second-hand, or "other". Otherwise "none"',
     ] : []),
     ...(projects.length ? [`"project": the number of the project it belongs to, or 0 when none clearly fits. Projects: ${projects.map((project, index) => `${index + 1} ${JSON.stringify(project.title)}`).join(', ')}`] : []),
   ]
@@ -62,7 +63,7 @@ function nearestEstimate(value: unknown): number {
 /** A store carries its place and energy with it, the way picking one on the sort form does. */
 function withStore(guess: TaskGuess): TaskGuess {
   if (!guess.storeType) return guess
-  if (guess.storeType === 'online') return { ...guess, energy: 'shallow', place: ['home'] }
+  if (shopsFromHome(guess.storeType)) return { ...guess, energy: 'shallow', place: ['home'] }
   return { ...guess, energy: 'errand', place: ['out'] }
 }
 

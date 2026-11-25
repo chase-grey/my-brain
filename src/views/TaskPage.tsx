@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { storeOptions } from '../domain/shopping'
+import { shopsFromHome, storeOptions } from '../domain/shopping'
 import { taskAttachment, type Attachment } from '../companion/attachments'
 import { placeOptions, priorityLabels, type TaskGuess } from '../domain/taskGuess'
 import type { Domain, Energy, Place, Priority, Project, StoreType, Task } from '../domain/types'
@@ -47,7 +47,7 @@ export function TaskPage({ domain: initialDomain, existingTask, guess, projects,
 
   function chooseStore(next: StoreType | '') {
     setStoreType(next)
-    if (next === 'online') {
+    if (next && shopsFromHome(next)) {
       setPlaces((current) => [...current.filter((place) => place !== 'out'), ...(current.includes('home') ? [] : ['home' as const])])
       setEnergy('shallow')
     } else if (next) {

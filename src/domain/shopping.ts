@@ -5,6 +5,7 @@ export const storeOptions: { value: StoreType; label: string; shortLabel: string
   { value: 'online', label: 'Online', shortLabel: 'Online' },
   { value: 'hardware', label: 'Hardware store', shortLabel: 'Hardware' },
   { value: 'thrift', label: 'Thrift store', shortLabel: 'Thrift' },
+  { value: 'marketplace', label: 'Marketplace', shortLabel: 'Marketplace' },
   { value: 'other', label: 'Other', shortLabel: 'Other' },
 ]
 
@@ -13,6 +14,11 @@ export function currentStore(storeType: string | undefined): StoreType | undefin
   if (storeType === 'amazon') return 'online'
   if (storeType === 'general') return 'other'
   return storeType as StoreType | undefined
+}
+
+/** A store that is looked through from home, not driven to. */
+export function shopsFromHome(storeType: StoreType): boolean {
+  return storeType === 'online' || storeType === 'marketplace'
 }
 
 export function storeLabel(storeType: StoreType): string {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { task } from './fixtures'
-import { currentStore, storeOptions, visibleStoreItems } from './shopping'
+import { currentStore, shopsFromHome, storeOptions, visibleStoreItems } from './shopping'
 
 describe('shopping lists', () => {
   it('keeps checked grocery staples visible so they can be unchecked later', () => {
@@ -8,9 +8,13 @@ describe('shopping lists', () => {
     expect(visibleStoreItems([milk], 'grocery')).toEqual([milk])
   })
 
-  it.each(['online', 'hardware', 'thrift', 'other'] as const)('removes bought %s items from the active list', (storeType) => {
+  it.each(['online', 'hardware', 'thrift', 'marketplace', 'other'] as const)('removes bought %s items from the active list', (storeType) => {
     const item = task({ id: storeType, storeType, completed: true })
     expect(visibleStoreItems([item], storeType)).toEqual([])
+  })
+
+  it('shops online and marketplace from home, and drives to the rest', () => {
+    expect(storeOptions.filter((store) => shopsFromHome(store.value)).map((store) => store.value)).toEqual(['online', 'marketplace'])
   })
 
   it('reads an item saved under a store\'s old name as the store it is now', () => {
