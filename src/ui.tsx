@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, type ReactNode } from 'react'
+import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { Icon } from './navIcons'
 import { duration } from './format'
 import type { Task } from './domain/types'
@@ -33,13 +33,56 @@ export function Menu({ label = 'more', items, align = 'end', children, controls 
   </details>
 }
 
-export function Toggle({ done, label, onToggle }: { done: boolean; label: string; onToggle: () => void }) {
-  return <button className={`toggle${done ? ' is-done' : ''}`} type="button" aria-pressed={done} aria-label={label} onClick={onToggle}><span>{done && <Icon name="check" size={14} />}</span></button>
+/** Motion is on: a browser that can say so, and a person who has not asked for less of it. */
+export function motionOn(): boolean {
+  return typeof matchMedia === 'function' && !matchMedia('(prefers-reduced-motion: reduce)').matches
 }
 
+export function Toggle({ done, label, onToggle }: { done: boolean; label: string; onToggle: () => void }) {
+  // The check pops only when it was just ticked here, never for one that was already done when the list was drawn.
+  const [ticked, setTicked] = useState(false)
+  return <button className={`toggle${done ? ' is-done' : ''}${done && ticked ? ' is-ticked' : ''}`} type="button" aria-pressed={done} aria-label={label} onClick={() => { setTicked(!done); onToggle() }}><span>{done && <Icon name="check" size={14} />}</span></button>
+}
+
+/** How long a ticked task stays to be seen done before it leaves its list (AGENTS.md, "motion"). The row's animation in styles.css runs to the same length. */
+export const leaveMs = 640
+
 export function TaskRow({ task, done, hint, onToggle, onOpen }: { task: Task; done: boolean; hint?: string; onToggle: () => void; onOpen?: () => void }) {
-  return <li className={`row${done ? ' is-done' : ''}`}>
-    <Toggle done={done} label={`${done ? 'undo' : 'complete'} ${task.title}`} onToggle={onToggle} />
+  const row = useRef<HTMLLIElement>(null)
+  const [leaving, setLeaving] = useState<number>()
+  const latest = useRef(onToggle)
+  latest.current = onToggle
+  // What is still owed when the row goes away early (another screen opened mid-animation): the tick itself.
+  const owed = useRef<() => void>(undefined)
+  useEffect(() => () => owed.current?.(), [])
+  useEffect(() => { if (done) setLeaving(undefined) }, [done])
+
+  function toggle() {
+    if (leaving !== undefined) {
+      // A second tap while it is leaving takes the tick back before anything was saved.
+      owed.current = undefined
+      setLeaving(undefined)
+      return
+    }
+    if (done || !motionOn()) return onToggle()
+    setLeaving(row.current?.offsetHeight ?? 0)
+  }
+
+  useEffect(() => {
+    if (leaving === undefined) return
+    const finish = () => { owed.current = undefined; latest.current() }
+    owed.current = finish
+    const timer = setTimeout(() => {
+      if (owed.current !== finish) return
+      finish()
+      setLeaving(undefined)
+    }, leaveMs)
+    return () => clearTimeout(timer)
+  }, [leaving])
+
+  const shownDone = done || leaving !== undefined
+  return <li ref={row} className={`row${shownDone ? ' is-done' : ''}${leaving !== undefined ? ' is-leaving' : ''}`} style={leaving !== undefined ? { '--row-h': `${leaving}px` } as CSSProperties : undefined}>
+    <Toggle done={shownDone} label={`${shownDone ? 'undo' : 'complete'} ${task.title}`} onToggle={toggle} />
     {onOpen
       ? <button className="row-main" type="button" onClick={onOpen}><span className="row-title">{task.title}</span>{hint && <small>{hint}</small>}</button>
       : <div className="row-main"><span className="row-title">{task.title}</span>{hint && <small>{hint}</small>}</div>}

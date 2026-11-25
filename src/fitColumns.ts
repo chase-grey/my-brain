@@ -66,7 +66,7 @@ function fit(content: HTMLElement) {
   const mainStyle = getComputedStyle(main)
   const areaPx = main.clientWidth - parseFloat(mainStyle.paddingLeft) - parseFloat(mainStyle.paddingRight)
   const cards = [...deck.children].filter((child) => getComputedStyle(child).columnSpan !== 'all')
-  // Measured at its own height, not stretched to the window, and without children's entry animations.
+  // Measured at its own height, not stretched to the window. Entry animations keep running: they only fade and move up or down, which changes nothing measured here.
   content.classList.add('is-measuring')
   const availablePx = window.innerHeight - (content.getBoundingClientRect().top + window.scrollY) - parseFloat(mainStyle.paddingBottom)
   const measure = (layout: Layout) => {

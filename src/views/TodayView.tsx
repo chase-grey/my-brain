@@ -57,6 +57,14 @@ export function HabitCard({ date, entries, habits, onToggle }: { date: string; e
   </Card>
 }
 
+/** What was ticked off today, each with its check to take it back. Not drawn until something is done. */
+export function DoneTodayCard({ tasks, onToggle, onOpen }: { tasks: Task[]; onToggle: (id: string) => void; onOpen: (id: string) => void }) {
+  if (!tasks.length) return null
+  return <Card title="done today" className="done-today" aside={<span className="count is-loud" key={tasks.length}>{tasks.length}</span>}>
+    <ul className="rows">{tasks.map((task) => <TaskRow key={task.id} task={task} done hint={undefined} onToggle={() => onToggle(task.id)} onOpen={task.storeType ? undefined : () => onOpen(task.id)} />)}</ul>
+  </Card>
+}
+
 /** What the email card says. Nothing when no mail needs me, and then the card is not drawn. */
 export function inboxLine(inbox?: InboxCounts): string | undefined {
   if (!inbox?.needsMe) return undefined
@@ -74,7 +82,7 @@ export function CalendarCard({ events }: { events: CalendarBlock[] }) {
   </Card>
 }
 
-export function TodayView({ domain, currentDay, place, placeOverride, onPlaceOverride, commitments, weeklyCommitments, habits, habitEntries, onHabitPart, plan, pickedMin, energy, onMinutes, onEnergy, weekPaid, floorToday, strategicTodayMin, onFloorNight, onStrategic, untriaged, guesses, projects, onConfirm, openCount, openMin, onToggle, onOpen, calendar, inbox, mailAppUrl }: {
+export function TodayView({ domain, currentDay, place, placeOverride, onPlaceOverride, commitments, weeklyCommitments, habits, habitEntries, onHabitPart, plan, pickedMin, energy, onMinutes, onEnergy, weekPaid, floorToday, strategicTodayMin, onFloorNight, onStrategic, untriaged, guesses, projects, onConfirm, openCount, openMin, onToggle, onOpen, doneTasks, calendar, inbox, mailAppUrl }: {
   domain: Domain
   currentDay: string
   place: Place
@@ -103,11 +111,15 @@ export function TodayView({ domain, currentDay, place, placeOverride, onPlaceOve
   openMin: number
   onToggle: (id: string) => void
   onOpen: (id: string) => void
+  /** What was ticked off today, for the card at the bottom. */
+  doneTasks: Task[]
   calendar: CalendarBlock[]
   inbox?: InboxCounts
   mailAppUrl: string
 }) {
-  const done = commitments.filter((task) => isDoneToday(task, currentDay)).length
+  // A task ticked off leaves this list for done today at the bottom; the count still says how far through the day is.
+  const open = commitments.filter((task) => !isDoneToday(task, currentDay))
+  const done = commitments.length - open.length
   const mailLine = domain === 'personal' && mailAppUrl ? inboxLine(inbox) : undefined
   const personalHabits = domain === 'personal' ? habits.filter((habit) => habit.domain === 'personal') : []
   const placeLabel = place === 'office' ? 'at work' : 'at home'
@@ -122,10 +134,10 @@ export function TodayView({ domain, currentDay, place, placeOverride, onPlaceOve
       </select>
     </header>
 
-    <Card title="today" aside={commitments.length > 0 && <span className="count">{done}/{commitments.length}</span>}>
-      {commitments.length
-        ? <ul className="rows">{commitments.map((task) => <TaskRow key={task.id} task={task} done={isDoneToday(task, currentDay)} hint={commitmentHint(task, currentDay, place)} onToggle={() => onToggle(task.id)} onOpen={() => onOpen(task.id)} />)}</ul>
-        : <Done label="nothing due today" />}
+    <Card title="today" aside={commitments.length > 0 && <span className="count" key={done}>{done}/{commitments.length}</span>}>
+      {open.length
+        ? <ul className="rows">{open.map((task) => <TaskRow key={task.id} task={task} done={false} hint={commitmentHint(task, currentDay, place)} onToggle={() => onToggle(task.id)} onOpen={() => onOpen(task.id)} />)}</ul>
+        : commitments.length ? <Done label="all done today" /> : <Done label="nothing due today" />}
     </Card>
 
     <CalendarCard events={calendar} />
@@ -149,6 +161,8 @@ export function TodayView({ domain, currentDay, place, placeOverride, onPlaceOve
         {guesses[task.id] && <button className="link" type="button" aria-label={`confirm ${task.title}`} onClick={() => onConfirm(task.id)}>confirm</button>}
       </li>)}</ul>
     </details>}
+
+    <DoneTodayCard tasks={doneTasks} onToggle={onToggle} onOpen={onOpen} />
 
     <p className="ledger">{openCount} open · {duration(openMin)}</p>
   </>

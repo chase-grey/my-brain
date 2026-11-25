@@ -130,7 +130,7 @@ button.row-main { min-height: 3rem; }
 
 /* bars */
 .bar { position: relative; height: 6px; margin: 0.35rem 0; border-radius: 999px; background: var(--surface-2); overflow: visible; }
-.bar > div { height: 100%; border-radius: 999px; background: var(--accent); transition: width 180ms ease; }
+.bar > div { height: 100%; border-radius: 999px; background: var(--accent); transition: width 420ms cubic-bezier(0.2, 0.7, 0.2, 1); }
 .bar i { position: absolute; top: -4px; width: 2px; height: 14px; margin-left: -1px; background: var(--text); opacity: 0.7; }
 .goals li { display: flex; flex-direction: column; padding: 0.5rem 0 0.7rem; border-top: 1px solid var(--border); }
 .goals li:first-child { border-top: 0; }
@@ -294,7 +294,6 @@ button.row-main { min-height: 3rem; }
   .content.is-deck > *, .dash > * { margin-bottom: 1rem; break-inside: avoid; }
   .content.is-deck > :not(.card, .wheel-head:not(.is-open)), .dash > .dash-outage { column-span: all; }
   .content.is-measuring { flex: none; }
-  .content.is-measuring * { animation: none !important; }
   .view-trips > .add-line { max-width: 28rem; }
 }
 
@@ -337,7 +336,7 @@ button.row-main { min-height: 3rem; }
 .slice.is-selected .slice-track { fill: color-mix(in srgb, var(--hue) 14%, var(--surface-2)); }
 .is-compact .slice-label { opacity: 0; }
 .is-compact .slice.is-dormant .slice-track { fill: var(--surface-2); stroke: none; }
-.slice-detail, .wheel-head:not(.is-open) ~ .card { animation: slice-in 320ms cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.slice-detail, .wheel-head:not(.is-open) ~ .card { animation: slice-in 320ms cubic-bezier(0.2, 0.7, 0.2, 1) backwards; } /* backwards, not both: a card that keeps an animation's last frame is its own layer, and its menu would open under the next card */
 .slice-bar .bar > div { background: var(--hue); }
 .slice-stat { padding: 0.35rem 0 0; color: var(--muted); }
 .slice-stat strong { font-size: 1.75rem; font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
@@ -499,3 +498,73 @@ input, textarea, [contenteditable="true"] { caret-color: var(--accent); }
 .sort summary::after { color: var(--accent); }
 .note-body blockquote, .md blockquote { border-left-color: var(--accent); }
 .dash-card.is-attention { box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent), 0 0 14px color-mix(in srgb, var(--accent) 22%, transparent); }
+
+/* motion (AGENTS.md, "motion"). What is pressed answers, what arrives fades up, and a ticked task is seen done before it leaves.
+   Anything that arrives only fades and moves up or down, never sideways or scaled as a whole card: the card screens are measured mid-flight (fitColumns). */
+.primary, .secondary, .plain, .pill, .link, .chips button, .segmented button, .switch button, .tabbar button, .rail button, .menu-list button, .linkcard, .icon-button, .row-remove, .history-main, .composer-send, .composer-mic { transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, scale 120ms ease; }
+.primary:active:not(:disabled), .secondary:active:not(:disabled) { scale: 0.97; }
+.icon-button:active, .composer-send:active:not(:disabled), .composer-mic:active:not(:disabled), .row-remove:active { scale: 0.9; }
+.linkcard:active { scale: 0.985; }
+.toggle span { position: relative; transition: background-color 160ms ease, border-color 160ms ease, scale 120ms ease; }
+.toggle:active span { scale: 0.84; }
+.row-title { transition: color 200ms ease; }
+/* done today is a list of what went right: its titles stay readable, and the filled checks say done */
+.done-today .row.is-done .row-title { color: var(--text); text-decoration: none; }
+
+@media (prefers-reduced-motion: no-preference) {
+  /* a screen arrives a piece at a time */
+  .content > * { animation: rise-in 280ms cubic-bezier(0.2, 0.7, 0.2, 1) backwards; }
+  .content > :nth-child(2) { animation-delay: 30ms; }
+  .content > :nth-child(3) { animation-delay: 60ms; }
+  .content > :nth-child(4) { animation-delay: 90ms; }
+  .content > :nth-child(5) { animation-delay: 120ms; }
+  .content > :nth-child(6) { animation-delay: 150ms; }
+  .content > :nth-child(n + 7) { animation-delay: 180ms; }
+  .sort[open] .rows { animation: rise-in 240ms cubic-bezier(0.2, 0.7, 0.2, 1); }
+  .review { animation: rise-in 260ms cubic-bezier(0.2, 0.7, 0.2, 1); }
+  .turn.user { animation: rise-in 240ms cubic-bezier(0.2, 0.7, 0.2, 1); }
+  .turn.is-pending { animation: waiting 1.2s ease-in-out infinite; }
+
+  /* the tick: the check pops and draws itself, a ring and six sparks leave it */
+  .toggle.is-ticked span { animation: tick-pop 420ms cubic-bezier(0.3, 1.6, 0.5, 1); }
+  .toggle.is-ticked svg { stroke-dasharray: 24; animation: tick-draw 280ms 90ms ease-out backwards; }
+  .toggle.is-ticked span::before { content: ""; position: absolute; inset: -1.5px; border: 2px solid var(--accent); border-radius: 50%; animation: tick-ring 520ms ease-out forwards; }
+  .toggle.is-ticked span::after { content: ""; position: absolute; top: 50%; left: 50%; width: 4px; height: 4px; margin: -2px; border-radius: 50%; animation: tick-sparks 560ms cubic-bezier(0.2, 0.7, 0.3, 1) forwards; }
+  /* then the row folds away, to turn up in done today. ui.tsx's leaveMs is the whole length */
+  .row.is-leaving { animation: row-out 300ms 340ms cubic-bezier(0.4, 0, 0.2, 1) forwards; }
+  .done-today .row { animation: row-in 360ms cubic-bezier(0.2, 0.7, 0.2, 1) backwards; }
+  .card-head .count { animation: count-pop 280ms ease-out; }
+  .done svg { animation: mark-pop 460ms cubic-bezier(0.3, 1.5, 0.5, 1) backwards; }
+  .nav-dot { animation: mark-pop 360ms cubic-bezier(0.3, 1.5, 0.5, 1); }
+  .tabbar button.active svg, .rail button.active svg { animation: tab-pop 300ms cubic-bezier(0.3, 1.5, 0.5, 1); }
+
+  /* bars fill from empty, menus open from their corner, a sheet comes up from the edge */
+  .bar > div { transform-origin: left; animation: bar-in 620ms cubic-bezier(0.2, 0.7, 0.2, 1) backwards; }
+  .menu[open] > .menu-list { transform-origin: top right; animation: menu-in 150ms cubic-bezier(0.2, 0.7, 0.2, 1); }
+  .menu-start[open] > .menu-list { transform-origin: top left; }
+  .tabbar .menu[open] > .menu-list { transform-origin: bottom right; }
+  .rail .menu[open] > .menu-list { transform-origin: bottom left; }
+  .sheet[open] { animation: sheet-up 280ms cubic-bezier(0.2, 0.8, 0.2, 1); }
+  .sheet[open]::backdrop { animation: fade-in 220ms ease-out; }
+  @media (min-width: 48rem) { .sheet[open] { animation-name: sheet-pop; } }
+}
+@keyframes rise-in { from { opacity: 0; transform: translateY(8px); } }
+@keyframes fade-in { from { opacity: 0; } }
+@keyframes waiting { 50% { opacity: 0.35; } }
+@keyframes tick-pop { 0% { scale: 0.7; } 55% { scale: 1.2; } 100% { scale: 1; } }
+@keyframes tick-draw { from { stroke-dashoffset: 24; } to { stroke-dashoffset: 0; } }
+@keyframes tick-ring { from { scale: 1; opacity: 0.7; } to { scale: 2.2; opacity: 0; } }
+@keyframes tick-sparks {
+  0% { opacity: 1; box-shadow: 0 0 0 0 var(--accent), 0 0 0 0 var(--accent), 0 0 0 0 var(--accent), 0 0 0 0 var(--accent), 0 0 0 0 var(--accent), 0 0 0 0 var(--accent); }
+  70% { opacity: 1; }
+  100% { opacity: 0; box-shadow: 0 -1.3rem 0 -0.5px var(--accent), 1.13rem -0.65rem 0 -0.5px var(--accent), 1.13rem 0.65rem 0 -0.5px var(--accent), 0 1.3rem 0 -0.5px var(--accent), -1.13rem 0.65rem 0 -0.5px var(--accent), -1.13rem -0.65rem 0 -0.5px var(--accent); }
+}
+@keyframes row-out { from { height: var(--row-h); min-height: 0; opacity: 1; overflow: clip; } to { height: 0; min-height: 0; opacity: 0; overflow: clip; border-top-color: transparent; } }
+@keyframes row-in { from { opacity: 0; transform: translateY(-8px); } }
+@keyframes count-pop { from { scale: 1.35; color: var(--accent); } }
+@keyframes mark-pop { from { opacity: 0; scale: 0.5; } }
+@keyframes tab-pop { from { scale: 0.78; } }
+@keyframes bar-in { from { transform: scaleX(0); } }
+@keyframes menu-in { from { opacity: 0; scale: 0.94; } }
+@keyframes sheet-up { from { translate: 0 100%; } }
+@keyframes sheet-pop { from { opacity: 0; scale: 0.96; translate: 0 8px; } }

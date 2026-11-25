@@ -23,6 +23,26 @@ The accent itself can be changed: settings has a swatch for the app's color and 
 
 Chase, 2026-11-25. A list that is empty because everything on it was dealt with is celebrated, not reported: the accent dot with the check cut out (`Done` in `src/ui.tsx`), no words, as my-mail's empty inbox. Today and this week on today wear it when nothing is due. The pattern is `~/.claude/patterns/empty-states.md`. An empty list that owes nothing either way (no notes yet, nothing found, loading) keeps its plain words (`Empty`). `done.test.tsx` holds this.
 
+## done today
+
+Chase, 2026-11-25. `doneToday.test.ts` and `motion.test.tsx` hold these.
+
+- Today ends with a `done today` card: what was ticked off today in this space, tasks, store items and routines, newest first (`doneToday` in `src/domain/doneToday.ts`). It is not drawn until something is done, and "today" is the day on this device's clock, not the utc day.
+- A task ticked off leaves the list it was on and turns up there. The today card keeps its count, and wears the check when everything due is done.
+- Each row's check takes the task back.
+- Personal care keeps its own card and checks and is not repeated there.
+
+## motion
+
+Chase, 2026-11-25. `motion.test.tsx` holds these; the styles are the last block of `src/styles.css`.
+
+- A ticked task is seen done before it leaves: the check pops with a ring and sparks, the title strikes, and the row folds away (`TaskRow` in `src/ui.tsx`, `leaveMs`). The tick is saved when the row has gone, or at once if the screen is left first; a second tap while it is leaving takes it back. A new list of tasks uses `TaskRow` and gets this.
+- A check pops only when it was just ticked there, never for one already done when the list was drawn.
+- What arrives (a screen's pieces, a card, a row) only fades and moves up or down. Never sideways, never a whole card scaled: the card screens are measured while it plays, and nothing stops animations to measure, since that starts every one of them again.
+- An animation on a card ends with `backwards`, never `both` or `forwards`: a card that keeps the last frame becomes its own layer and its menu opens under the next card.
+- Every animation sits inside `prefers-reduced-motion: no-preference`, and with motion turned down a tick is saved at once.
+- Motion wears the accent like everything else; no new colors.
+
 ## updates
 
 A new deploy reaches an open tab or installed window on its own (`src/appUpdate.ts`, the pattern in `~/.claude/patterns/app-update.md`; my-mail carries the same file). The app reloads onto it at a quiet moment: off screen, just reopened and not yet touched, or left alone for five minutes. It never reloads over an open sheet, a draft, or a screen that called `holdUpdates`. Until the reload happens, the more menu wears a dot and offers `update ready · restart`, and the settings button says the same. A new screen whose state a reload would lose calls `holdUpdates()`. Do not reload any other way.

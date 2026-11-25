@@ -13,6 +13,7 @@ import { useFitColumns } from './fitColumns'
 import { besideThisApp } from './site'
 import { splitRail, useRailSlots } from './rail'
 import { buildNowPlan, isDoneToday, thisWeekCommitments, todayCommitments } from './domain/personalNow'
+import { doneToday } from './domain/doneToday'
 import { currentStore } from './domain/shopping'
 import { projectTasks } from './domain/taskProjection'
 import { buildWeekReceipt } from './domain/receipt'
@@ -976,7 +977,7 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
           weekPaid={weekPaid} floorToday={floorToday} strategicTodayMin={strategicTodayMin}
           onFloorNight={() => setProduct((current) => ({ ...current, dayOverrides: [...current.dayOverrides, { date: currentDay, domain: activeDomain, kind: 'floor' }] }))}
           onStrategic={(minutes) => setProduct((current) => ({ ...current, activities: [...current.activities, { id: newId('activity'), domain: activeDomain, kind: 'strategic', occurredAt: new Date().toISOString(), minutes }] }))}
-          untriaged={untriaged} guesses={guesses} projects={activeProjects} onConfirm={confirmGuess} openCount={openTasks.length} openMin={openEstimate} onToggle={toggleComplete} onOpen={editTask}
+          untriaged={untriaged} guesses={guesses} projects={activeProjects} onConfirm={confirmGuess} openCount={openTasks.length} openMin={openEstimate} onToggle={toggleComplete} onOpen={editTask} doneTasks={doneToday(tasks, product.activities, currentDay, activeDomain)}
           calendar={eventsOn(calendarEvents, currentDay)} inbox={activeDomain === 'personal' ? inboxCounts : undefined} mailAppUrl={activeDomain === 'personal' ? besideThisApp(settings.mailAppUrl) : ''} />}
         {shownView === 'dashboard' && <WorkScreens currentDay={currentDay} />}
         {shownView === 'progress' && <ProgressView domain={activeDomain} product={product} tasks={tasks} journalVault={activeDomain === 'personal' ? tripVault ?? (connectionStatus === 'connected' ? personalData?.notes : undefined) : undefined} currentDay={currentDay} heldEvents={heldEvents} onProduct={setProduct} onGoals={() => setView('goals')} onReview={reviews.open} readMoney={activeDomain === 'personal' ? moneyReader(settings) : undefined} />}
