@@ -56,11 +56,18 @@ Studio (it is blocked there), so this is how the app gets built. Each build is s
 secrets `ANDROID_KEYSTORE_BASE64` and `ANDROID_KEYSTORE_PASSWORD`, which is what lets a new apk install over the
 last one and keep the app's data. The key exists only in those secrets; replacing it means uninstalling the app once.
 
+The apk is a release build (`assembleRelease`, not minified), so it cannot be debugged, and the webview cannot be
+inspected from a computer. Backup is off, so the keys and sign-ins the app keeps are not copied to Google Drive or
+to a new phone. The build stops before publishing if the apk can be debugged or is signed with a different key from
+the apk already on the release.
+
 ## updates
 
 The phone does not need a reinstall for each change. Every build also publishes the web part of the app
 (`web-<commit>.zip`) and `update.json` on the same release. `update.json` names the commit and a fingerprint of the
-native part: the `android/` folder, `capacitor.config.ts` and the versions of the capacitor packages.
+native part: the `android/` folder, `capacitor.config.ts` and the versions of the capacitor packages. It also
+carries the zip's SHA-256 and the build's number, and the build signs it with the apk's signing key
+(`scripts/SignUpdate.java`) and publishes the signature as `update.json.sig`.
 
 - **Web part changed, native part the same** (nearly every push): the app downloads the zip into its own files,
   and at a quiet moment has the shell serve that folder instead of the copy inside the apk, then reloads. The
@@ -72,6 +79,10 @@ native part: the `android/` folder, `capacitor.config.ts` and the versions of th
 - A downloaded build that starts twice without the app coming up is dropped, the copy inside the apk is used,
   and that build is not downloaded again.
 - The app only ever downloads from the `android` release (`UpdatePlugin.java` holds the address).
+- The app believes `update.json` only when its signature checks out against the certificate of the installed apk,
+  unpacks a zip only when its hash is the one `update.json` names, and takes nothing with a lower build number than
+  the apk or the last web part it took. When any of that fails it stays on the build it has, the same as a failed
+  download. The apk itself is checked by android's installer.
 
 `src/native/update.ts` decides which of the two a published build needs; `UpdatePlugin.java` does the downloading.
 

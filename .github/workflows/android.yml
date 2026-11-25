@@ -49,8 +49,16 @@ jobs:
           } | sha256sum | cut -c1-12 )
           echo "NATIVE_STAMP=n$stamp" >> "$GITHUB_ENV"
           echo "WEB_COMMIT=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
+      # update.json is what the installed app reads. It names the web part, its hash, and this build's number, which
+      # only goes up: the app takes nothing with a lower number than it has.
+      - name: Pack the web part
+        run: |
+          cd dist && zip -qr "$RUNNER_TEMP/web-$WEB_COMMIT.zip" .
+          hash=$(sha256sum "$RUNNER_TEMP/web-$WEB_COMMIT.zip" | cut -d' ' -f1)
+          echo "{\"web\":\"$WEB_COMMIT\",\"native\":\"$NATIVE_STAMP\",\"sha256\":\"$hash\",\"build\":${{ github.run_number }}}" > "$RUNNER_TEMP/update.json"
       # Every build is signed with the same key, so a new apk installs over the last one and keeps the app's data.
-      - name: Build apk
+      # The same key signs update.json, and the app checks that against its own certificate before it takes a web part.
+      - name: Build the apk and sign update.json
         working-directory: android
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -58,27 +66,49 @@ jobs:
         run: |
           if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
             export ANDROID_KEYSTORE_FILE="$RUNNER_TEMP/my-brain.p12"
+            trap 'rm -f "$ANDROID_KEYSTORE_FILE"' EXIT
             echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$ANDROID_KEYSTORE_FILE"
           else
-            echo "::warning::No signing key in the repo secrets. This apk will not install over an earlier one."
+            echo "::warning::No signing key in the repo secrets. This apk will not install over an earlier one, and it will take no web updates."
           fi
           chmod +x gradlew
           ./gradlew assembleRelease -PversionCode=${{ github.run_number }} -PversionName=1.0.${{ github.run_number }} -PnativeStamp="$NATIVE_STAMP"
-          rm -f "$RUNNER_TEMP/my-brain.p12"
           cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/my-brain.apk"
-      - name: Pack the web part
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
+            java ../scripts/SignUpdate.java "$ANDROID_KEYSTORE_FILE" "$RUNNER_TEMP/update.json" "$RUNNER_TEMP/update.json.sig" > "$RUNNER_TEMP/signer.txt"
+          fi
+      # Nothing is published unless the apk is a release build, carries the certificate update.json was signed with,
+      # and carries the same one as the apk already out, so it installs over it.
+      - name: Check the apk
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          cd dist && zip -qr "$RUNNER_TEMP/web-$WEB_COMMIT.zip" .
-          echo "{\"web\":\"$WEB_COMMIT\",\"native\":\"$NATIVE_STAMP\"}" > "$RUNNER_TEMP/update.json"
+          tools=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          certificate() { "$tools/apksigner" verify --print-certs "$1" | grep -m1 'certificate SHA-256 digest' | sed 's/.*: //'; }
+          if "$tools/aapt2" dump badging "$RUNNER_TEMP/my-brain.apk" | grep -q application-debuggable; then
+            echo "::error::The apk can be debugged."; exit 1
+          fi
+          [ -f "$RUNNER_TEMP/update.json.sig" ] || exit 0
+          new=$(certificate "$RUNNER_TEMP/my-brain.apk")
+          if [ -z "$new" ] || [ "$new" != "$(cat "$RUNNER_TEMP/signer.txt")" ]; then
+            echo "::error::The apk does not carry the certificate update.json was signed with."; exit 1
+          fi
+          if gh release download android --repo "$GITHUB_REPOSITORY" --pattern my-brain.apk --dir "$RUNNER_TEMP/published" 2>/dev/null; then
+            if [ "$new" != "$(certificate "$RUNNER_TEMP/published/my-brain.apk")" ]; then
+              echo "::error::The apk is signed with a different key from the one published, so it would not install over it."; exit 1
+            fi
+          fi
       # One release, replaced on every build, so the phone always downloads from the same address.
-      # update.json goes up last: it is what the installed app reads, and what it names has to be there already.
+      # update.json and its signature go up last: they are what the installed app reads, and what they name has to be there already.
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          export GH_REPO="$GITHUB_REPOSITORY"
           gh release view android >/dev/null 2>&1 || gh release create android --prerelease --title "android app" --notes "The latest build of the phone app. Replaced on every push to main."
           gh release upload android "$RUNNER_TEMP/my-brain.apk" "$RUNNER_TEMP/web-$WEB_COMMIT.zip" --clobber
-          gh release upload android "$RUNNER_TEMP/update.json" --clobber
+          signature="$RUNNER_TEMP/update.json.sig"
+          gh release upload android $( [ -f "$signature" ] && echo "$signature" ) "$RUNNER_TEMP/update.json" --clobber
           for old in $(gh release view android --json assets -q '.assets[].name' | grep '^web-' | grep -v "^web-$WEB_COMMIT.zip$" || true); do
             gh release delete-asset android "$old" -y
           done
