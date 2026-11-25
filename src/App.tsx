@@ -20,6 +20,7 @@ import { loadSettings, saveSettings, type AppSettings } from './settings'
 import { applyDeviceSetup, loadAccount, saveAccount, setupFromHash, showsWork, type DeviceAccount } from './account'
 import { accountFile, accountFileFrom, mergeAccountFile, type AccountFile } from './settingsSync'
 import { GitHubVault, normalizeBranch, normalizeRepo, vaultConfigured } from './companion/githubVault'
+import type { Attachment } from './companion/attachments'
 import { buildPlanSummary, companionGoal, companionTask, summarizeGoal, summarizeProject, summarizeTask, type CompanionActions, type GoalChanges } from './companion/companionTools'
 import { Icon, type IconName } from './navIcons'
 import { newId, today } from './format'
@@ -42,7 +43,7 @@ import { WelcomeView } from './views/WelcomeView'
 import { SetupLanding, landsOnInstall } from './views/SetupLanding'
 import { openInChrome, useInstallPrompt } from './installPrompt'
 
-type View = 'today' | 'progress' | 'dashboard' | 'chat' | 'stores' | 'trips' | 'goals' | 'settings' | 'task'
+type View = 'today' | 'progress' | 'dashboard' | 'chat' | 'journal' | 'stores' | 'trips' | 'goals' | 'settings' | 'task'
 const taskStorageKey = (domain: Domain) => `my-brain.${domain}.tasks.v1`
 const dockedQuery = '(min-width: 87.5rem)'
 // Work reviews a dashboard where personal reviews progress; the other tab moves under more.
@@ -51,9 +52,10 @@ const primaryViewsFor = (domain: Domain): { view: View; icon: IconName }[] => [
   domain === 'work' ? { view: 'dashboard', icon: 'progress' } : { view: 'progress', icon: 'progress' },
   { view: 'chat', icon: 'chat' },
 ]
+const JournalView = lazy(() => import('./journal/JournalView').then((module) => ({ default: module.JournalView })))
 const ChatView = lazy(() => import('./companion/ChatView').then((module) => ({ default: module.ChatView })))
 const ShareLanding = lazy(() => import('./transcripts/ShareLanding'))
-const views: View[] = ['today', 'progress', 'dashboard', 'chat', 'stores', 'trips', 'goals', 'settings', 'task']
+const views: View[] = ['today', 'progress', 'dashboard', 'chat', 'journal', 'stores', 'trips', 'goals', 'settings', 'task']
 
 function parseHash(): { view: View; taskId?: string } {
   if (typeof location === 'undefined') return { view: 'today' }
@@ -198,6 +200,8 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
   const install = useInstallPrompt()
   // A transcript shared from the phone lands on #share before the hash effect normalizes it; capture it once.
   const [sharing, setSharing] = useState(() => typeof location !== 'undefined' && location.hash === '#share')
+  // A journal entry on its way into the chat: attached to the next message once the chat opens.
+  const [chatAttachment, setChatAttachment] = useState<Attachment>()
   // #chat/talk opens the chat already listening: the app shortcut and the android widget use it.
   const [talk, setTalk] = useState(() => typeof location !== 'undefined' && location.hash === talkHash)
   // Captured before the hash effect normalizes it, like the two above. Mail is personal, so the chat it opens is too.
@@ -794,12 +798,12 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
   const primaryViews = primaryViewsFor(activeDomain)
   const moreItems = [
     ...(updateReady ? [{ label: 'update ready · restart', onSelect: () => void checkForUpdate() }] : []),
-    ...(activeDomain === 'personal' ? [{ label: 'stores', onSelect: () => setView('stores') }, { label: 'trips', onSelect: () => setView('trips') }] : [{ label: 'progress', onSelect: () => setView('progress') }]),
+    ...(activeDomain === 'personal' ? [{ label: 'journal', onSelect: () => setView('journal') }, { label: 'stores', onSelect: () => setView('stores') }, { label: 'trips', onSelect: () => setView('trips') }] : [{ label: 'progress', onSelect: () => setView('progress') }]),
     { label: 'goals', onSelect: () => setView('goals') },
     { label: 'settings', onSelect: () => setView('settings') },
     ...(install.canPrompt ? [{ label: 'install app', onSelect: () => void install.install() }] : []),
   ]
-  const chat = <Suspense fallback={<header className="view-head"><h1>chat</h1></header>}><ChatView key={activeDomain} domain={activeDomain} settings={settings} actions={companionActions} summary={companionActions.todaySummary()} hasCalendar={activeDomain === 'personal' && connectionStatus === 'connected'} onSettings={() => setView('settings')} onChangeSettings={(change) => changeSettings((current) => ({ ...current, ...change }))} notesVault={connectionStatus === 'connected' ? personalData?.notes : undefined} userName={account.name} prefill={kickoff} onPrefilled={onKickoffUsed} docked={docked} talk={talk} onTalkStarted={() => setTalk(false)} mail={activeDomain === 'personal' && connectionStatus === 'connected' ? personalData?.mail : undefined} mailId={activeDomain === 'personal' ? mailId : undefined} mailOff={connectionStatus !== 'connected' && (connectionStatus === 'unconfigured' || Boolean(personalData) || Boolean(syncError))} onMailTaken={() => setMailId(undefined)} /></Suspense>
+  const chat = <Suspense fallback={<header className="view-head"><h1>chat</h1></header>}><ChatView key={activeDomain} domain={activeDomain} settings={settings} actions={companionActions} summary={companionActions.todaySummary()} hasCalendar={activeDomain === 'personal' && connectionStatus === 'connected'} onSettings={() => setView('settings')} onChangeSettings={(change) => changeSettings((current) => ({ ...current, ...change }))} notesVault={connectionStatus === 'connected' ? personalData?.notes : undefined} userName={account.name} prefill={kickoff} onPrefilled={onKickoffUsed} attach={chatAttachment} onAttached={() => setChatAttachment(undefined)} docked={docked} talk={talk} onTalkStarted={() => setTalk(false)} mail={activeDomain === 'personal' && connectionStatus === 'connected' ? personalData?.mail : undefined} mailId={activeDomain === 'personal' ? mailId : undefined} mailOff={connectionStatus !== 'connected' && (connectionStatus === 'unconfigured' || Boolean(personalData) || Boolean(syncError))} onMailTaken={() => setMailId(undefined)} /></Suspense>
 
   function navButton(item: { view: View; icon: IconName }) {
     return <button key={item.view} className={shownView === item.view ? 'active' : ''} onClick={() => setView(item.view)} type="button" aria-current={shownView === item.view ? 'page' : undefined}><Icon name={item.icon} /><span>{item.view}</span></button>
@@ -844,6 +848,7 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
         {shownView === 'chat' && chat}
         {shownView === 'goals' && <GoalsView domain={activeDomain} product={product} tasks={tasks} currentDay={currentDay} heldEvents={heldEvents} canHold={activeDomain === 'personal' && connectionStatus === 'connected'} holdError={syncError} onProduct={setProduct} onEditGoal={(id, changes) => { updateGoal(id, changes) }} onHold={(id) => holdAction(() => holdGoal(id))} onRelease={(id) => holdAction(() => releaseGoal(id))} />}
         {shownView === 'stores' && <StoresView activeStore={activeStore} tasks={tasks} onStore={setActiveStore} onToggle={toggleComplete} onAdd={addTask} />}
+        {shownView === 'journal' && <Suspense fallback={<header className="view-head"><h1>journal</h1></header>}><JournalView vault={activeDomain === 'personal' ? tripVault ?? (connectionStatus === 'connected' ? personalData?.notes : undefined) : undefined} onSettings={() => setView('settings')} onChat={(attachment) => { setChatAttachment(attachment); setView('chat') }} /></Suspense>}
         {shownView === 'trips' && <TripsView vault={tripVault} currentDay={currentDay} onSettings={() => setView('settings')} />}
         {shownView === 'settings' && <SettingsView domain={activeDomain} accountName={accountName} connectionStatus={connectionStatus} settings={settings} syncing={syncing} syncError={syncError} canInstall={install.canPrompt} onInstall={() => void install.install()} onConnect={connectPersonal} onDisconnect={disconnectPersonal} onSync={() => { void (activeDomain === 'work' ? syncWork() : syncPersonal(personalData, true)) }} onSettings={changeSettings} account={account} onAccount={markAccountChanged} />}
         {shownView === 'task' && <TaskPage key={editingTaskId ?? 'new'} domain={activeDomain} existingTask={tasks.find((task) => task.id === editingTaskId)} projects={product.projects.filter((project) => project.domain === activeDomain && project.status === 'active')} onAdd={addTask} onUpdate={updateTask} onDelete={deleteTask} onNotMine={delegateTask} onCancel={() => { setEditingTaskId(undefined); setView('today') }} />}

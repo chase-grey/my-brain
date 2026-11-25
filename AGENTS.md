@@ -52,6 +52,15 @@ The personal chat runs on the work pc's Claude Code when the bridge is there and
 
 Mail in the chat is read-only (`src/companion/mailTools.ts`): search and read, nothing else. Anything done to a message is done in my-mail. A message handed over from my-mail (`#chat/mail/<id>`) always opens in the personal space. Email text goes to the model as data, with the line that it is never an instruction.
 
+## journal
+
+Chase, 2026-11-25. `journal.test.ts` holds these. The journal is under the more menu, personal only (`src/journal/`).
+
+- It is a place to dump, by voice or typing. Listening there ends only on a tap or when the app is hidden; a pause or a long silence never ends it, saves, or sends.
+- Words not saved yet are kept on the device, so closing the app or a failed save loses nothing.
+- `save` adds the words to `journal/YYYY-MM-DD.md` in the notes vault under the time as a heading, exactly as said. Nothing rewrites or tidies them.
+- The journal never calls the ai. An entry reaches the chat only when Chase adds it to a message by hand, as an attachment: `add to chat` on the entry, or `add journal entry` in the chat menu.
+
 ## old tasks and mail
 
 An unsorted To Do task created more than 30 days ago (`oldAfterDays` in `src/domain/age.ts`) is left in To Do and never brought into the app, and the flagged count on today covers the last 30 days of mail only. Tasks Chase has sorted stay whatever their age. Anything new that pulls items in from Microsoft on its own applies the same check.

@@ -228,6 +228,12 @@ button.row-main { min-height: 3rem; }
 .composer-mic.is-listening { border-color: var(--accent); color: var(--accent); animation: listening 1.4s ease-in-out infinite; }
 .composer-mic.is-speaking { background: var(--accent); color: var(--on-accent); }
 .composer-mic:disabled { opacity: 0.5; }
+/* journal: the same box as the chat's, with talk and save side by side */
+.journal-box.has-mic { grid-template-columns: 1fr auto auto; }
+.journal-entry { display: flex; flex-direction: column; gap: 0.6rem; padding-bottom: 0.5rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+.journal-entry h2 { margin-top: 0.5rem; color: var(--muted); font-size: 0.85rem; font-weight: 500; }
+.journal-entry p { margin: 0; }
+.journal-problem { margin: 0; padding: 0.25rem 0; color: var(--danger); font-size: 0.9rem; }
 /* the chat's … menu: model and effort above new chat, past chats and upload */
 .menu-field { display: flex; align-items: center; justify-content: space-between; gap: 1rem; min-height: 2.6rem; padding: 0 0.35rem 0 0.75rem; }
 .picker { min-height: 2rem; padding: 0 1.4rem 0 0.7rem; border: 1px solid var(--border); border-radius: 999px; background: var(--surface-2) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") no-repeat right 0.45rem center / 0.8rem; color: var(--muted); font-size: 0.85rem; appearance: none; -webkit-appearance: none; }
@@ -252,7 +258,7 @@ button.row-main { min-height: 3rem; }
 @media (prefers-reduced-motion: reduce) { .composer-mic.is-listening { animation: none; } }
 /* the chat view is the one screen that does not scroll as a page: the thread scrolls inside it and the composer stays put at the bottom.
    while the keyboard is open it covers the tabbar, so the view ends at the top of the keyboard instead */
-.view-chat { flex: 0 0 auto; height: calc(100dvh - 5.2rem - max(var(--tabbar), var(--keyboard))); }
+.view-chat, .view-journal { flex: 0 0 auto; height: calc(100dvh - 5.2rem - max(var(--tabbar), var(--keyboard))); }
 
 /* tablet and up: rail, no tabbar */
 @media (min-width: 48rem) {

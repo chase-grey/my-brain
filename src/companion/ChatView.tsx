@@ -8,6 +8,8 @@ import { autoModel, effortOptions, modelShortName, type AppSettings } from '../s
 import { Icon } from '../navIcons'
 import { Empty, Menu } from '../ui'
 import { useVoice } from '../voice/useVoice'
+import { journalAttachment, journalDays, journalPath } from '../journal/journal'
+import { JournalDays } from '../journal/JournalView'
 import type { CompanionAction, ActionStatus } from './actions'
 import { ActionHandlersContext, ActionPart, type ActionHandlers } from './ActionParts'
 import { attachmentAccept, readAttachment, type Attachment } from './attachments'
@@ -122,7 +124,7 @@ function withStatusForAll(turns: CompanionTurn[], from: ActionStatus[], to: Acti
     : turn)
 }
 
-export function ChatView({ domain, settings, actions, summary, hasCalendar = false, onSettings, onChangeSettings, docked = false, talk = false, onTalkStarted, notesVault, userName, prefill, onPrefilled, mail, mailId, mailOff = false, onMailTaken }: {
+export function ChatView({ domain, settings, actions, summary, hasCalendar = false, onSettings, onChangeSettings, docked = false, talk = false, onTalkStarted, notesVault, userName, prefill, onPrefilled, mail, mailId, mailOff = false, onMailTaken, attach: handed, onAttached }: {
   domain: Domain
   settings: AppSettings
   /** Notes in the account's OneDrive, used when no github vault is set up. */
@@ -148,6 +150,9 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
   /** There is no connected account to read that message with. */
   mailOff?: boolean
   onMailTaken?: () => void
+  /** Attached to the next message once: a journal entry sent over from the journal. */
+  attach?: Attachment
+  onAttached?: () => void
 }) {
   // The chat unmounts on every view change. A thread still warm comes back; an older one waits in the history.
   const [conversation, setConversation] = useState<CompanionConversation>(() => {
@@ -155,6 +160,8 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
     return last && continuesThread({ turns: last.turns, now: Date.now() }) ? last : newConversation()
   })
   const [history, setHistory] = useState<CompanionConversation[]>()
+  // The journal's days, while one is being picked to attach.
+  const [journal, setJournal] = useState<{ days?: string[] }>()
   const [sending, setSending] = useState(false)
   // Picked for the next message and not sent yet.
   const [attached, setAttached] = useState<Attachment[]>([])
@@ -208,6 +215,8 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
   const keyReady = settings.aiMode === 'key' && apiKey.length > 0 && baseUrl.length > 0 && activeModel(domain, settings).length > 0
   const hasKey = domain === 'work' || viaBridge || keyReady
 
+  const vault = useMemo<VaultStore | undefined>(() => hasGitHubVault ? new GitHubVault(vaultConfig) : fallbackVault, [hasGitHubVault, fallbackVault, vaultConfig.repo, vaultConfig.token, vaultConfig.branch])
+
   const companion = useMemo<Companion | undefined>(() => {
     const systemPrompt = (memoryIndex?: string) => buildSystemPrompt({ domain, summary: summaryRef.current, vaultAvailable: domain === 'work' ? true : hasVault, memoryIndex, notes: fallbackVault ? 'onedrive' : 'homebase', userName, mailAvailable: domain === 'personal' && Boolean(mailRef.current), mail: conversationRef.current.mail })
     if (domain === 'work') {
@@ -225,7 +234,7 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
       keep: (follows) => keepRef.current(follows),
       systemPrompt,
       actions: () => actionsRef.current,
-      vault: hasGitHubVault ? new GitHubVault(vaultConfig) : fallbackVault,
+      vault,
       memoryFolder: memoryFolders[domain],
       hasCalendar: () => hasCalendarRef.current,
       mail: () => domain === 'personal' ? mailRef.current : undefined,
@@ -318,6 +327,36 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
     voiceRef.current.sent()
     await sendText(textOf(message))
   }
+
+  // The journal is only ever read into a message by hand, here: nothing sends it on its own.
+  function pickJournal() {
+    if (!vault) return
+    setHistory(undefined)
+    setJournal({})
+    vault.listNotes().then((notes) => setJournal((current) => current && { days: journalDays(notes) })).catch(() => {
+      setJournal(undefined)
+      appendTurn({ role: 'assistant', text: "couldn't load the journal", at: new Date().toISOString(), error: true })
+    })
+  }
+
+  async function attachJournal(day: string) {
+    if (!vault) return
+    setJournal(undefined)
+    setReading(true)
+    try {
+      const { content } = await vault.readNote(journalPath(day))
+      setAttached((items) => [...items, journalAttachment(day, content)])
+    } catch {
+      appendTurn({ role: 'assistant', text: "couldn't open that entry", at: new Date().toISOString(), error: true })
+    }
+    setReading(false)
+  }
+
+  useEffect(() => {
+    if (!handed) return
+    setAttached((items) => [...items, handed])
+    onAttached?.()
+  }, [handed])
 
   function pickFiles() {
     fileInput.current?.click()
@@ -551,6 +590,7 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
           { label: 'new chat', onSelect: startNew, disabled: !conversation.turns.length && !conversation.mail },
           { label: history ? 'back to chat' : 'past chats', onSelect: () => setHistory(history ? undefined : loadHistory(domain)) },
           { label: 'upload', onSelect: pickFiles, disabled: reading },
+          ...(vault ? [{ label: journal ? 'back to chat' : 'add journal entry', onSelect: () => (journal ? setJournal(undefined) : pickJournal()), disabled: reading }] : []),
         ]}
       />}
     </header>
@@ -565,7 +605,9 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
       : <AssistantRuntimeProvider runtime={runtime}>
         <ActionHandlersContext.Provider value={handlers}>
           <ThreadPrimitive.Root className="thread">
-            {history
+            {journal
+              ? <div className="chat-history"><JournalDays days={journal.days} onOpen={(day) => { void attachJournal(day) }} /></div>
+              : history
               ? <HistoryList items={history} currentId={conversation.id} onOpen={reopen} onDelete={remove} onDeleteAll={removeAll} />
               : <ThreadPrimitive.Viewport className="thread-viewport">
                 {conversation.mail && <p className="chat-about"><Icon name="mail" size={16} /><span>{conversation.mail.subject}</span>{conversation.mail.from && <small>{conversation.mail.from}</small>}</p>}
