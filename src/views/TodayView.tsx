@@ -54,10 +54,10 @@ export function HabitCard({ date, entries, habits, onToggle }: { date: string; e
   </Card>
 }
 
-export function inboxLine(inbox: InboxCounts): string {
-  const parts = [`${inbox.unread} unread`]
-  if (inbox.flagged) parts.push(`${inbox.flagged} flagged`)
-  return parts.join(' · ')
+/** What the email card says. Nothing when no mail needs me, and then the card is not drawn. */
+export function inboxLine(inbox?: InboxCounts): string | undefined {
+  if (!inbox?.needsMe) return undefined
+  return inbox.needsMe === 1 ? '1 needs me' : `${inbox.needsMe} need me`
 }
 
 export function CalendarCard({ events }: { events: CalendarBlock[] }) {
@@ -105,7 +105,7 @@ export function TodayView({ domain, currentDay, place, placeOverride, onPlaceOve
   mailAppUrl: string
 }) {
   const done = commitments.filter((task) => isDoneToday(task, currentDay)).length
-  const showMail = domain === 'personal' && Boolean(mailAppUrl) && (inbox !== undefined)
+  const mailLine = domain === 'personal' && mailAppUrl ? inboxLine(inbox) : undefined
   const personalHabits = domain === 'personal' ? habits.filter((habit) => habit.domain === 'personal') : []
   const placeLabel = place === 'office' ? 'at work' : 'at home'
 
@@ -152,7 +152,7 @@ export function TodayView({ domain, currentDay, place, placeOverride, onPlaceOve
         {plan.tasks.length > 0 && <p className="fit">{duration(plan.totalMin)} planned · {duration(Math.max(0, plan.availableMin - plan.totalMin))} open</p>}
       </Card>}
 
-    {showMail && <a className="card linkcard" href={mailAppUrl} target="_blank" rel="noreferrer"><span className="row-title">email</span><small>{inboxLine(inbox!)}</small></a>}
+    {mailLine && <a className="card linkcard" href={mailAppUrl} target="_blank" rel="noreferrer"><span className="row-title">email</span><small>{mailLine}</small></a>}
 
     {untriaged.length > 0 && <details className="card sort">
       <summary>{untriaged.length} new to sort</summary>

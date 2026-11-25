@@ -3,12 +3,12 @@ import type { GraphClient } from './graphClient'
 
 /** Read-only glance at the personal inbox. My Brain never opens, moves, or sends mail; the mail app does that. */
 export type InboxCounts = {
-  unread: number
-  total: number
-  flagged: number
+  /** Conversations in the inbox with something for me to do. */
+  needsMe: number
 }
 
-type InboxFolder = { unreadItemCount: number; totalItemCount: number }
+/** The categories the mail app writes on a message that asks something of me. Waiting on someone else is not one. */
+export const toDoCategories = ['reply', 'action']
 
 /** One message as the chat reads it. `text` is the body as plain text, there only when the message was opened. */
 export type MailSummary = { id: string; conversationId?: string; subject: string; from: string; to: string; received: string; preview: string }
@@ -86,12 +86,19 @@ export class MailGraphProvider {
       .map((message) => ({ ...summary(message), text: (message.body?.content ?? message.bodyPreview ?? '').trim() }))
   }
 
-  /** Flagged counts recent mail only; a flag left on a message from years ago is not something waiting on me. */
+  /**
+   * Mail with something for me to do: flagged, marked important by the sender, or sorted by the mail app as needing a reply or an action.
+   * Recent mail only; a flag left on a message from years ago is not something waiting on me.
+   */
   async inboxCounts(now = new Date().toISOString()): Promise<InboxCounts> {
-    const [folder, flagged] = await Promise.all([
-      this.graph.request<InboxFolder>('/me/mailFolders/inbox?$select=unreadItemCount,totalItemCount'),
-      this.graph.request<{ value: { id: string }[] }>(`/me/mailFolders/inbox/messages?${new URLSearchParams({ '$filter': `flag/flagStatus eq 'flagged' and receivedDateTime ge ${oldCutoff(now)}`, '$select': 'id', '$top': '50' })}`),
-    ])
-    return { unread: folder.unreadItemCount, total: folder.totalItemCount, flagged: flagged.value.length }
+    const recent = `receivedDateTime ge ${oldCutoff(now)}`
+    const asks = [
+      "flag/flagStatus eq 'flagged'",
+      "importance eq 'high'",
+      ...toDoCategories.map((category) => `categories/any(c:c eq '${category}')`),
+    ]
+    // One plain filter a request: Graph turns down an "or" inside the category test, checked against the real inbox.
+    const pages = await Promise.all(asks.map((ask) => this.graph.request<{ value: { id: string; conversationId?: string }[] }>(`/me/mailFolders/inbox/messages?${new URLSearchParams({ '$filter': `${ask} and ${recent}`, '$select': 'id,conversationId', '$top': '50' })}`)))
+    return { needsMe: new Set(pages.flatMap((page) => page.value.map((message) => message.conversationId ?? message.id))).size }
   }
 }

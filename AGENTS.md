@@ -96,7 +96,11 @@ Chase, 2026-11-25. `notes.test.ts` and `journal.test.ts` hold these. Notes is un
 
 ## old tasks and mail
 
-An unsorted To Do task created more than 30 days ago (`oldAfterDays` in `src/domain/age.ts`) is left in To Do and never brought into the app, and the flagged count on today covers the last 30 days of mail only. Tasks Chase has sorted stay whatever their age. Anything new that pulls items in from Microsoft on its own applies the same check.
+An unsorted To Do task created more than 30 days ago (`oldAfterDays` in `src/domain/age.ts`) is left in To Do and never brought into the app, and the email card on today reads the last 30 days of mail only. Tasks Chase has sorted stay whatever their age. Anything new that pulls items in from Microsoft on its own applies the same check.
+
+## email on today
+
+Chase, 2026-11-25. Today shows the email card only when mail needs something done: a conversation in the inbox from the last 30 days that is flagged, marked important by the sender, or sorted by my-mail as needing a reply or an action (`inboxCounts` in `src/data/mailGraphProvider.ts`). Unread mail and mail waiting on someone else never bring it up, and with nothing to do the card is not drawn. `mailGraphProvider.test.ts` and `TodayView.test.tsx` hold this.
 
 ## sorting tasks
 
