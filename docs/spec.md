@@ -22,7 +22,7 @@ Personal email is handled by a separate app, my-mail, on the same Microsoft regi
 
 ## work
 
-Work owns its Outlook tasks, workday capacity, maintenance floors, project planning, and receipts. Personal authentication is never initialized by the work workspace. Work tasks come from the Outlook default Tasks folder, which is where Microsoft To Do keeps the work account's list, through the local bridge: open tasks plus the last two weeks of completions sync when the space opens, when the tab returns after five minutes away, and on sync now in settings. Outlook owns title, due date, and completion; the app owns triage metadata locally and keeps it across syncs. Adding, editing, completing, or removing a task writes back through the bridge, and removal completes the task in Outlook. Routines and tasks added while the bridge is down stay app-native. The bridge starts classic Outlook over COM when it is not already running.
+Work owns its Outlook tasks, project planning, and receipts. Personal authentication is never initialized by the work workspace. Work tasks come from the Outlook default Tasks folder, which is where Microsoft To Do keeps the work account's list, through the local bridge: open tasks plus the last two weeks of completions sync when the space opens, when the tab returns after five minutes away, and on sync now in settings. Outlook owns title, due date, and completion; the app owns triage metadata locally and keeps it across syncs. Adding, editing, completing, or removing a task writes back through the bridge, and removal completes the task in Outlook. Routines and tasks added while the bridge is down stay app-native. The bridge starts classic Outlook over COM when it is not already running.
 
 Work's second tab is a dashboard instead of progress: a grid of cards over a snapshot the bridge keeps in the vault, drawn by screens the bridge serves (they live in the private `work/` repo, not here). It shows what needs the user, what they are waiting on, their own work, one card per direct report, and product quality and projects, with per-person filters and ignores stored in the vault and an outage planner for time away.
 
@@ -30,7 +30,7 @@ Work transcripts never pass through the phone app's share path. Transcribe sends
 
 ## persistence and providers
 
-Tasks, product state, settings, and outbox databases are namespaced by space. Appearance and floors are configured separately. Provider writes reject records belonging to the other space. Personal metadata sync accepts only personal tasks. Existing local task and product records are read by ownership; original records remain available for recovery.
+Tasks, product state, settings, and outbox databases are namespaced by space. Provider writes reject records belonging to the other space. Personal metadata sync accepts only personal tasks. Existing local task and product records are read by ownership; original records remain available for recovery.
 
 Location and tools narrow eligibility within the selected space. They never switch spaces or grant access to the other space's records. Travel affecting work and personal requires a separate record in each.
 
@@ -42,7 +42,7 @@ Location and tools narrow eligibility within the selected space. They never swit
 - chat: the companion. Docked beside the content on wide screens.
 - goals (behind more): weekly target and ceiling, goals with hours and dates or a scheduled block, hold or release a block in the calendar, projects, Life Ring commitments in personal.
 - stores (behind more, personal): pickup lists.
-- settings (behind more): the active space's capacity and floors; Microsoft connection, mail app link, and chat keys in personal.
+- settings (behind more): Microsoft connection, mail app link, and chat keys in personal.
 
 ## companion actions
 

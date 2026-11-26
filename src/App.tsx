@@ -19,6 +19,7 @@ import { projectTasks } from './domain/taskProjection'
 import { buildWeekReceipt } from './domain/receipt'
 import { toggleHabitPart } from './domain/habits'
 import type { Domain, Energy, Goal, Place, Priority, StoreType, Task } from './domain/types'
+import { WEEKLY_MIN } from './domain/noiseEngine'
 import { loadProductState, saveProductState, withMoneyReading, type ProductState } from './productState'
 import { fetchTrackerSummary, newerSummary, readTrackerSummary, readTrackerToken, type TrackerSummary } from './domain/bodyTracker'
 import { loadSettings, saveSettings, type AppSettings } from './settings'
@@ -295,10 +296,10 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
     domain: activeDomain,
     today: currentDay,
     availableMin,
-    weeklyCapacityMin: activeDomain === 'work' ? settings.workdayCapacityMin * 5 : settings.personalWeeklyCeilingMin,
+    weeklyCapacityMin: WEEKLY_MIN[activeDomain],
     energy,
     place: energy === 'errand' ? 'out' : currentPlace,
-  }), [activeDomain, availableMin, currentDay, currentPlace, energy, openTasks, settings.personalWeeklyCeilingMin, settings.workdayCapacityMin])
+  }), [activeDomain, availableMin, currentDay, currentPlace, energy, openTasks])
   const openEstimate = openTasks.reduce((sum, task) => sum + task.estimateMin, 0)
   const activeCommitment = [...product.commitments].reverse().find((item) => item.domain === activeDomain)
   const weekPaid = activeCommitment ? buildWeekReceipt(activeCommitment, product.activities.filter((item) => item.domain === activeDomain), product.dayOverrides).paid : false

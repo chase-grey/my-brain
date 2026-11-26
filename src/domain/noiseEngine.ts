@@ -1,4 +1,7 @@
-import type { Priority, Task } from './types'
+import type { Domain, Priority, Task } from './types'
+
+/** The minutes a week each space has for tasks: five seven-hour workdays, six hours of personal time. */
+export const WEEKLY_MIN: Record<Domain, number> = { work: 2100, personal: 360 }
 
 export const SPREAD = 1.5
 export const MAX_LEAD_DAYS = 30

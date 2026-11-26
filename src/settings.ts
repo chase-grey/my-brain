@@ -27,9 +27,6 @@ export const aiModes = ['key', 'paste', 'off'] as const
 export type AiMode = typeof aiModes[number]
 
 export type AppSettings = {
-  workdayCapacityMin: number
-  personalWeeklyCeilingMin: number
-  floors: string[]
   aiMode: AiMode
   /** A provider id from companion/aiProvider; anthropic unless another is picked. */
   aiProvider: string
@@ -59,9 +56,6 @@ export type AppSettings = {
 }
 
 export const defaultSettings: AppSettings = {
-  workdayCapacityMin: 420,
-  personalWeeklyCeilingMin: 360,
-  floors: [],
   aiMode: 'key',
   aiProvider: 'anthropic',
   aiBaseUrl: '',
@@ -98,18 +92,11 @@ function text(value: unknown, fallback: string): string {
   return typeof value === 'string' ? value : fallback
 }
 
-function minutes(value: unknown, fallback: number): number {
-  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : fallback
-}
-
 export function loadSettings(domain: Domain): AppSettings {
   try {
     const stored = JSON.parse(localStorage.getItem(settingsStorageKey(domain)) ?? '{}') as Partial<Record<keyof AppSettings, unknown>>
     const companion = Object.fromEntries(companionFields.map((field) => [field, text(stored[field], defaultSettings[field])])) as Pick<AppSettings, typeof companionFields[number]>
     return {
-      workdayCapacityMin: minutes(stored.workdayCapacityMin, defaultSettings.workdayCapacityMin),
-      personalWeeklyCeilingMin: minutes(stored.personalWeeklyCeilingMin, defaultSettings.personalWeeklyCeilingMin),
-      floors: Array.isArray(stored.floors) ? stored.floors.filter((item): item is string => typeof item === 'string').slice(0, 4) : [],
       ...companion,
       aiMode: aiMode(stored.aiMode),
       aiProvider: companion.aiProvider || defaultSettings.aiProvider,
@@ -126,14 +113,13 @@ export function loadSettings(domain: Domain): AppSettings {
 export function saveSettings(settings: AppSettings, domain: Domain): void {
   try {
     const scoped = domain === 'work'
-      ? { workdayCapacityMin: settings.workdayCapacityMin }
+      ? {}
       : {
-        personalWeeklyCeilingMin: settings.personalWeeklyCeilingMin,
         aiMode: settings.aiMode,
         ...Object.fromEntries(companionFields.map((field) => [field, settings[field]])),
       }
     const chat = Object.fromEntries(chatFields.map((field) => [field, settings[field]]))
-    localStorage.setItem(settingsStorageKey(domain), JSON.stringify({ floors: settings.floors, ...chat, ...scoped }))
+    localStorage.setItem(settingsStorageKey(domain), JSON.stringify({ ...chat, ...scoped }))
   } catch {
     // Keep the in-memory setting usable if persistence is unavailable.
   }

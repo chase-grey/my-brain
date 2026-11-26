@@ -38,12 +38,11 @@ describe('work and personal ownership', () => {
 
   it('keeps each space?s settings independent', () => {
     const values = storage()
-    saveSettings({ ...defaultSettings, floors: ['email'] }, 'work')
-    saveSettings({ ...defaultSettings, floors: ['chores'] }, 'personal')
-    expect(loadSettings('work').floors).toEqual(['email'])
-    expect(loadSettings('personal').floors).toEqual(['chores'])
-    expect(values.get('my-brain.personal.settings.v1')).not.toContain('workdayCapacityMin')
-    expect(values.get('my-brain.work.settings.v1')).not.toContain('personalWeeklyCeilingMin')
+    saveSettings({ ...defaultSettings, chatEffort: 'low', githubToken: 'ghp_1' }, 'work')
+    saveSettings({ ...defaultSettings, chatEffort: 'max', githubToken: 'ghp_1' }, 'personal')
+    expect(loadSettings('work').chatEffort).toBe('low')
+    expect(loadSettings('personal').chatEffort).toBe('max')
+    expect(values.get('my-brain.work.settings.v1')).not.toContain('ghp_1')
   })
 
   it('credits only the commitment?s space and week', () => {

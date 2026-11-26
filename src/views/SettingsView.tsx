@@ -41,7 +41,7 @@ export function SettingsView({ domain, accountName, connectionStatus, settings, 
 }) {
   const update = useAppUpdate()
   const set = <K extends keyof AppSettings>(key: K) => (event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
-    onSettings((current) => ({ ...current, [key]: typeof current[key] === 'number' ? Number(event.target.value) : event.target.value }))
+    onSettings((current) => ({ ...current, [key]: event.target.value }))
 
   const provider = providerOf(settings.aiProvider)
   // A model belongs to its provider, so a new pick starts on that provider's default.
@@ -102,15 +102,6 @@ export function SettingsView({ domain, accountName, connectionStatus, settings, 
     </Card>}
 
     {domain === 'personal' && (account.owner || settings.issueToken) && <IssuesCard settings={settings} onSettings={onSettings} />}
-
-    <Card title="capacity">
-      <div className="grid-2">
-        {domain === 'work'
-          ? <Field label="workday minutes"><input inputMode="numeric" min="0" step="30" type="number" value={settings.workdayCapacityMin} onChange={set('workdayCapacityMin')} /></Field>
-          : <Field label="weekly ceiling minutes"><input inputMode="numeric" min="0" step="30" type="number" value={settings.personalWeeklyCeilingMin} onChange={set('personalWeeklyCeilingMin')} /></Field>}
-        <Field label="floors"><input value={settings.floors.join(', ')} onChange={(event) => onSettings((current) => ({ ...current, floors: event.target.value.split(',').map((item) => item.trim()).filter(Boolean).slice(0, 4) }))} placeholder={domain === 'work' ? 'email, expenses' : 'dishes, laundry'} /></Field>
-      </div>
-    </Card>
 
     {domain === 'personal' && <ShareCard account={account} settings={settings} />}
 

@@ -42,7 +42,7 @@ describe('device account', () => {
 
 describe('setup link', () => {
   const account = { setupComplete: true, owner: true, name: 'Chase', workSpace: true }
-  const settings = { ...defaultSettings, anthropicApiKey: 'sk-ant-1', githubRepo: 'me/vault', githubToken: 'ghp_1', workdayCapacityMin: 300 }
+  const settings = { ...defaultSettings, anthropicApiKey: 'sk-ant-1', githubRepo: 'me/vault', githubToken: 'ghp_1', homeWifi: 'home' }
 
   it('carries the account and its keys in the fragment and reads them back', () => {
     const link = setupLink('https://chase-grey.github.io/my-brain/#today', deviceSetupFrom(account, settings))
@@ -50,7 +50,7 @@ describe('setup link', () => {
     expect(link).not.toContain('?')
     const setup = setupFromHash(new URL(link).hash)
     expect(setup).toMatchObject({ owner: true, name: 'Chase', workSpace: true, settings: { anthropicApiKey: 'sk-ant-1', githubRepo: 'me/vault', githubToken: 'ghp_1' } })
-    expect(setup?.settings).not.toHaveProperty('workdayCapacityMin')
+    expect(setup?.settings).not.toHaveProperty('homeWifi')
   })
 
   it('ignores hashes that are not a setup link', () => {

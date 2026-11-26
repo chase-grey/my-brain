@@ -15,8 +15,8 @@ describe('settings sync', () => {
 
   it('gives a device that never synced everything the account holds', () => {
     const remote = accountFileFrom({ ...friend, owner: true, name: 'Chase', workSpace: true }, { ...defaultSettings, anthropicApiKey: 'sk-ant-1', githubRepo: 'me/vault' }, '2026-11-14T00:00:00.000Z')
-    const merged = mergeAccountFile({ account: { setupComplete: true, owner: false, name: '', workSpace: false }, settings: { ...defaultSettings, workdayCapacityMin: 300 } }, remote, now)
-    expect(merged.settings).toMatchObject({ anthropicApiKey: 'sk-ant-1', githubRepo: 'me/vault', workdayCapacityMin: 300 })
+    const merged = mergeAccountFile({ account: { setupComplete: true, owner: false, name: '', workSpace: false }, settings: defaultSettings }, remote, now)
+    expect(merged.settings).toMatchObject({ anthropicApiKey: 'sk-ant-1', githubRepo: 'me/vault' })
     expect(merged.account).toMatchObject({ owner: true, name: 'Chase', workSpace: true, updatedAt: '2026-11-14T00:00:00.000Z' })
     expect(merged.push).toBe(false)
   })
