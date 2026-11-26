@@ -11,6 +11,7 @@ import { loadGuide, restart, saveGuide } from '../tour'
 import { Card, Field, Segmented } from '../ui'
 import { AccentPicker } from './AccentPicker'
 import { IssuesCard } from './IssuesCard'
+import { syncedLabel } from '../lastSync'
 import { ShareCard } from './ShareCard'
 import { SignInLog } from './SignInLog'
 import { WifiCard } from './Whereabouts'
@@ -24,11 +25,13 @@ export const usageLinks = {
 
 export type ConnectionStatus = 'unconfigured' | 'disconnected' | 'connected'
 
-export function SettingsView({ domain, accountName, connectionStatus, settings, syncing, syncError, canInstall, onInstall, onConnect, onDisconnect, onSync, onSettings, account, onAccount }: {
+export function SettingsView({ domain, accountName, connectionStatus, settings, syncing, syncedAt, syncError, canInstall, onInstall, onConnect, onDisconnect, onSync, onSettings, account, onAccount }: {
   domain: Domain
   accountName?: string
   connectionStatus: ConnectionStatus
   syncing: boolean
+  /** When this space last finished a sync on this device. */
+  syncedAt?: number
   syncError?: string
   settings: AppSettings
   canInstall: boolean
@@ -53,7 +56,7 @@ export function SettingsView({ domain, accountName, connectionStatus, settings, 
 
     {domain === 'personal' && <Card title="microsoft account">
       {connectionStatus === 'connected'
-        ? <><p className="note">{accountName}</p><div className="actions row-actions"><button className="primary" disabled={syncing} type="button" onClick={onSync}>{syncing ? 'syncing' : 'sync now'}</button><button className="plain" disabled={syncing} type="button" onClick={() => void onDisconnect()}>disconnect</button></div></>
+        ? <><p className="note">{accountName}</p><div className="actions row-actions"><button className="primary" disabled={syncing} type="button" onClick={onSync}>{syncing ? 'syncing' : 'sync now'}</button><button className="plain" disabled={syncing} type="button" onClick={() => void onDisconnect()}>disconnect</button></div>{syncedAt && <p className="note">{syncedLabel(syncedAt)}</p>}</>
         : <div className="actions"><button className="primary" disabled={syncing || connectionStatus === 'unconfigured'} type="button" onClick={() => void onConnect()}>{syncing ? 'connecting' : connectionStatus === 'unconfigured' ? 'no microsoft app id' : 'connect microsoft'}</button></div>}
       {syncError && <p className="note is-error" role="alert">{syncError}</p>}
       {(syncError || connectionStatus === 'disconnected') && <SignInLog />}
@@ -67,6 +70,7 @@ export function SettingsView({ domain, accountName, connectionStatus, settings, 
     {domain === 'work' && <Card title="outlook tasks">
       <p className="note">{connectionStatus === 'connected' ? accountName : 'work bridge not reachable'}</p>
       <div className="actions"><button className="primary" disabled={syncing} type="button" onClick={onSync}>{syncing ? 'syncing' : 'sync now'}</button></div>
+      {syncedAt && <p className="note">{syncedLabel(syncedAt)}</p>}
       {syncError && <p className="note is-error" role="alert">{syncError}</p>}
     </Card>}
 

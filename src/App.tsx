@@ -19,6 +19,7 @@ import { projectTasks } from './domain/taskProjection'
 import { buildWeekReceipt } from './domain/receipt'
 import { toggleHabitPart } from './domain/habits'
 import type { Domain, Energy, Goal, Place, Priority, StoreType, Task } from './domain/types'
+import { loadLastSync, saveLastSync } from './lastSync'
 import { WEEKLY_MIN } from './domain/noiseEngine'
 import { loadProductState, saveProductState, withMoneyReading, type ProductState } from './productState'
 import { fetchTrackerSummary, newerSummary, readTrackerSummary, readTrackerToken, type TrackerSummary } from './domain/bodyTracker'
@@ -263,6 +264,7 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
   const workSyncedAt = useRef(0)
   const [accountName, setAccountName] = useState<string>()
   const [syncing, setSyncing] = useState(false)
+  const [syncedAt, setSyncedAt] = useState(() => ({ personal: loadLastSync('personal'), work: loadLastSync('work') }))
   const [syncError, setSyncError] = useState<string>()
   const [calendarEvents, setCalendarEvents] = useState<CalendarBlock[]>([])
   const [calendarRead, setCalendarRead] = useState(false)
@@ -525,6 +527,13 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
     markAccountChanged()
   }
 
+  /** Only a sync that brought the tasks in counts; a failed one leaves the last time standing. */
+  function markSynced(domain: Domain): void {
+    const at = Date.now()
+    saveLastSync(domain, at)
+    setSyncedAt((current) => ({ ...current, [domain]: at }))
+  }
+
   /** `reconnect` is for a sync the user asked for: an expired sign-in opens microsoft again instead of failing. */
   async function syncPersonal(data = personalData, reconnect = false): Promise<void> {
     if (activeDomain !== 'personal' || !data) return
@@ -555,6 +564,7 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
       const metadata = replayedMetadata.length ? replayedMetadata : legacyMetadata ?? taskMetadata(current)
       const personal = mergePersonalTasks(providerTasks, metadata, current)
       commitTasks(personal)
+      markSynced('personal')
     } catch (error) {
       setSyncError(errorMessage(error))
     } finally {
@@ -582,6 +592,7 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
       const remote = await workBridge.listTasks()
       commitTasks(mergeWorkTasks(remote, tasksRef.current))
       workSyncedAt.current = Date.now()
+      markSynced('work')
       setConnectionStatus('connected')
       setAccountName('outlook tasks through the work bridge')
       void syncWorkCalendar()
@@ -1131,7 +1142,7 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
         {shownView === 'stores' && <StoresView activeStore={activeStore} tasks={tasks} onStore={setActiveStore} onToggle={toggleComplete} onAdd={addTask} />}
         {(shownView === 'notes' || shownView === 'journal') && <Suspense fallback={<header className="view-head"><h1>{shownView}</h1></header>}><NotesView key={activeDomain} domain={activeDomain} settings={settings} vault={activeDomain === 'personal' ? tripVault ?? (connectionStatus === 'connected' ? personalData?.notes : undefined) : workJournal} onSettings={() => setView('settings')} onChat={(attachment) => { setChatAttachment(attachment); setView('chat') }} /></Suspense>}
         {shownView === 'trips' && <TripsView vault={tripVault} currentDay={currentDay} onSettings={() => setView('settings')} />}
-        {shownView === 'settings' && <SettingsView domain={activeDomain} accountName={accountName} connectionStatus={connectionStatus} settings={settings} syncing={syncing} syncError={syncError} canInstall={install.canPrompt} onInstall={() => void install.install()} onConnect={connectPersonal} onDisconnect={disconnectPersonal} onSync={() => { void (activeDomain === 'work' ? syncWork() : syncPersonal(personalData, true)) }} onSettings={changeSettings} account={account} onAccount={markAccountChanged} />}
+        {shownView === 'settings' && <SettingsView domain={activeDomain} accountName={accountName} connectionStatus={connectionStatus} settings={settings} syncing={syncing} syncedAt={syncedAt[activeDomain]} syncError={syncError} canInstall={install.canPrompt} onInstall={() => void install.install()} onConnect={connectPersonal} onDisconnect={disconnectPersonal} onSync={() => { void (activeDomain === 'work' ? syncWork() : syncPersonal(personalData, true)) }} onSettings={changeSettings} account={account} onAccount={markAccountChanged} />}
         {shownView === 'task' && <TaskPage key={editingTaskId ?? 'new'} domain={activeDomain} existingTask={tasks.find((task) => task.id === editingTaskId)} guess={editingTaskId ? guesses[editingTaskId] : undefined} projects={activeProjects} onAdd={addTask} onUpdate={updateTask} onDelete={deleteTask} onDone={finishTask} onNotMine={delegateTask} onChat={(attachment) => { setChatAttachment(attachment); if (!docked) setView('chat') }} onCancel={() => { setEditingTaskId(undefined); setView('today') }} blocks={editingTaskId ? blocksFor(product.timeBlocks, { taskId: editingTaskId }) : []} onBlock={canBlock ? blockTime : undefined} onUnblock={(id) => holdAction(() => unblockTime(id))} />}
       </div>
 
