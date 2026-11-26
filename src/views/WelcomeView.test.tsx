@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { aiAnswered, aiSettings, firstName, noAiAnswers, welcomeQuestions, welcomeSettings, WelcomeView } from './WelcomeView'
+import { aiAnswered, aiSettings, browserDelayMs, firstName, InstallSteps, noAiAnswers, welcomeQuestions, welcomeSettings, WelcomeView } from './WelcomeView'
 import { defaultSettings } from '../settings'
 import { SetupLanding, setupLanding } from './SetupLanding'
 
@@ -63,6 +63,28 @@ describe('welcome ai step', () => {
     expect(aiSettings({ ...noAiAnswers, want: true, path: 'paste', key: 'typed-then-changed-mind' })).toEqual({ aiMode: 'paste', aiProvider: 'anthropic', aiBaseUrl: '', aiModel: '', anthropicApiKey: '', jevApiKey: '' })
     expect(aiSettings({ ...noAiAnswers, want: false, path: 'key', key: 'typed-then-changed-mind' }).aiMode).toBe('off')
     expect(aiSettings({ ...noAiAnswers, want: false, path: 'key', key: 'typed-then-changed-mind' }).anthropicApiKey).toBe('')
+  })
+})
+
+describe('install steps on an iphone', () => {
+  it('is titled steps to install and holds the browser back at first', () => {
+    const html = renderToStaticMarkup(<InstallSteps onContinue={() => {}} />)
+    expect(html).toContain('steps to install')
+    expect(html).toContain('add to home screen')
+    expect(html).not.toContain('continue in the browser')
+  })
+
+  it('then offers the browser quietly, marked not recommended', () => {
+    const html = renderToStaticMarkup(<InstallSteps onContinue={() => {}} shown />)
+    expect(html).toContain('continue in the browser')
+    expect(html).toContain('not recommended')
+    expect(html).toContain('class="link-button"')
+    expect(html).not.toContain('class="primary"')
+  })
+
+  it('waits a few seconds', () => {
+    expect(browserDelayMs).toBeGreaterThanOrEqual(3000)
+    expect(browserDelayMs).toBeLessThanOrEqual(5000)
   })
 })
 

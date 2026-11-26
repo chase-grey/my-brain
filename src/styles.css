@@ -449,6 +449,8 @@ button.row-main { min-height: 3rem; }
 .welcome-actions { flex-direction: column; align-items: stretch; }
 .welcome-actions .primary, .welcome-actions .plain { flex: none; min-height: 2.75rem; }
 .welcome-fill { flex: 1; }
+.welcome-later { display: flex; flex-direction: column; align-items: center; gap: 0.1rem; }
+.welcome-later .link-button { min-height: 2.75rem; padding-bottom: 0; }
 .welcome-top { display: flex; align-items: center; justify-content: space-between; min-height: 2.75rem; margin-top: -1.25rem; }
 .welcome-dots { display: flex; gap: 0.4rem; }
 .welcome-dots span { width: 0.4rem; height: 0.4rem; border-radius: 50%; background: var(--border); }
@@ -603,6 +605,7 @@ input, textarea, [contenteditable="true"] { caret-color: var(--accent); }
   .sheet[open] { animation: sheet-up 280ms cubic-bezier(0.2, 0.8, 0.2, 1); }
   .sheet[open]::backdrop { animation: fade-in 220ms ease-out; }
   .tour-step { animation: rise-in 240ms cubic-bezier(0.2, 0.7, 0.2, 1) backwards; }
+  .welcome-later { animation: fade-in 600ms ease-out backwards; }
   @media (min-width: 48rem) { .sheet[open] { animation-name: sheet-pop; } }
 }
 @keyframes rise-in { from { opacity: 0; transform: translateY(8px); } }
