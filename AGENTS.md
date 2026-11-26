@@ -62,6 +62,8 @@ A new deploy reaches an open tab or installed window on its own (`src/appUpdate.
 
 The installed android app follows the same rules (Chase, 2026-11-25: no reinstalling for each change). Every push publishes the web part beside the apk, and the app downloads it and moves onto it at a quiet moment (`src/native/update.ts`, `UpdatePlugin.java`). Only a change to the native part (anything under `android/`, the shell's config, a capacitor package) needs the apk; then the button reads `update ready · install`, downloads it and opens android's installer, and nothing installs or reloads on its own. Keep native changes rare and together, since each one costs Chase an install. `update.test.ts` holds the choice between the two.
 
+A move onto an update lands on the newest build, never the one that was found (Chase, 2026-11-25: several updates came one restart at a time). The shell moves onto the build it has downloaded, so the app keeps asking after it has found one, and both the button and the quiet reload ask once more before moving (`appUpdate.flow.test.ts`). On the web the reload fetches the page fresh, so it lands on the newest by itself.
+
 ## status bar
 
 Chase, 2026-11-25. The android shell draws the app under the phone's status bar and tells the page how tall it is. `--top-inset` in `src/styles.css` holds that height, and anything at the top edge (the top bar, a full-screen layer, the rail, a height worked out from the screen) pads itself by it. Never use `env(safe-area-inset-top)` directly: older phones report it wrong, and the shell's own number comes first. `shell.test.ts` holds this.

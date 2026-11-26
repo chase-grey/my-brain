@@ -85,9 +85,12 @@ let source: UpdateSource | undefined
 /** The build this page was loaded with: its entry script, or the source's name for it. Undefined on a dev server, where there is nothing to compare. */
 let running: string | undefined
 let published: string | undefined
+/** When the published build was last asked for. */
+let looked = 0
 
 /** Ask for the published build past every cache and compare it with the one running. */
 async function look(): Promise<'new' | 'current' | 'failed'> {
+  looked = Date.now()
   try {
     if (source) {
       const found = await source.look()
@@ -216,12 +219,18 @@ function announceReload(): void {
 }
 
 /**
- * The settings button. With a newer build already found it restarts onto it. Otherwise it asks: a newer build
- * reloads onto it; nothing newer, or no answer, stays put and says so.
+ * The settings button. With a newer build already found it restarts onto the newest there is. Otherwise it asks:
+ * a newer build reloads onto it; nothing newer, or no answer, stays put and says so.
  */
 export async function checkForUpdate(): Promise<void> {
-  if (state.ready || !running) return reload(true)
+  if (!running) return reload(true)
   set({ checking: true })
+  if (state.ready) {
+    // A shell moves onto the build it has downloaded, and more may have been published since. Asking again
+    // first lands them all in one restart. A page on the web is fetched fresh by the reload itself.
+    if (source) await look()
+    return reload(true)
+  }
   const outcome = await look()
   if (outcome === 'new') return reload(true)
   set({ checking: false })
@@ -231,8 +240,9 @@ export async function checkForUpdate(): Promise<void> {
 /**
  * Watch for new deploys while the app is open. Call once at startup, in a production build: served over the web,
  * or inside a native shell that passes where its builds come from.
- * A check runs on open, on every return to the app and on a slow timer. A newer build is reloaded onto at the
- * first quiet moment, once per build so a stale answer cannot loop; until then `ready` drives the dot and the button.
+ * A check runs on open, on every return to the app and on a slow timer, and keeps running after a build is found,
+ * so the one moved onto is the newest. A newer build is reloaded onto at the first quiet moment, once per build so
+ * a stale answer cannot loop; until then `ready` drives the dot and the button.
  */
 export function watchForUpdates(from?: UpdateSource): void {
   announceReload()
@@ -240,32 +250,41 @@ export function watchForUpdates(from?: UpdateSource): void {
   running = source ? source.running : document.querySelector('script[src*="/assets/"]')?.getAttribute('src') ?? undefined
   if (!running) return
 
-  let checked = 0
   let touched = false
   let lastTouch = Date.now()
 
-  const reloadIfQuiet = () => {
-    if (!state.ready || state.byHand || !published) return
+  const quietNow = () => {
+    if (!state.ready || state.byHand || !published) return false
     try {
-      if (sessionStorage.getItem(reloadedForKey) === published) return
+      if (sessionStorage.getItem(reloadedForKey) === published) return false
     } catch {
-      return
+      return false
     }
-    const quiet = isQuietMoment({
+    return isQuietMoment({
       hidden: document.visibilityState === 'hidden',
       held: holds.size > 0 || midEdit(),
       touchedSinceShown: touched,
       idleMs: Date.now() - lastTouch,
     })
-    if (quiet) reload(false)
+  }
+
+  let asking = false
+  const reloadIfQuiet = async () => {
+    if (asking || !quietNow()) return
+    // A shell asks once more when its answer is not fresh, as the button does, then looks again: the app may
+    // have been touched while it waited.
+    if (source && Date.now() - looked >= returnCheckMs) {
+      asking = true
+      await look()
+      asking = false
+      if (!quietNow()) return
+    }
+    reload(false)
   }
 
   const check = async (gapMs: number) => {
-    if (!state.ready && document.visibilityState === 'visible' && Date.now() - checked >= gapMs) {
-      checked = Date.now()
-      await look()
-    }
-    reloadIfQuiet()
+    if (document.visibilityState === 'visible' && Date.now() - looked >= gapMs) await look()
+    await reloadIfQuiet()
   }
 
   const onTouch = () => {
