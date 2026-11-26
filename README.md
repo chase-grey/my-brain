@@ -139,6 +139,8 @@ app and it lands in `40 Transcripts/` in HomeBase. Details in [docs/transcripts.
 serves them as one module (`/work-ui.js`) and the app imports it when the tab opens, so the
 dashboard exists only where the bridge runs. The bridge and those screens live in a separate
 private repo checked out at `work/` (ignored here); `npm run bridge` starts it from there.
+While the bridge is not running the tab says so and how to start it, and keeps looking every few
+seconds, so starting the bridge is enough: the dashboard draws itself without a reload.
 
 **memory.** Each vault keeps what the companion remembers as one fact per file plus a
 `MEMORY.md` index: `memory/` in HomeBase, `99 System/Memory/` in Hivemind. The index goes
