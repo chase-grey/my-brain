@@ -160,7 +160,7 @@ button.row-main { min-height: 3rem; }
 .actions .primary, .actions .secondary { flex: 1 1 10rem; }
 .primary { min-height: 2.75rem; padding: 0 1.1rem; border-radius: 10px; background: var(--accent); color: var(--on-accent); font-weight: 600; }
 .secondary { min-height: 2.75rem; padding: 0 1.1rem; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
-.plain { min-height: 2.75rem; padding: 0 0.75rem; color: var(--muted); }
+.plain { min-height: 2.75rem; padding: 0 1.1rem; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); font-weight: 500; }
 .task-form { padding-bottom: 1.5rem; }
 .row-actions { padding-top: 0; }
 .links { display: flex; flex-wrap: wrap; gap: 0 1.25rem; }
@@ -557,7 +557,7 @@ input, textarea, [contenteditable="true"] { caret-color: var(--accent); }
 /* motion (AGENTS.md, "motion"). What is pressed answers, what arrives fades up, and a ticked task is seen done before it leaves.
    Anything that arrives only fades and moves up or down, never sideways or scaled as a whole card: the card screens are measured mid-flight (fitColumns). */
 .primary, .secondary, .plain, .pill, .link, .chips button, .segmented button, .switch button, .tabbar button, .rail button, .menu-list button, .linkcard, .icon-button, .row-remove, .history-main, .composer-send, .composer-mic { transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, scale 120ms ease; }
-.primary:active:not(:disabled), .secondary:active:not(:disabled) { scale: 0.97; }
+.primary:active:not(:disabled), .secondary:active:not(:disabled), .plain:active:not(:disabled) { scale: 0.97; }
 .icon-button:active, .composer-send:active:not(:disabled), .composer-mic:active:not(:disabled), .row-remove:active { scale: 0.9; }
 .linkcard:active { scale: 0.985; }
 .toggle span { position: relative; transition: background-color 160ms ease, border-color 160ms ease, scale 120ms ease; }
