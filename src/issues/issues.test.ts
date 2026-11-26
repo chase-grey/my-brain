@@ -58,11 +58,23 @@ describe('reporting an issue from chat', () => {
     expect(file).toHaveBeenCalledWith('my-mail', 'archive leaves the thread open', 'it should go back to the inbox')
     expect(outcome.ok && outcome.content).toContain('"number":12')
 
-    expect(await executeTool('report_issue', { app: 'workout-tracker', title: 'x', body: 'y' }, { actions, issues })).toEqual({ ok: false, error: 'app must be one of my-brain, my-mail' })
+    expect(await executeTool('report_issue', { app: 'workout-tracker', title: 'squat log loses the weight', body: 'the weight goes back to zero' }, { actions, issues })).toMatchObject({ ok: true })
+    expect(file).toHaveBeenLastCalledWith('workout-tracker', 'squat log loses the weight', 'the weight goes back to zero')
+    expect(await executeTool('report_issue', { app: 'my-notes', title: 'x', body: 'y' }, { actions, issues })).toEqual({ ok: false, error: 'app must be one of my-brain, my-mail, workout-tracker' })
     // A report too long to file whole is refused, so what goes up is never a cut version of what was approved.
     expect((await executeTool('report_issue', { app: 'my-brain', title: 'x', body: 'y'.repeat(issueBodyLimit + 1) }, { actions, issues })).ok).toBe(false)
     expect(await executeTool('report_issue', { app: 'my-brain', title: 'x', body: 'y' }, { actions })).toEqual({ ok: false, error: 'report issues is off' })
-    expect(file).toHaveBeenCalledTimes(1)
+    expect(file).toHaveBeenCalledTimes(2)
+  })
+
+  it('offers workout tracker as a third app, named plainly on the card', async () => {
+    const tool = companionTools({ hasVault: false, hasIssues: true }).find((item) => item.name === 'report_issue')
+    expect(JSON.stringify(tool?.input_schema)).toContain('"workout-tracker"')
+    const description = await describeAction('report_issue', { app: 'workout-tracker', title: 'timer stops', body: 'the rest timer stops when the screen locks' }, { actions })
+    expect(description?.weight).toBe('heavy')
+    expect(description?.fields).toContainEqual({ label: 'app', value: 'workout tracker' })
+    expect(description?.fields).toContainEqual({ label: 'seen by', value: 'anyone on github' })
+    expect(buildSystemPrompt({ domain: 'personal', summary, vaultAvailable: false, issuesAvailable: true })).toContain('workout-tracker')
   })
 
   it('tells the model about it only with a token, and to keep personal things out', () => {
@@ -98,13 +110,26 @@ describe('github issues', () => {
     await expect(fakeGitHub(() => ({ status: 404 })).issues.list()).rejects.toThrow('the issue token cannot reach chase-grey/my-brain')
   })
 
-  it('lists what the app filed in both repos, without the pull requests', async () => {
-    const { calls, issues } = fakeGitHub((call) => ({ json: call.url.includes('my-mail') ? [] : [
+  it('files a workout tracker issue to its own repo', async () => {
+    const { calls, issues } = fakeGitHub((call) => call.url.endsWith('/issues') ? { status: 201, json: { number: 9, html_url: 'https://github.com/chase-grey/workout-tracker/issues/9' } } : { status: 204 })
+    expect((await issues.file('workout-tracker', 'timer stops', 'the rest timer stops')).number).toBe(9)
+    expect(calls.map((call) => `${call.method} ${call.url}`)).toEqual(['POST /repos/chase-grey/workout-tracker/issues', 'PUT /repos/chase-grey/workout-tracker/issues/9/lock'])
+  })
+
+  it('still lists the other repos when the token cannot reach one of them', async () => {
+    const { issues } = fakeGitHub((call) => call.url.includes('workout-tracker') ? { status: 404 } : { json: call.url.includes('my-mail') ? [] : [
+      { number: 3, title: 'wheel clips', html_url: 'u3', state: 'open', closed_at: null, labels: [] },
+    ] })
+    expect((await issues.list()).map((item) => item.number)).toEqual([3])
+  })
+
+  it('lists what the app filed in every repo, without the pull requests', async () => {
+    const { calls, issues } = fakeGitHub((call) => ({ json: call.url.includes('my-mail') || call.url.includes('workout-tracker') ? [] : [
       { number: 3, title: 'wheel clips', html_url: 'u3', state: 'open', closed_at: null, labels: [{ name: 'from-app' }, { name: 'needs-input' }] },
       { number: 4, title: 'a fix', html_url: 'u4', state: 'open', closed_at: null, labels: [], pull_request: {} },
     ] }))
     expect(await issues.list()).toEqual([{ app: 'my-brain', number: 3, title: 'wheel clips', url: 'u3', state: 'open', labels: ['from-app', 'needs-input'], closedAt: '' }])
-    expect(calls.map((call) => call.url)).toEqual(['/repos/chase-grey/my-brain/issues?labels=from-app&state=all&per_page=50&sort=created&direction=desc', '/repos/chase-grey/my-mail/issues?labels=from-app&state=all&per_page=50&sort=created&direction=desc'])
+    expect(calls.map((call) => call.url)).toEqual(['/repos/chase-grey/my-brain/issues?labels=from-app&state=all&per_page=50&sort=created&direction=desc', '/repos/chase-grey/my-mail/issues?labels=from-app&state=all&per_page=50&sort=created&direction=desc', '/repos/chase-grey/workout-tracker/issues?labels=from-app&state=all&per_page=50&sort=created&direction=desc'])
   })
 
   it('reads the fixer\'s question off the newest comment and hands the issue back with the answer', async () => {
