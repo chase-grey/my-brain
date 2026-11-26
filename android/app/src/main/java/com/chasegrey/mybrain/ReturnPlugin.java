@@ -29,8 +29,12 @@ import java.util.TimeZone;
  * address it was redirected to: it goes to the network, where nothing is listening, and shows "webpage not available".
  * Loading the same address again from here does go through the shell.
  *
- * Only a page that is away is brought back. The app moving within itself (reloading onto an update) is left to the
- * webview: loading the address it is already on, from here, would not reload anything.
+ * When microsoft already knows who is signing in it answers without showing a page, so the webview never leaves the
+ * app's address and the answer arrives as a move to the address it is already on. Loading that from here would only
+ * change what follows the # and start nothing, which left the app waiting until the sign-in timed out. Such an
+ * answer is loaded with ?back= added, which makes it a page of its own; the app takes that off as it starts.
+ *
+ * The app moving within itself with no answer (reloading onto an update) is left to the webview.
  *
  * It also keeps the webview's side of a sign-in for the sign-in log (src/signInLog.ts): where the page went, by
  * address without anything after ? or #, and what failed to load. The app cannot be inspected from a computer.
@@ -56,9 +60,10 @@ public class ReturnPlugin extends Plugin {
         String from = webView.getUrl();
         boolean toApp = isApp(url);
         boolean away = from != null && !isApp(Uri.parse(from));
-        if (toApp || away) note("going to " + place(url) + " from " + (from == null ? "nothing" : place(Uri.parse(from))) + (toApp && away ? ", loaded by the shell" : ""));
-        if (!toApp || !away) return null;
-        String address = url.toString();
+        if (toApp || away) note("going to " + place(url) + " from " + (from == null ? "nothing" : place(Uri.parse(from))) + (toApp && away ? ", loaded by the shell" : toApp && !place(url).equals(placeOnly(url)) ? ", loaded by the shell as a new page" : ""));
+        boolean answer = !place(url).equals(placeOnly(url));
+        if (!toApp || (!away && !answer)) return null;
+        String address = away ? url.toString() : url.buildUpon().appendQueryParameter("back", String.valueOf(System.currentTimeMillis())).build().toString();
         webView.post(() -> webView.loadUrl(address));
         return true;
     }
@@ -83,9 +88,14 @@ public class ReturnPlugin extends Plugin {
     private static String place(Uri url) {
         String fragment = url.getEncodedFragment();
         String query = url.getEncodedQuery();
-        String carried = (fragment == null ? "" : fragment) + "&" + (query == null ? "" : query);
-        String answer = carried.contains("code=") ? " (with a code)" : carried.contains("error=") ? " (with an error)" : "";
-        return url.getScheme() + "://" + url.getHost() + (url.getPath() == null ? "" : url.getPath()) + answer;
+        String carried = "&" + (fragment == null ? "" : fragment) + "&" + (query == null ? "" : query);
+        boolean signIn = carried.contains("&state=");
+        String answer = signIn && carried.contains("&code=") ? " (with a code)" : signIn && carried.contains("&error=") ? " (with an error)" : "";
+        return placeOnly(url) + answer;
+    }
+
+    private static String placeOnly(Uri url) {
+        return url.getScheme() + "://" + url.getHost() + (url.getPath() == null ? "" : url.getPath());
     }
 
     private void note(String line) {

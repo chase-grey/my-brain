@@ -10,6 +10,10 @@ import { applyAccent, loadAccent } from './accent'
 import { holdPlace, isSignInResponse, signInArrival, takeSignInResponse } from './signInReturn'
 import { answerShape, noteSignIn } from './signInLog'
 
+// The android shell adds ?back= to an answer that arrives at the address the webview is already on, so that it
+// loads as a page of its own (ReturnPlugin.java). It is taken off before anything reads the address.
+if (/^\?back=\d+$/.test(window.location.search)) history.replaceState(null, '', `${window.location.pathname}${window.location.hash}`)
+
 // Microsoft sends the sign-in popup, and the hidden frame that renews a sign-in, back to this page with the result in the url.
 const arrival = signInArrival(isSignInResponse(), window.parent !== window || Boolean(window.opener), isNativeApp())
 // A page that arrives with microsoft's answer, or inside a frame, is part of a sign-in: the log says how it was taken.
