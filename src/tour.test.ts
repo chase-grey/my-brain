@@ -22,7 +22,7 @@ describe('what the welcome picks lead to', () => {
   })
 
   it('leaves out the steps for what was not picked', () => {
-    expect(ids(fresh(['tasks']))).toEqual(['today', 'new', 'progress', 'chat', 'settings'])
+    expect(ids(fresh(['tasks']))).toEqual(['today', 'new', 'tasks', 'progress', 'chat', 'settings'])
     expect(ids(fresh(['notes', 'trips']))).toEqual(['today', 'progress', 'chat', 'notes', 'trips', 'settings'])
     // The other apps have no screen here to be shown.
     expect(ids(fresh(['email', 'workouts']))).toEqual(['today', 'progress', 'chat', 'settings'])
@@ -50,13 +50,13 @@ describe('the tour', () => {
       shown.push(step.id)
       guide = advance(steps, guide, step.id)
     }
-    expect(shown).toEqual(['today', 'new', 'progress', 'settings'])
+    expect(shown).toEqual(['today', 'new', 'tasks', 'progress', 'settings'])
     expect(guide.done).toBe(true)
   })
 
   it('counts where a step falls', () => {
     const steps = stepsFor(fresh(['tasks']), false)
-    expect(stepPosition(steps, steps[1])).toEqual({ index: 2, total: 4 })
+    expect(stepPosition(steps, steps[1])).toEqual({ index: 2, total: 5 })
   })
 
   it('stays over once skipped, and keeps the picks when started again', () => {

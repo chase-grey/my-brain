@@ -1,6 +1,7 @@
 // Stroke icons on a 24x24 grid using currentColor.
 const paths = {
   today: 'M12 4v2M12 18v2M4 12h2M18 12h2M6.3 6.3l1.4 1.4M16.3 16.3l1.4 1.4M6.3 17.7l1.4-1.4M16.3 7.7l1.4-1.4M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z',
+  tasks: 'M4 7l1.5 1.5L8 6M4 12.5l1.5 1.5L8 11.5M4 18l1.5 1.5L8 17M11 7.5h9M11 13h9M11 18.5h9',
   progress: 'M5 19V12M10 19V6M15 19v-4M20 19V9',
   chat: 'M5 5h14a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-8l-4 3v-3H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z',
   more: 'M5 12h.01M12 12h.01M19 12h.01',

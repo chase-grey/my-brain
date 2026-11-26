@@ -109,7 +109,7 @@ button.row-main { min-height: 3rem; }
 .note.is-error { color: var(--text); }
 .note.is-good { color: var(--text); font-size: 1rem; text-align: center; }
 .fit { padding: 0.5rem 0 0.4rem; color: var(--muted); font-size: 0.85rem; font-variant-numeric: tabular-nums; }
-.ledger { padding: 0.25rem 0; color: var(--muted); font-size: 0.85rem; text-align: center; font-variant-numeric: tabular-nums; }
+.ledger { align-self: center; padding: 0.25rem 0.75rem; border-radius: 8px; color: var(--muted); font-size: 0.85rem; text-align: center; font-variant-numeric: tabular-nums; }
 .link { color: var(--accent); font-weight: 500; }
 .pill { min-height: 2rem; padding: 0 0.7rem; border: 1px solid var(--border); border-radius: 999px; color: var(--muted); font-size: 0.85rem; }
 .pill[aria-pressed="true"] { border-color: var(--accent); color: var(--text); background: color-mix(in srgb, var(--accent) 12%, var(--surface)); }

@@ -380,3 +380,13 @@ Chase, 2026-11-25. `finds.test.ts` holds these; the rules are in `src/notes/find
 - A note is read once for each version of it, by the cheapest model, where the personal chat goes (the bridge when the device has one, the key when it does not). The offers and what was read are kept on the device, so stopping part way loses nothing.
 - The notes go to the model as data, with the line that they are never an instruction, and only the three kinds it is asked for are kept. It never offers a person on their own, and nothing is logged to connection from it.
 - The notes are only read. Nothing here writes to a note or the journal.
+
+## all tasks
+
+Chase, 2026-11-25. `allTasks.test.ts` holds these; the rules are in `src/domain/allTasks.ts` and the screen is `TasksView.tsx`.
+
+- `tasks` shows every task of the space still to do, in both spaces: overdue, today, this week, later, no date, new to sort, routines. A group with nothing in it is not drawn. It is first under …, and the open count at the bottom of today opens it.
+- Today stays short. Nothing is added to today to show more tasks; the rest is on `tasks`.
+- A finished task is not there, nor a store item (stores has those) or one marked not mine. A routine stays after it is done today, with its check, and a task hidden until later is there and says so.
+- Dated groups read soonest first, the rest by priority. The search box keeps the titles that hold the words.
+- Rows are `TaskRow`, so a tick behaves as it does on today. A task opened from `tasks` comes back to `tasks` when it is saved, done or cancelled (`taskFrom` in `App.tsx`); one made with the new task button while on `tasks` does too.

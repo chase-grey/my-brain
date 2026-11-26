@@ -96,7 +96,7 @@ export function CalendarCard({ events }: { events: CalendarBlock[] }) {
   </Card>
 }
 
-export function TodayView({ domain, currentDay, place, placeOverride, onPlaceOverride, gone, onGone, commitments, weeklyCommitments, habits, habitEntries, onHabitPart, plan, pickedMin, energy, onMinutes, onEnergy, weekPaid, floorToday, strategicTodayMin, onFloorNight, onStrategic, untriaged, guesses, projects, onConfirm, openCount, openMin, onToggle, onOpen, doneTasks, calendar, inbox, mailAppUrl, sessions = [], canPlanProject = false, onPlanProject, onProject, onProjectOff }: {
+export function TodayView({ domain, currentDay, place, placeOverride, onPlaceOverride, gone, onGone, commitments, weeklyCommitments, habits, habitEntries, onHabitPart, plan, pickedMin, energy, onMinutes, onEnergy, weekPaid, floorToday, strategicTodayMin, onFloorNight, onStrategic, untriaged, guesses, projects, onConfirm, onTasks, openCount, openMin, onToggle, onOpen, doneTasks, calendar, inbox, mailAppUrl, sessions = [], canPlanProject = false, onPlanProject, onProject, onProjectOff }: {
   /** The projects pulled into today, each with the steps picked for it. */
   sessions?: ProjectSession[]
   /** There is a project with steps left that is not on today yet. */
@@ -131,6 +131,8 @@ export function TodayView({ domain, currentDay, place, placeOverride, onPlaceOve
   guesses: Record<string, TaskGuess>
   projects: Pick<Project, 'id' | 'title'>[]
   onConfirm: (id: string) => void
+  /** Opens the tasks screen, where everything still to do is. */
+  onTasks?: () => void
   openCount: number
   openMin: number
   onToggle: (id: string) => void
@@ -190,6 +192,6 @@ export function TodayView({ domain, currentDay, place, placeOverride, onPlaceOve
 
     <DoneTodayCard tasks={doneTasks} onToggle={onToggle} onOpen={onOpen} />
 
-    {!gone && <p className="ledger">{openCount} open · {duration(openMin)}</p>}
+    {!gone && <button className="ledger link" type="button" onClick={onTasks}>{openCount} open · {duration(openMin)}</button>}
   </>
 }

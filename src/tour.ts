@@ -30,7 +30,7 @@ export function appOffers(picked: readonly Use[], link: (url: string) => string 
 }
 
 /** The screens a step can open behind its card. */
-export type TourView = 'today' | 'progress' | 'chat' | 'notes' | 'trips' | 'goals' | 'settings'
+export type TourView = 'today' | 'tasks' | 'progress' | 'chat' | 'notes' | 'trips' | 'goals' | 'settings'
 
 export type TourStep = {
   id: string
@@ -46,10 +46,11 @@ export type TourStep = {
   needsAi?: boolean
 }
 
-/** In the order they are shown: today, then along the bar, then what sits behind …. */
+/** In the order they are shown: today and what it is short for, then along the bar, then what sits behind …. */
 export const tourSteps: readonly TourStep[] = [
   { id: 'today', view: 'today', target: 'today', title: 'today', body: 'what is due, and what there is time for. it stays short on purpose, so the day never starts as a wall of everything.' },
   { id: 'new', view: 'today', target: 'new', title: 'new task', needs: 'tasks', body: 'put a thing down the moment you think of it. it waits under new to sort, so nothing has to be decided right then.' },
+  { id: 'tasks', view: 'tasks', target: 'tasks', title: 'tasks', needs: 'tasks', body: 'everything still to do, by when it is due. today can stay short because the rest is kept here.' },
   { id: 'progress', view: 'progress', target: 'progress', title: 'progress', body: 'eight areas of your life on one wheel. a full week can hide what has gone quiet; the wheel shows it.' },
   { id: 'chat', view: 'chat', target: 'chat', title: 'chat', needsAi: true, body: 'it sees your tasks, goals and calendar, and can change them for you. ask it to plan your week.' },
   { id: 'notes', view: 'notes', target: 'notes', title: 'notes', needs: 'notes', body: 'notes, and a journal with a page for each day. they save themselves, and your words are only tidied when you ask.' },

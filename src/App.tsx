@@ -55,6 +55,7 @@ import { bumpsBetween, recordBumps } from './review/bumpLog'
 import { useReviews } from './review/useReviews'
 import { GoalsView, type GoalEdit } from './views/GoalsView'
 import { StoresView } from './views/StoresView'
+import { TasksView } from './views/TasksView'
 import { SettingsView, type ConnectionStatus } from './views/SettingsView'
 import { UpdateToast } from './views/UpdateToast'
 import { checkForUpdate, holdUpdates, useAppUpdate } from './appUpdate'
@@ -69,12 +70,13 @@ import { currentStep, stepsFor, useGuide } from './tour'
 import { SetupLanding, landsOnInstall } from './views/SetupLanding'
 import { openInChrome, useInstallPrompt } from './installPrompt'
 
-type View = 'today' | 'progress' | 'dashboard' | 'chat' | 'notes' | 'journal' | 'stores' | 'trips' | 'goals' | 'settings' | 'task'
+type View = 'today' | 'tasks' | 'progress' | 'dashboard' | 'chat' | 'notes' | 'journal' | 'stores' | 'trips' | 'goals' | 'settings' | 'task'
 const taskStorageKey = (domain: Domain) => `my-brain.${domain}.tasks.v1`
 const dockedQuery = '(min-width: 87.5rem)'
 // Work reviews a dashboard where personal reviews progress; the other tab moves under more.
 /** The screens past the main ones: under … on the phone, and on the rail itself wherever a monitor has the room (src/rail.ts). */
 const moreViewsFor = (domain: Domain): { view: View; icon: IconName }[] => [
+  { view: 'tasks', icon: 'tasks' },
   // Personal has notes, with the journal a folder inside them. Work has the journal alone, kept on the work pc.
   { view: domain === 'personal' ? 'notes' : 'journal', icon: 'journal' },
   ...(domain === 'personal' ? [{ view: 'stores', icon: 'stores' }, { view: 'trips', icon: 'trips' }] as const : [{ view: 'progress', icon: 'progress' }] as const),
@@ -92,8 +94,8 @@ const NotesView = lazy(() => import('./notes/NotesView').then((module) => ({ def
 const ChatView = lazy(() => import('./companion/ChatView').then((module) => ({ default: module.ChatView })))
 const ShareLanding = lazy(() => import('./transcripts/ShareLanding'))
 /** The screens made of cards, which src/fitColumns.ts lays out to fit a monitor. */
-const deckViews: View[] = ['today', 'progress', 'goals', 'settings', 'trips']
-const views: View[] = ['today', 'progress', 'dashboard', 'chat', 'notes', 'journal', 'stores', 'trips', 'goals', 'settings', 'task']
+const deckViews: View[] = ['today', 'tasks', 'progress', 'goals', 'settings', 'trips']
+const views: View[] = ['today', 'tasks', 'progress', 'dashboard', 'chat', 'notes', 'journal', 'stores', 'trips', 'goals', 'settings', 'task']
 
 function parseHash(): { view: View; taskId?: string } {
   if (typeof location === 'undefined') return { view: 'today' }
@@ -258,6 +260,9 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
   // Captured before the hash effect normalizes it, like the two above. Mail is personal, so the chat it opens is too.
   const [mailId, setMailId] = useState(() => typeof location === 'undefined' ? undefined : mailIdFromHash(location.hash))
   const [editingTaskId, setEditingTaskId] = useState<string | undefined>(() => parseHash().taskId)
+  // The list a task was opened from, to go back to when it is left: the tasks screen, or today.
+  const taskFrom = useRef<View>('today')
+  const noteTaskFrom = () => { if (view !== 'task') taskFrom.current = view === 'tasks' ? 'tasks' : 'today' }
   // A project open over the screen: its steps, or with `planning` the steps to work on today.
   const [projectOpen, setProjectOpen] = useState<{ id?: string; planning?: boolean }>()
   const [personalData, setPersonalData] = useState<PersonalGraphData>()
@@ -419,6 +424,7 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
   const sortingOn = useRef(false)
 
   function startAddingTask() {
+    noteTaskFrom()
     setEditingTaskId(undefined)
     setView('task')
   }
@@ -835,7 +841,7 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
       setActiveStore(task.storeType)
       setView('stores')
     } else {
-      setView('today')
+      setView(taskFrom.current)
     }
   }
 
@@ -1000,6 +1006,7 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
       if (step) setProjectOpen({ id: step.projectId })
       return
     }
+    noteTaskFrom()
     setEditingTaskId(id)
     setView('task')
   }
@@ -1010,7 +1017,7 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
     return nextToSort(tasksRef.current.filter((task) => task.domain === activeDomain && toSort(task)), id)
   }
 
-  /** Leaves a task that is dealt with: on to the next one to sort while sorting, back to today otherwise. */
+  /** Leaves a task that is dealt with: on to the next one to sort while sorting, back to the list it was opened from otherwise. */
   function leaveTask(next: string | undefined) {
     if (next) {
       sortingOn.current = true
@@ -1018,7 +1025,7 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
       return
     }
     setEditingTaskId(undefined)
-    setView('today')
+    setView(taskFrom.current)
   }
 
   function deleteTask(id: string) {
@@ -1180,9 +1187,10 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
           weekPaid={weekPaid} floorToday={floorToday} strategicTodayMin={strategicTodayMin}
           onFloorNight={() => setProduct((current) => ({ ...current, dayOverrides: [...current.dayOverrides, { date: currentDay, domain: activeDomain, kind: 'floor' }] }))}
           onStrategic={(minutes) => setProduct((current) => ({ ...current, activities: [...current.activities, { id: newId('activity'), domain: activeDomain, kind: 'strategic', occurredAt: new Date().toISOString(), minutes }] }))}
-          untriaged={untriaged} guesses={guesses} projects={activeProjects} onConfirm={confirmGuess} openCount={openTasks.length} openMin={openEstimate} onToggle={toggleComplete} onOpen={editTask} doneTasks={doneToday(tasks, product.activities, currentDay, activeDomain, stepsDoneOn(product, currentDay, activeDomain))}
+          untriaged={untriaged} guesses={guesses} projects={activeProjects} onConfirm={confirmGuess} onTasks={() => setView('tasks')} openCount={openTasks.length} openMin={openEstimate} onToggle={toggleComplete} onOpen={editTask} doneTasks={doneToday(tasks, product.activities, currentDay, activeDomain, stepsDoneOn(product, currentDay, activeDomain))}
           sessions={sessions} canPlanProject={planProjects.some((project) => !sessions.some((session) => session.project.id === project.id && session.open.length))} onPlanProject={() => setProjectOpen({ planning: true })} onProject={openProject} onProjectOff={(id) => setProduct((current) => withoutSession(current, id, currentDay))}
           calendar={eventsOn(calendarEvents, currentDay)} inbox={activeDomain === 'personal' ? inboxCounts : undefined} mailAppUrl={activeDomain === 'personal' ? besideThisApp(settings.mailAppUrl) : ''} />}
+        {shownView === 'tasks' && <TasksView domain={activeDomain} tasks={tasks} currentDay={currentDay} projects={activeProjects} onToggle={toggleComplete} onOpen={editTask} />}
         {shownView === 'dashboard' && <WorkScreens currentDay={currentDay} />}
         {shownView === 'progress' && <ProgressView domain={activeDomain} product={product} tasks={tasks} journalVault={activeDomain === 'personal' ? tripVault ?? (connectionStatus === 'connected' ? personalData?.notes : undefined) : undefined} currentDay={currentDay} heldEvents={heldEvents} onProduct={setProduct} onGoals={() => setView('goals')} onReview={reviews.open} readMoney={activeDomain === 'personal' ? moneyReader(settings) : undefined} findsModel={activeDomain === 'personal' && settings.aiMode !== 'off' ? () => guessModel('personal', settings) : undefined} onProject={openProject} />}
         {shownView === 'chat' && chat}
@@ -1191,7 +1199,7 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
         {(shownView === 'notes' || shownView === 'journal') && <Suspense fallback={<header className="view-head"><h1>{shownView}</h1></header>}><NotesView key={activeDomain} domain={activeDomain} settings={settings} vault={activeDomain === 'personal' ? tripVault ?? (connectionStatus === 'connected' ? personalData?.notes : undefined) : workJournal} onSettings={() => setView('settings')} onChat={(attachment) => { setChatAttachment(attachment); setView('chat') }} /></Suspense>}
         {shownView === 'trips' && <TripsView vault={tripVault} currentDay={currentDay} onSettings={() => setView('settings')} />}
         {shownView === 'settings' && <SettingsView domain={activeDomain} accountName={accountName} connectionStatus={connectionStatus} settings={settings} syncing={syncing} syncedAt={syncedAt[activeDomain]} syncError={syncError} canInstall={install.canPrompt} onInstall={() => void install.install()} onConnect={connectPersonal} onDisconnect={disconnectPersonal} onSync={() => { void (activeDomain === 'work' ? syncWork() : syncPersonal(personalData, true)) }} onSettings={changeSettings} account={account} onAccount={markAccountChanged} />}
-        {shownView === 'task' && <TaskPage key={editingTaskId ?? 'new'} domain={activeDomain} existingTask={tasks.find((task) => task.id === editingTaskId)} guess={editingTaskId ? guesses[editingTaskId] : undefined} projects={activeProjects} onAdd={addTask} onUpdate={updateTask} onDelete={deleteTask} onDone={finishTask} onNotMine={delegateTask} onChat={(attachment) => { setChatAttachment(attachment); if (!docked) setView('chat') }} onCancel={() => { setEditingTaskId(undefined); setView('today') }} blocks={editingTaskId ? blocksFor(product.timeBlocks, { taskId: editingTaskId }) : []} onBlock={canBlock ? blockTime : undefined} onUnblock={(id) => holdAction(() => unblockTime(id))} />}
+        {shownView === 'task' && <TaskPage key={editingTaskId ?? 'new'} domain={activeDomain} existingTask={tasks.find((task) => task.id === editingTaskId)} guess={editingTaskId ? guesses[editingTaskId] : undefined} projects={activeProjects} onAdd={addTask} onUpdate={updateTask} onDelete={deleteTask} onDone={finishTask} onNotMine={delegateTask} onChat={(attachment) => { setChatAttachment(attachment); if (!docked) setView('chat') }} onCancel={() => { setEditingTaskId(undefined); setView(taskFrom.current) }} blocks={editingTaskId ? blocksFor(product.timeBlocks, { taskId: editingTaskId }) : []} onBlock={canBlock ? blockTime : undefined} onUnblock={(id) => holdAction(() => unblockTime(id))} />}
       </div>
 
       {shownView !== 'task' && <nav className="tabbar" aria-label="primary">

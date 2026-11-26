@@ -38,7 +38,7 @@ export function todayCommitments(tasks: Task[], today: string, domain: Domain = 
   })
 }
 
-function endOfWeek(today: string): string {
+export function endOfWeek(today: string): string {
   const date = new Date(`${today}T00:00:00.000Z`)
   const daysUntilSunday = (7 - date.getUTCDay()) % 7
   date.setUTCDate(date.getUTCDate() + daysUntilSunday)
@@ -68,7 +68,7 @@ function isEligible(task: Task, input: NowInput): boolean {
   return surfaces(task, input.today, input.weeklyCapacityMin)
 }
 
-function compareCandidates(a: Task, b: Task): number {
+export function compareCandidates(a: Task, b: Task): number {
   if (a.priority !== b.priority) return a.priority - b.priority
   if (a.dueDate !== b.dueDate) {
     if (!a.dueDate) return 1
