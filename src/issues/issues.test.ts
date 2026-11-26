@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { describeAction } from '../companion/actions'
 import { buildSystemPrompt } from '../companion/companionPrompt'
@@ -83,6 +85,14 @@ describe('reporting an issue from chat', () => {
     expect(withIssues).toContain('public')
     expect(buildSystemPrompt({ domain: 'personal', summary, vaultAvailable: false })).not.toContain('report_issue')
     expect(buildSystemPrompt({ domain: 'work', summary, vaultAvailable: false })).not.toContain('report_issue')
+  })
+
+  it('leaves report issues on for the open chat: only its switch changes it, never a filed report', () => {
+    const chat = readFileSync(join(process.cwd(), 'src', 'companion', 'ChatView.tsx'), 'utf8')
+    expect(chat).toContain('const [reporting, setReporting] = useState(false)')
+    // The one other mention is the switch itself.
+    expect(chat.match(/setReporting\(/g)).toHaveLength(1)
+    expect(chat).toContain('onChange={(event) => setReporting(event.target.checked)}')
   })
 
   it('carries the issue token to the other devices with the other keys', () => {

@@ -460,7 +460,6 @@ export function ChatView({ domain, owner = false, settings, actions, summary, ha
     try {
       const decision = await pending.decide(approvalId, approved)
       if (decision.undo) undosRef.current.set(approvalId, decision.undo)
-      if (decision.action.tool === 'report_issue' && decision.action.status === 'done') setReporting(false)
       update({ ...conversationRef.current, turns: withAction(conversationRef.current.turns, approvalId, decision.action) })
       if (decision.reply) absorb(decision.reply)
     } catch (error) {
