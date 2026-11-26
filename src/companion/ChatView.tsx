@@ -234,9 +234,9 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
   const journalStore = useMemo<JournalStore | undefined>(() => domain === 'work' ? new WorkJournal() : vault, [domain, vault])
 
   const companion = useMemo<Companion | undefined>(() => {
-    const systemPrompt = (memoryIndex?: string) => buildSystemPrompt({ domain, summary: summaryRef.current, vaultAvailable: domain === 'work' ? true : hasVault, memoryIndex, notes: fallbackVault ? 'onedrive' : 'homebase', userName, mailAvailable: domain === 'personal' && Boolean(mailRef.current), issuesAvailable: Boolean(issues), mail: conversationRef.current.mail })
+    const systemPrompt = (memoryIndex?: string) => buildSystemPrompt({ domain, summary: summaryRef.current, vaultAvailable: domain === 'work' ? true : hasVault, memoryIndex, notes: fallbackVault ? 'onedrive' : 'homebase', userName, mailAvailable: domain === 'personal' && Boolean(mailRef.current), issuesAvailable: Boolean(issues), mail: conversationRef.current.mail, canBlockTime: domain === 'work' ? Boolean(actionsRef.current.blockTime) : hasCalendarRef.current && Boolean(actionsRef.current.blockTime) })
     if (domain === 'work') {
-      return createBridgeCompanion({ client: new BridgeCompanionClient(), sessionId: () => conversationRef.current.sessionId, systemPrompt, model: modelShortName(model), effort: settings.chatEffort })
+      return createBridgeCompanion({ client: new BridgeCompanionClient(), sessionId: () => conversationRef.current.sessionId, systemPrompt, model: modelShortName(model), effort: settings.chatEffort, actions: () => actionsRef.current })
     }
     if (!hasKey) return undefined
     const keyClient = () => usesAnthropic(domain, settings) ? new AnthropicClient(apiKey) : new OpenAiCompatClient(apiKey, baseUrl, provider.id === 'custom' ? 'the ai service' : provider.label)

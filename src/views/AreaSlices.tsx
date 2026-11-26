@@ -5,6 +5,7 @@ import {
   type AreaContext, type AreaReading, type AreaThing, type Challenge, type ChallengeCounts, type ChallengeStanding, type CheckArea, type Happy,
 } from '../domain/areas'
 import type { RingArc } from '../domain/lifeRing'
+import { stepsLeftMin } from '../domain/projectSteps'
 import type { Task } from '../domain/types'
 import { duration, newId, shortDate } from '../format'
 import { Icon } from '../navIcons'
@@ -184,7 +185,7 @@ function Reading({ product, today, onProduct }: { product: ProductState; today: 
 }
 
 /** One of the five areas judged by answers: its things, its challenges, and what was logged. */
-export function AreaDetail({ arc, product, tasks = [], today, journalDays, onProduct, onGoals }: { arc: RingArc; product: ProductState; tasks?: Task[]; today: string; journalDays: string[]; onProduct: SetProduct; onGoals: () => void }) {
+export function AreaDetail({ arc, product, tasks = [], today, journalDays, onProduct, onGoals, onProject }: { arc: RingArc; product: ProductState; tasks?: Task[]; today: string; journalDays: string[]; onProduct: SetProduct; onGoals: () => void; /** Opens a project's steps. */ onProject?: (id: string) => void }) {
   const reading = arc.area!
   const area = reading.area
   const context = contextOf(product, journalDays)
@@ -209,7 +210,7 @@ export function AreaDetail({ arc, product, tasks = [], today, journalDays, onPro
         const work = projectWork(project, product, product.activities, today)
         if (work.tasks) parts.push(`${work.tasks} ${work.tasks === 1 ? 'task' : 'tasks'}`)
         if (work.minutes) parts.push(duration(work.minutes))
-        const left = tasks.filter((task) => task.projectId === project.id && !task.completed).reduce((sum, task) => sum + task.estimateMin, 0)
+        const left = tasks.filter((task) => task.projectId === project.id && !task.completed).reduce((sum, task) => sum + task.estimateMin, 0) + stepsLeftMin(product, project.id)
         if (left) parts.push(`${duration(left)} left`)
       }
     }
@@ -225,7 +226,7 @@ export function AreaDetail({ arc, product, tasks = [], today, journalDays, onPro
       </>}
       {things.length > 0 && <ul className="things">{things.map(({ thing: item, due }) => <li key={item.id}>
         {area === 'projects'
-          ? <div className="thing-head"><span className="row-title">{item.title}</span><small>{meta(item)}{due && item.happy ? <strong>{meta(item) ? ' · ' : ''}due</strong> : null}</small></div>
+          ? <button className="thing-head" type="button" onClick={() => onProject?.(item.id.replace(/^project:/, ''))}><span className="row-title">{item.title}</span><small>{meta(item)}{due && item.happy ? <strong>{meta(item) ? ' · ' : ''}due</strong> : null}</small></button>
           : <button className="thing-head" type="button" onClick={() => setThing(item)}><span className="row-title">{item.title}</span><small>{meta(item)}{due && item.happy ? <strong>{meta(item) ? ' · ' : ''}due</strong> : null}</small></button>}
         <HappyPick thing={item} today={today} onProduct={onProduct} />
       </li>)}</ul>}

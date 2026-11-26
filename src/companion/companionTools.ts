@@ -1,6 +1,8 @@
 import type { CalendarBlock } from '../data/calendarGraphProvider'
 import { localMoment, upcoming, validMoment } from '../domain/remind'
 import type { FreeNow } from '../domain/calendar'
+import { blockProblem, validBlockStart, type BlockInput, type TimeBlock } from '../domain/timeBlock'
+import type { ProjectStep } from '../domain/projectSteps'
 import { MONEY_FIGURES, type MoneyAccount, type MoneyFigure } from '../domain/money'
 import type { Domain, Goal, Horizon, Plan, Priority, Project, Task } from '../domain/types'
 import type { AnthropicTool } from './anthropicClient'
@@ -34,6 +36,9 @@ export type PlanSummary = {
 }
 export type CalendarSummary = Pick<CalendarBlock, 'subject' | 'start' | 'end' | 'isAllDay'>
 
+/** A project's step as the chat sees it. */
+export type StepSummary = { id: string; title: string; estimateMin: number; done: boolean; onToday: boolean }
+export type BlockSummary = { id: string; title: string; start: string; end: string }
 export type NewTaskInput = { title: string; dueDate?: string; remindAt?: string; estimateMin?: number; priority?: Priority; notes?: string; projectId?: string }
 export type NewGoalInput = { title: string; horizon?: Horizon; targetDate?: string }
 export type GoalChanges = Partial<Pick<Goal, 'title' | 'status' | 'targetDate' | 'hoursCommitted' | 'funded' | 'shape' | 'scheduledOn'>>
@@ -54,6 +59,15 @@ export interface CompanionActions {
   updateGoal(id: string, changes: GoalChanges): GoalSummary | undefined
   removeGoal(id: string): void
   listProjects(): ProjectSummary[]
+  /** A project's steps in order, or nothing when the project is not one of this space's. */
+  listProjectSteps(projectId: string): StepSummary[] | undefined
+  /** Replaces the steps still open on a project, and hands back the way to put the old ones back. */
+  setProjectSteps(projectId: string, steps: { title: string; estimateMin?: number }[]): { steps: StepSummary[]; undo(): void } | undefined
+  /** Puts steps of a project on today. */
+  planProjectSession(projectId: string, stepIds: string[]): { steps: StepSummary[]; undo(): void } | undefined
+  /** Writes a busy event into this space's calendar. Left out while the calendar cannot be written. */
+  blockTime?(input: BlockInput): Promise<BlockSummary>
+  unblockTime?(id: string): Promise<void>
   listCalendar(): CalendarBlock[]
   holdGoal(id: string): Promise<GoalSummary>
   releaseGoal(id: string): Promise<void>
@@ -94,9 +108,16 @@ const taskTools: AnthropicTool[] = [
   { name: 'today_summary', description: 'Current view of today: due, overdue, this week, suggestions, available minutes, calendar.', input_schema: { type: 'object', properties: {} } },
 ]
 
+const projectTools: AnthropicTool[] = [
+  { name: 'list_project_steps', description: 'The steps of one project, in the order they would be done, with their ids, how long each takes, and whether it is done or on today.', input_schema: { type: 'object', properties: { project_id: { type: 'string' } }, required: ['project_id'] } },
+  { name: 'set_project_steps', description: 'Replace the steps still to do on a project with a new list, in the order they would be done: break the project down, reword, reorder, add or drop steps. Send the whole list, including the steps that stay; finished steps are kept as they are. The user approves the list in the app before it is saved.', input_schema: { type: 'object', properties: { project_id: { type: 'string' }, steps: { type: 'array', items: { type: 'object', properties: { title: { type: 'string' }, minutes: { type: 'integer', description: 'how long it takes' } }, required: ['title'] } } }, required: ['project_id', 'steps'] } },
+  { name: 'plan_project_session', description: 'Put steps of a project on today, for when the user says they are going to work on it and for how long. Read list_project_steps first and pick steps that fit the time, earliest first. The user approves the set in the app before it goes on today.', input_schema: { type: 'object', properties: { project_id: { type: 'string' }, step_ids: { type: 'array', items: { type: 'string' } } }, required: ['project_id', 'step_ids'] } },
+]
+
 const calendarTools: AnthropicTool[] = [
   { name: 'list_calendar', description: 'Personal calendar events for the next seven days, in local time.', input_schema: { type: 'object', properties: {} } },
-  { name: 'hold_in_calendar', description: 'Write a block goal\'s scheduled day into the personal calendar as a busy afternoon so the day stays free. Set scheduled_on with update_goal first.', input_schema: { type: 'object', properties: { id: { type: 'string', description: 'goal id' } }, required: ['id'] } },
+  { name: 'hold_in_calendar', description: 'Write a block goal\'s scheduled day into the personal calendar as a busy afternoon so the day stays free. Set scheduled_on with update_goal first. The user approves it in the app before anything is written.', input_schema: { type: 'object', properties: { id: { type: 'string', description: 'goal id' } }, required: ['id'] } },
+  { name: 'block_time', description: 'Block time in the calendar for a task or a project: a busy event on a day and at a time the user gave or agreed to. Never pick a day or a time they did not; list_calendar shows only the next seven days. The user approves it in the app before anything is written.', input_schema: { type: 'object', properties: { title: { type: 'string', description: 'what the time is for, as the event will be named' }, start: { type: 'string', description: 'when it starts, on their own clock, as YYYY-MM-DDTHH:MM' }, minutes: { type: 'integer', description: 'how long, from 15 minutes to 12 hours' }, task_id: { type: 'string', description: 'the task it is for, when there is one' }, project_id: { type: 'string', description: 'the project it is for, when there is one' } }, required: ['title', 'start', 'minutes'] } },
 ]
 
 const moneyTools: AnthropicTool[] = [
@@ -125,6 +146,7 @@ export function companionTools(options: { hasVault: boolean; hasCalendar?: boole
     ...(has('notes') ? [...noteTools, ...memoryTools] : []),
     ...(has('trips') ? tripTools : []),
     ...taskTools,
+    ...projectTools,
     ...(has('calendar') ? calendarTools : []),
     ...moneyTools,
     ...textTools,
@@ -179,6 +201,28 @@ function optionalEnum<T extends string>(input: Args, key: string, allowed: reado
   const value = optionalString(input, key)
   if (value !== undefined && !allowed.includes(value as T)) throw new Error(`${key} must be one of ${allowed.join(', ')}`)
   return value as T | undefined
+}
+
+/** The block a tool call asks for, checked the way the form checks one. */
+export function blockInput(input: Record<string, unknown>): BlockInput {
+  const title = requireString(input, 'title').trim()
+  const start = validBlockStart(requireString(input, 'start'))
+  if (!start) throw new Error('start must be YYYY-MM-DDTHH:MM')
+  const minutes = optionalNumber(input, 'minutes')
+  if (minutes === undefined) throw new Error('minutes is required')
+  const block: BlockInput = { title, start, minutes: Math.round(minutes), taskId: optionalString(input, 'task_id'), projectId: optionalString(input, 'project_id') }
+  const problem = blockProblem(block)
+  if (problem) throw new Error(problem)
+  return block
+}
+
+function stepList(input: Args): { title: string; estimateMin?: number }[] {
+  const listed = arg(input, 'steps')
+  if (!Array.isArray(listed)) throw new Error('steps must be a list')
+  return (listed as Record<string, unknown>[]).flatMap((step) => {
+    const title = step && typeof step === 'object' && typeof step.title === 'string' ? step.title.trim() : ''
+    return title ? [{ title, ...(typeof step.minutes === 'number' && step.minutes > 0 ? { estimateMin: step.minutes } : {}) }] : []
+  })
 }
 
 type RunResult = { result: unknown; undo?: Undo }
@@ -334,6 +378,29 @@ async function run(name: string, input: Args, { actions, vault, memoryFolder = '
       for (const key of Object.keys(changes) as (keyof GoalChanges)[]) (rollback as Record<string, unknown>)[key] = previous?.[key]
       return done(result, previous ? async () => { actions.updateGoal(id, rollback) } : undefined)
     }
+    case 'list_project_steps': {
+      const steps = actions.listProjectSteps(requireString(input, 'project_id'))
+      if (!steps) throw new Error('no project with that id')
+      return done(steps)
+    }
+    case 'set_project_steps': {
+      const saved = actions.setProjectSteps(requireString(input, 'project_id'), stepList(input))
+      if (!saved) throw new Error('no project with that id')
+      return done(saved.steps, async () => saved.undo())
+    }
+    case 'plan_project_session': {
+      const ids = arg(input, 'step_ids')
+      if (!Array.isArray(ids) || !ids.length) throw new Error('step_ids is required')
+      const planned = actions.planProjectSession(requireString(input, 'project_id'), ids.filter((id): id is string => typeof id === 'string'))
+      if (!planned) throw new Error('no project with that id')
+      if (!planned.steps.some((step) => step.onToday)) { planned.undo(); throw new Error('none of those steps are open on that project') }
+      return done(planned.steps.filter((step) => step.onToday), async () => planned.undo())
+    }
+    case 'block_time': {
+      if (!actions.blockTime) throw new Error('the calendar is not connected')
+      const block = await actions.blockTime(blockInput(input))
+      return done(block, actions.unblockTime ? () => actions.unblockTime!(block.id) : undefined)
+    }
     case 'list_calendar':
       return done(actions.listCalendar().map(summarizeEvent))
     case 'hold_in_calendar': {
@@ -403,6 +470,15 @@ export function summarizeGoal(goal: Goal): GoalSummary {
 export function summarizeEvent(event: CalendarBlock): CalendarSummary {
   const { subject, start, end, isAllDay } = event
   return { subject, start, end, isAllDay }
+}
+
+export function summarizeStep(step: ProjectStep, today: string): StepSummary {
+  return { id: step.id, title: step.title, estimateMin: step.estimateMin, done: Boolean(step.doneAt), onToday: step.planDate === today && !step.doneAt }
+}
+
+export function summarizeBlock(block: TimeBlock): BlockSummary {
+  const { id, title, start, end } = block
+  return { id, title, start, end }
 }
 
 export function summarizeProject(project: Project): ProjectSummary {

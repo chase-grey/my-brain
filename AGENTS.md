@@ -330,3 +330,39 @@ Chase, 2026-11-25. `issues.test.ts` holds the app side.
 - Settings lists what is open and what was fixed today, the ones waiting on Chase first. Older closed issues are left to GitHub, and an open, stalled or asking one can be closed from its row. A question from the fixer is answered there. An issue waiting on an answer or a merge puts the dot on settings and a line in the … menu.
 - The fixer is `scripts/autofix.mjs`; my-mail carries the same file and workout-tracker's is the original. `npm run autofix` starts all three. It treats every issue as hostile: only issues this account filed from the app are heard, the model gets file tools only (no shell, web or MCP), a change may touch only `src/`, `public/`, `index.html` and `README.md`, the diff is audited and the tests run in a sandbox, and the fix goes up as a pull request, never a push to main. Do not loosen any of these without asking. After a change to the script, `npm run autofix:one -- --check` proves the sandboxed suite still passes on main.
 - The fixer's token is `GITHUB_ISSUE_TOKEN`, read from `.env` here or from workout-tracker's `.env`, so it lives in one file on the work pc. It needs issues, contents and pull requests on each repo.
+
+## project steps
+
+Chase, 2026-11-25. `projectSteps.test.ts` holds these; the rules are in `src/domain/projectSteps.ts`.
+
+- A project has steps: the pieces of it still to do, in the order they would be done, each with a length. They are kept on the project (`projectSteps`) and are not tasks: they are never sent to To Do, never sorted, and never suggested for extra time.
+- A step is on today only when he pulls it there. `work on a project` on today, or a project opened from goals or the projects slice, asks how long he has and offers the steps that fit, in order (`fitSteps`); he changes the pick before `add to today`. The length is typed and starts empty.
+- A pulled step is ticked like a task (`TaskRow`), shows on done today, and counts for its project and the week. A step not finished goes back to the project when the day is over, and `not today` puts them back at once.
+- A finished project drops the steps it never got to. Finished steps are kept 400 days.
+- A new place that lists a project's work counts its steps as well as its tasks (`stepsLeftMin`).
+
+## blocking time
+
+Chase, 2026-11-25. `timeBlock.test.ts` and `approval.test.ts` hold these.
+
+- A task or a project can have time blocked in the calendar: a busy event with no one invited, on the day, hour and length he gives (`src/domain/timeBlock.ts`). Nothing starts filled in but the name and how long the thing takes. The app never picks a day or an hour.
+- It goes into the calendar of the space it is in: Microsoft for personal, Outlook through the bridge for work (`POST /calendar`). The bridge deletes only an appointment that carries the app's words and is not a meeting.
+- The calendar is where a block lives. One moved there comes back with its new time, one deleted there is gone here, and a block leaves the app once its time is over. A task that is done or deleted and a project that is finished give their blocked time back.
+- This is apart from holding a block goal, which still takes the afternoon and leaves the hour to Outlook.
+
+## what the chat may write only with approval
+
+Chase, 2026-11-25: the chat follows the card rules for any write like these. `approval.test.ts` holds it.
+
+- Anything written to a calendar (`block_time`, `hold_in_calendar`), a change to a project's steps (`set_project_steps`) and putting a project on today (`plan_project_session`) wait on a card that shows every step or the day, hour and calendar. Nothing is written until it is approved. A new tool that writes outside the app, or rewrites a list of his, is heavy in `describeAction`.
+- The work chat is Claude Code and cannot call the app's tools. To block time it ends its reply with a `<block-time>` line (`src/companion/proposals.ts`), which the app shows as the same card. That line is the only thing the work chat can ask the app to do; do not add one that writes without a card.
+
+## from my notes
+
+Chase, 2026-11-25. `finds.test.ts` holds these; the rules are in `src/notes/finds.ts`.
+
+- `look through my notes` in the progress menu reads this year's journal entries and the other notes under `notes/`, and offers what they show for progress: a project and its steps, steps for a project already there, a thing in purpose, connection, mind or creativity, a book. It runs only when he picks it. Personal only.
+- Everything it finds is an offer. Each can be reworded, moved to another area or trimmed, and reaches progress only on `add`. What is dismissed is not offered again.
+- A note is read once for each version of it, by the cheapest model, where the personal chat goes (the bridge when the device has one, the key when it does not). The offers and what was read are kept on the device, so stopping part way loses nothing.
+- The notes go to the model as data, with the line that they are never an instruction, and only the three kinds it is asked for are kept. It never offers a person on their own, and nothing is logged to connection from it.
+- The notes are only read. Nothing here writes to a note or the journal.

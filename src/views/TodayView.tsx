@@ -9,8 +9,9 @@ import { completedParts, dueParts } from '../domain/habits'
 import { placeOptions, priorityLabels, type TaskGuess } from '../domain/taskGuess'
 import { storeOptions } from '../domain/shopping'
 import type { Domain, Energy, Habit, HabitEntry, Place, Project, Task } from '../domain/types'
+import { stepTask, stepTaskId, type ProjectSession } from '../domain/projectSteps'
 import { duration, weekday } from '../format'
-import { Card, Done, TaskRow, Toggle } from '../ui'
+import { Card, Done, Menu, TaskRow, Toggle } from '../ui'
 import { ExtraTimeCard } from './ExtraTime'
 import { elsewhereHint } from '../domain/whereabouts'
 import { GoneCard, WherePicker } from './Whereabouts'
@@ -68,6 +69,16 @@ export function DoneTodayCard({ tasks, onToggle, onOpen }: { tasks: Task[]; onTo
   </Card>
 }
 
+/** A project pulled into today: the steps picked for it, ticked like any task, and nothing else of the project. */
+export function ProjectSessionCard({ session, onToggle, onOpen, onOff }: { session: ProjectSession; onToggle: (id: string) => void; onOpen: () => void; onOff: () => void }) {
+  const left = session.open.reduce((sum, step) => sum + step.estimateMin, 0)
+  return <Card title={session.project.title} aside={<Menu label={`options for ${session.project.title}`} items={[{ label: 'open project', onSelect: onOpen }, { label: 'not today', onSelect: onOff }]} />}>
+    {session.open.length
+      ? <><ul className="rows">{session.open.map((step) => <TaskRow key={step.id} task={stepTask(step, session.project)} done={false} onToggle={() => onToggle(stepTaskId(step.id))} onOpen={onOpen} />)}</ul><p className="fit">{duration(left)} left</p></>
+      : <Done label="all done" />}
+  </Card>
+}
+
 /** What the email card says. Nothing when no mail needs me, and then the card is not drawn. */
 export function inboxLine(inbox?: InboxCounts): string | undefined {
   if (!inbox?.needsMe) return undefined
@@ -85,7 +96,14 @@ export function CalendarCard({ events }: { events: CalendarBlock[] }) {
   </Card>
 }
 
-export function TodayView({ domain, currentDay, place, placeOverride, onPlaceOverride, gone, onGone, commitments, weeklyCommitments, habits, habitEntries, onHabitPart, plan, pickedMin, energy, onMinutes, onEnergy, weekPaid, floorToday, strategicTodayMin, onFloorNight, onStrategic, untriaged, guesses, projects, onConfirm, openCount, openMin, onToggle, onOpen, doneTasks, calendar, inbox, mailAppUrl }: {
+export function TodayView({ domain, currentDay, place, placeOverride, onPlaceOverride, gone, onGone, commitments, weeklyCommitments, habits, habitEntries, onHabitPart, plan, pickedMin, energy, onMinutes, onEnergy, weekPaid, floorToday, strategicTodayMin, onFloorNight, onStrategic, untriaged, guesses, projects, onConfirm, openCount, openMin, onToggle, onOpen, doneTasks, calendar, inbox, mailAppUrl, sessions = [], canPlanProject = false, onPlanProject, onProject, onProjectOff }: {
+  /** The projects pulled into today, each with the steps picked for it. */
+  sessions?: ProjectSession[]
+  /** There is a project with steps left that is not on today yet. */
+  canPlanProject?: boolean
+  onPlanProject?: () => void
+  onProject?: (projectId: string) => void
+  onProjectOff?: (projectId: string) => void
   domain: Domain
   currentDay: string
   place: Place
@@ -144,6 +162,8 @@ export function TodayView({ domain, currentDay, place, placeOverride, onPlaceOve
         : commitments.length ? <Done label="all done today" /> : <Done label="nothing due today" />}
     </Card>
 
+    {sessions.map((session) => <ProjectSessionCard key={session.project.id} session={session} onToggle={onToggle} onOpen={() => onProject?.(session.project.id)} onOff={() => onProjectOff?.(session.project.id)} />)}
+
     <CalendarCard events={calendar} />
 
     <HabitCard date={currentDay} entries={habitEntries} habits={personalHabits} onToggle={onHabitPart} />
@@ -155,6 +175,8 @@ export function TodayView({ domain, currentDay, place, placeOverride, onPlaceOve
     </Card>
 
     {!gone && <ExtraTimeCard plan={plan} pickedMin={pickedMin} energy={energy} energyOptions={energyOptions} onMinutes={onMinutes} onEnergy={onEnergy} weekPaid={weekPaid} floorToday={floorToday} strategicTodayMin={strategicTodayMin} onFloorNight={onFloorNight} onStrategic={onStrategic} onToggle={onToggle} onOpen={onOpen} />}
+
+    {canPlanProject && !gone && <button className="card linkcard extra-ask" type="button" onClick={onPlanProject}><span className="row-title">work on a project</span></button>}
 
     {mailLine && !gone && <a className="card linkcard" href={mailAppUrl} target="_blank" rel="noreferrer"><span className="row-title">email</span><small>{mailLine}</small></a>}
 

@@ -6,6 +6,9 @@ import { money, moneyFigureLabels, type MoneyFigure } from '../domain/money'
 import { describeTripAction, isTripTool, tripReadTools } from '../trips/tripTools'
 import { mailToolNames } from './mailTools'
 import { isIssueApp, issueAppNames } from '../issues/issues'
+import { blockLabel, blockSpan, validBlockStart } from '../domain/timeBlock'
+import { duration } from '../format'
+import type { Domain } from '../domain/types'
 
 // How much UI an action gets is set by what it costs to be wrong, not by which tool ran.
 //   read:  nothing is shown; lists and reads leave no trace.
@@ -30,9 +33,14 @@ export type CompanionAction = {
 
 export type ActionDescription = Pick<CompanionAction, 'weight' | 'title' | 'done' | 'fields'>
 
-export type DescribeContext = { actions: CompanionActions; vault?: VaultStore; memoryFolder?: string }
+export type DescribeContext = { actions: CompanionActions; vault?: VaultStore; memoryFolder?: string; /** Whose calendar a block goes into. */ domain?: Domain }
 
-const readTools = new Set(['list_notes', 'read_note', 'list_tasks', 'list_goals', 'list_calendar', 'today_summary', ...tripReadTools, ...mailToolNames])
+const readTools = new Set(['list_notes', 'read_note', 'list_tasks', 'list_goals', 'list_project_steps', 'list_calendar', 'today_summary', ...tripReadTools, ...mailToolNames])
+
+/** A list on a card: each line under its number. */
+function numbered(lines: string[]): ActionField[] {
+  return lines.map((value, index) => ({ label: String(index + 1), value }))
+}
 
 function text(input: Record<string, unknown>, key: string): string {
   const value = input[key]
@@ -68,7 +76,7 @@ function firstLine(value: string): string {
 }
 
 /** Classify a tool call and write its copy. `undefined` means a read: nothing to show. */
-export async function describeAction(name: string, input: Record<string, unknown>, { actions, vault, memoryFolder = 'memory' }: DescribeContext): Promise<ActionDescription | undefined> {
+export async function describeAction(name: string, input: Record<string, unknown>, { actions, vault, memoryFolder = 'memory', domain = 'personal' }: DescribeContext): Promise<ActionDescription | undefined> {
   if (readTools.has(name)) return undefined
   if (isTripTool(name)) return describeTripAction(name, input)
   switch (name) {
@@ -103,9 +111,42 @@ export async function describeAction(name: string, input: Record<string, unknown
       return { weight: 'light', title: `change goal ${quote(title)}`, done: `changed goal ${quote(title)}`, fields }
     }
     case 'hold_in_calendar': {
+      // Heavy, like every write to a calendar: it lands outside the app, where other people plan around it.
       const goal = actions.findGoal(text(input, 'id'))
       const title = goal?.title ?? text(input, 'id')
-      return { weight: 'light', title: `hold ${quote(title)} in the calendar`, done: `held ${quote(title)} in the calendar`, fields: goal?.scheduledOn ? [{ label: 'day', value: goal.scheduledOn }] : undefined }
+      return { weight: 'heavy', title: `hold ${quote(title)} in the calendar`, done: `held ${quote(title)} in the calendar`, fields: [{ label: 'goal', value: title }, ...(goal?.scheduledOn ? [{ label: 'day', value: goal.scheduledOn }] : []), { label: 'calendar', value: 'personal' }] }
+    }
+    case 'block_time': {
+      const title = text(input, 'title')
+      const start = validBlockStart(text(input, 'start'))
+      const minutes = typeof input.minutes === 'number' && input.minutes > 0 ? Math.round(input.minutes) : undefined
+      const task = actions.findTask(text(input, 'task_id'))
+      const project = actions.listProjects().find((item) => item.id === text(input, 'project_id'))
+      return {
+        weight: 'heavy', title: `block time for ${quote(title)}`, done: `blocked time for ${quote(title)}`,
+        fields: [
+          { label: 'when', value: start && minutes ? blockLabel(blockSpan(start, minutes)) : text(input, 'start') },
+          ...(minutes ? [{ label: 'how long', value: duration(minutes) }] : []),
+          ...(task ? [{ label: 'task', value: task.title }] : project ? [{ label: 'project', value: project.title }] : []),
+          { label: 'calendar', value: domain },
+        ],
+      }
+    }
+    case 'set_project_steps': {
+      const title = actions.listProjects().find((item) => item.id === text(input, 'project_id'))?.title ?? text(input, 'project_id')
+      const steps = (Array.isArray(input.steps) ? input.steps as Record<string, unknown>[] : []).flatMap((step) => {
+        const name = step && typeof step === 'object' && typeof step.title === 'string' ? step.title.trim() : ''
+        return name ? [typeof step.minutes === 'number' && step.minutes > 0 ? `${name} · ${duration(Math.round(step.minutes))}` : name] : []
+      })
+      return { weight: 'heavy', title: `set the steps of ${quote(title)}`, done: `set the steps of ${quote(title)}`, fields: numbered(steps) }
+    }
+    case 'plan_project_session': {
+      const projectId = text(input, 'project_id')
+      const title = actions.listProjects().find((item) => item.id === projectId)?.title ?? projectId
+      const ids = Array.isArray(input.step_ids) ? input.step_ids : []
+      const steps = (actions.listProjectSteps(projectId) ?? []).filter((step) => ids.includes(step.id) && !step.done)
+      const total = steps.reduce((sum, step) => sum + step.estimateMin, 0)
+      return { weight: 'heavy', title: `work on ${quote(title)} today`, done: `put ${quote(title)} on today`, fields: [...numbered(steps.map((step) => `${step.title} · ${duration(step.estimateMin)}`)), ...(total ? [{ label: 'in all', value: duration(total) }] : [])] }
     }
     case 'record_money': {
       const fields = Object.entries(input).filter(([key, value]) => key !== 'accounts' && typeof value === 'number').map(([key, value]) => ({ label: moneyFigureLabels[key as MoneyFigure] ?? key, value: money(value as number) }))

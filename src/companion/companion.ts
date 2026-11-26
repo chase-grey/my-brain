@@ -7,9 +7,11 @@ import { companionTools, executeTool, toolGroups, type CompanionActions, type To
 import type { MailReader } from './mailTools'
 import type { IssueStore } from '../issues/issues'
 import type { CompanionTurn } from './companionStore'
+import type { Domain } from '../domain/types'
 import { contextTurns } from './context'
 import { GitHubError, type VaultStore } from './githubVault'
 import { readMemoryIndex } from './memory'
+import { takeProposals } from './proposals'
 import { defaultRoute, handOffTool, rungs, topRung, type Route, type RouteAsk } from './route'
 
 export type { Undo } from './companionTools'
@@ -93,6 +95,8 @@ export function createAnthropicCompanion(deps: {
   mail?: () => MailReader | undefined
   /** Where chat files a report about the app, while there is an issue token. */
   issues?: () => IssueStore | undefined
+  /** The space this chat is in: a card for a calendar write names whose calendar it is. Personal when left out. */
+  domain?: Domain
 }): Companion {
   const memoryFolder = deps.memoryFolder ?? 'memory'
   const toolContext = (): ToolContext => ({ actions: deps.actions(), vault: deps.vault, memoryFolder, mail: deps.mail?.(), issues: deps.issues?.() })
@@ -144,7 +148,7 @@ export function createAnthropicCompanion(deps: {
             results.push({ type: 'tool_result', tool_use_id: use.id, content: moved ? 'handed off. you are now the stronger model, with every tool. carry on with the request.' : 'there is no stronger model to hand off to. finish the request yourself.' })
             continue
           }
-          const description = await describeAction(use.name, use.input, toolContext())
+          const description = await describeAction(use.name, use.input, { ...toolContext(), domain: deps.domain })
           if (description?.weight === 'heavy') {
             const action: CompanionAction = { ...description, weight: 'heavy', id: use.id, tool: use.name, status: 'pending' }
             actions.push(action)
@@ -226,7 +230,48 @@ export function createBridgeCompanion(deps: {
   /** A Claude Code alias ("sonnet") or full model name; the bridge's default when left out. */
   model?: string
   effort?: string
+  /** With these, a block of time the reply asks for becomes a card to approve. Without them the reply is only words. */
+  actions?: () => CompanionActions
 }): Companion {
+  // Claude Code keeps its own thread, so what became of a card is told to it with the next message.
+  const untold: string[] = []
+  const context = (): ToolContext => ({ actions: deps.actions!() })
+
+  /** Each block the reply asked for, waiting on its card. Deciding one writes it or drops it; the model is not asked again. */
+  async function gate(reply: string): Promise<Pick<AssistantReply, 'text' | 'actions' | 'pending'>> {
+    if (!deps.actions) return { text: reply, actions: [] }
+    const { text, proposals } = takeProposals(reply)
+    const gates: { action: CompanionAction; input: Record<string, unknown> }[] = []
+    for (const proposal of proposals) {
+      const description = await describeAction(proposal.tool, proposal.input, { ...context(), domain: 'work' })
+      if (description) gates.push({ input: proposal.input, action: { ...description, weight: 'heavy', id: `work_${crypto.randomUUID()}`, tool: proposal.tool, status: 'pending' } })
+    }
+    if (!gates.length) return { text, actions: [] }
+    const decided = new Set<string>()
+    return {
+      text,
+      actions: gates.map((item) => item.action),
+      pending: {
+        ids: gates.map((item) => item.action.id),
+        async decide(id, approved) {
+          const found = gates.find((item) => item.action.id === id)
+          if (!found) throw new Error('no action waiting with that id')
+          if (decided.has(id)) throw new Error('already decided')
+          decided.add(id)
+          if (!approved) {
+            const action: CompanionAction = { ...found.action, status: 'dismissed' }
+            untold.push(actionLine(action))
+            return { action }
+          }
+          const outcome = await executeTool(found.action.tool, found.input, context())
+          const action: CompanionAction = { ...found.action, status: outcome.ok ? 'done' : 'failed', ...(outcome.ok ? {} : { error: outcome.error }) }
+          untold.push(actionLine(action))
+          return { action, ...(outcome.ok && outcome.undo ? { undo: outcome.undo } : {}) }
+        },
+      },
+    }
+  }
+
   return {
     async send(text, attachments = []) {
       const sessionId = deps.sessionId()
@@ -234,7 +279,7 @@ export function createBridgeCompanion(deps: {
       try {
         // Claude Code reads photos and pdfs from disk, so those are left on the pc first; a text file goes in the message itself.
         const files: string[] = []
-        const words = [text]
+        const words = [...untold.splice(0), text]
         for (const item of attachments) {
           if (item.data === undefined) continue
           if (item.kind === 'text') words.unshift(fileText(item))
@@ -245,7 +290,7 @@ export function createBridgeCompanion(deps: {
         throw mapCompanionError(error)
       }
       if (response.isError) throw new CompanionError('http', response.text || 'claude code returned an error')
-      return { text: response.text, actions: [], undos: {}, toolCalls: [], sessionId: response.sessionId }
+      return { ...await gate(response.text), undos: {}, toolCalls: [], sessionId: response.sessionId }
     },
   }
 }

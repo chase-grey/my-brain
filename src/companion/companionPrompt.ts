@@ -3,6 +3,7 @@ import type { Domain } from '../domain/types'
 import type { PlanSummary, TaskSummary } from './companionTools'
 import type { AttachedMail } from './mailTools'
 import { indexEntries, memoryFolders, memoryIndexPath } from './memory'
+import { blockProposalRule } from './proposals'
 
 export type PromptContext = {
   domain: Domain
@@ -19,6 +20,8 @@ export type PromptContext = {
   issuesAvailable?: boolean
   /** The email this chat was opened about, from the mail app. */
   mail?: AttachedMail
+  /** This space's calendar can be written, so time can be blocked in it. */
+  canBlockTime?: boolean
 }
 
 export const vaultNames: Record<Domain, string> = { personal: 'HomeBase', work: 'Hivemind' }
@@ -77,7 +80,7 @@ export function pastePrompt(context: Omit<PromptContext, 'domain' | 'vaultAvaila
   ].join('\n\n')
 }
 
-export function buildSystemPrompt({ domain, summary, vaultAvailable, memoryIndex, notes = 'homebase', userName, mailAvailable = false, issuesAvailable = false, mail }: PromptContext): string {
+export function buildSystemPrompt({ domain, summary, vaultAvailable, memoryIndex, notes = 'homebase', userName, mailAvailable = false, issuesAvailable = false, mail, canBlockTime = false }: PromptContext): string {
   const vault = vaultNames[domain]
   const plainNotes = domain === 'personal' && notes === 'onedrive'
   const vaultLine = plainNotes
@@ -106,7 +109,11 @@ export function buildSystemPrompt({ domain, summary, vaultAvailable, memoryIndex
     ...(issuesAvailable ? ['When the user asks to report, fix or change something in the app itself (this app, my-brain, or their mail app, my-mail), call report_issue. It files a public GitHub issue that an automated fixer turns into a change for them to approve. Write it about the app only: what happens, what should happen instead, and where. Never put a name, a personal detail, or anything from their tasks, notes, mail, money or health in it. It waits on a card showing the exact words, so call the tool without asking first, and once it is filed say its number.'] : []),
     domain === 'work'
       ? 'You run as Claude Code on the work PC with the vault and office tools. The task list above is a read-only snapshot from the app.'
-      : 'Use the task and goal tools to make changes in the app. Ids above are the ones the tools expect. Small changes run at once and show the user a receipt they can undo. Deleting a task, forgetting a memory, replacing or moving a note, and closing a goal wait on a card the user approves in the app: the tool result arrives once they decide, so go ahead and call the tool when the user asked for the change, and do not ask for permission in words first.',
+      : 'Use the task and goal tools to make changes in the app. Ids above are the ones the tools expect. Small changes run at once and show the user a receipt they can undo. Deleting a task, forgetting a memory, replacing or moving a note, closing a goal, changing a project\'s steps, putting a project on today, and anything written to the calendar wait on a card the user approves in the app: the tool result arrives once they decide, so go ahead and call the tool when the user asked for the change, and do not ask for permission in words first.',
+    ...(domain === 'work' && canBlockTime ? [blockProposalRule] : []),
+    ...(domain === 'personal' ? [
+      `A project has steps: the pieces of it still to do, in the order they would be done, each with a length. They are kept on the project and are not tasks. list_project_steps reads them and set_project_steps changes them. When the user says they are going to work on a project and for how long, read its steps and call plan_project_session with the ones that fit that time, earliest first; if they gave no length, ask for one.${canBlockTime ? ' To set time aside on a later day for a task or a project, call block_time with the day and time they gave; if they gave none, ask rather than choosing one.' : ''}`,
+    ] : []),
     ...(domain === 'personal' ? [
       'When the user sends screenshots of bank, loan, investment or net worth screens, or states balances, call record_money with exactly what they show, then answer from the money section and those numbers. Money goals are set in the app on the money slice of progress.',
       'Text messages: draft one only when the user asks for it, never on your own. Write it the way this user writes: match the wording, length, casing and punctuation of their own messages in this chat and anything memory says about how they text. Short and plain, the way a person actually texts; no greeting or sign-off they would not use, nothing that sounds written for them. Call draft_text with it. The app shows the draft with a button that opens their messaging app, and they send it from there, so never say it was sent.',

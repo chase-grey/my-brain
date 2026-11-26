@@ -19,12 +19,18 @@ import { addMoneyReading, type MoneyAccount, type MoneyFigure, type MoneyGoal, t
 import type { RestDay, RestGoals } from './domain/rest'
 import type { LifeDomain } from './domain/types'
 import { defaultPersonalHabits, retiredHabitIds } from './domain/habits'
+import { settleSteps, type ProjectStep } from './domain/projectSteps'
+import { settleBlocks, type TimeBlock } from './domain/timeBlock'
 
 export type ProductState = AreaFields & {
   goals: Goal[]
   habits: Habit[]
   habitEntries: HabitEntry[]
   projects: Project[]
+  /** The pieces of each project still to do, in order. On today only when pulled there. */
+  projectSteps: ProjectStep[]
+  /** Time blocked in this space's calendar for a task or a project, until it is over. */
+  timeBlocks: TimeBlock[]
   activities: Activity[]
   commitments: Commitment[]
   delegations: Delegation[]
@@ -47,7 +53,7 @@ export type ProductState = AreaFields & {
 }
 
 export const emptyProductState: ProductState = {
-  goals: [], habits: defaultPersonalHabits, habitEntries: [], projects: [], activities: [], commitments: [], delegations: [], travelWindows: [],
+  goals: [], habits: defaultPersonalHabits, habitEntries: [], projects: [], projectSteps: [], timeBlocks: [], activities: [], commitments: [], delegations: [], travelWindows: [],
   dayOverrides: [], ringEvidence: [], ringCommitments: [], ringOff: [], restCheckIns: [], moneySnapshots: [], moneyGoals: [], restDays: [], restGoals: {}, people: [], ...emptyAreaFields,
 }
 
@@ -113,11 +119,12 @@ const storageKey = (domain: Domain) => `my-brain.${domain}.product.v1`
 
 export function scopeProductState(state: ProductState, domain: Domain): ProductState {
   const scoped = structuredClone(state)
-  for (const key of ['goals', 'habits', 'projects', 'activities', 'commitments', 'delegations', 'travelWindows', 'dayOverrides'] as const) {
+  for (const key of ['goals', 'habits', 'projects', 'activities', 'commitments', 'delegations', 'travelWindows', 'dayOverrides', 'timeBlocks'] as const) {
     // All domain-owned collections use the same ownership boundary.
     Object.assign(scoped, { [key]: state[key].filter((item) => item.domain === domain) })
   }
   scoped.habitEntries = state.habitEntries.filter((entry) => scoped.habits.some((habit) => habit.id === entry.habitId))
+  scoped.projectSteps = state.projectSteps.filter((step) => scoped.projects.some((project) => project.id === step.projectId))
   if (domain === 'work') {
     scoped.ringEvidence = []
     scoped.ringCommitments = []
@@ -149,7 +156,8 @@ export function loadProductState(domain: Domain, seedHabits = true): ProductStat
         timeWindow: habits[index].timeWindow ?? habit.timeWindow,
       }
     }
-    return settleAreas(scopeProductState({ ...emptyProductState, ...stored, habits, habitEntries: stored.habitEntries ?? [] }, domain), new Date().toLocaleDateString('en-CA'))
+    const day = new Date().toLocaleDateString('en-CA')
+    return settleBlocks(settleSteps(settleAreas(scopeProductState({ ...emptyProductState, ...stored, habits, habitEntries: stored.habitEntries ?? [] }, domain), day), day))
   } catch {
     return scopeProductState(seedHabits ? emptyProductState : { ...emptyProductState, habits: [] }, domain)
   }

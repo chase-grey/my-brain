@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { CalendarBlock } from '../data/calendarGraphProvider'
 import type { VaultStore } from '../companion/githubVault'
+import type { GuessModel } from '../companion/taskGuesses'
 import { areaReadings } from '../domain/areas'
 import { bodyReading, TRACKER_GOALS_LINK } from '../domain/bodyTracker'
 import { timeRange } from '../domain/calendar'
@@ -18,10 +19,11 @@ import { reviewKinds, type ReviewKind } from '../review/period'
 import { Icon } from '../navIcons'
 import { Card, Empty, Field, Menu, Sheet } from '../ui'
 import { AreaDetail, AreaLogSheet, SawSomeoneSheet } from './AreaSlices'
+import { NoteFindsSheet } from './NoteFinds'
 import { LifeWheel, wheelHue } from './LifeWheel'
 import { hasPhoneRest, MoneyDetail, MoneySheet, RestDetail } from './MoneyRest'
 
-type LogKind = 'connection' | 'did' | 'money' | 'rest'
+type LogKind = 'connection' | 'did' | 'money' | 'rest' | 'notes'
 
 function sliceFromHash(): LifeDomain | undefined {
   if (typeof location === 'undefined') return undefined
@@ -63,7 +65,11 @@ function GoalRow({ goal, product, currentDay, held, onOpen }: { goal: Goal; prod
   </li>
 }
 
-export function ProgressView({ domain, product, tasks, currentDay, heldEvents, onProduct, onGoals, onReview, readMoney, journalVault }: {
+export function ProgressView({ domain, product, tasks, currentDay, heldEvents, onProduct, onGoals, onReview, readMoney, journalVault, findsModel, onProject }: {
+  /** Who reads the notes for `look through my notes`; left out when ai is off, and then it is not offered. */
+  findsModel?: () => Promise<GuessModel | undefined>
+  /** Opens a project's steps. */
+  onProject?: (id: string) => void
   domain: Domain
   product: ProductState
   /** For what is left on each project in the projects slice. */
@@ -76,7 +82,7 @@ export function ProgressView({ domain, product, tasks, currentDay, heldEvents, o
   /** Reads money screenshots with the person's own key; left out when the chat has none. */
   readMoney?: (files: File[]) => Promise<MoneyRead>
   /** Where the journal is kept; the mind slice counts its days and never opens one. */
-  journalVault?: Pick<VaultStore, 'listNotes'>
+  journalVault?: Pick<VaultStore, 'listNotes'> & Partial<Pick<VaultStore, 'readNote'>>
 }) {
   const journalDays = useJournalDays(domain === 'personal' ? journalVault : undefined)
   const [log, setLog] = useState<LogKind>()
@@ -120,6 +126,7 @@ export function ProgressView({ domain, product, tasks, currentDay, heldEvents, o
           { label: 'did something', onSelect: () => setLog('did') },
           { label: 'money numbers', onSelect: () => setLog('money') },
           { label: 'rest check-in', onSelect: () => setLog('rest') },
+          ...(findsModel && journalVault?.readNote ? [{ label: 'look through my notes', onSelect: () => setLog('notes') }] : []),
         ] : []),
         ...(onReview ? reviewKinds.map((kind) => ({ label: `${kind} in review`, onSelect: () => onReview(kind) })) : []),
       ]} />}
@@ -127,7 +134,7 @@ export function ProgressView({ domain, product, tasks, currentDay, heldEvents, o
 
     {open?.domain === 'money' && <MoneyDetail arc={open} product={product} day={currentDay} onProduct={onProduct} readMoney={readMoney} />}
     {open?.domain === 'rest' && hasPhoneRest(product) && <RestDetail arc={open} product={product} day={currentDay} onProduct={onProduct} onCheckIn={() => setLog('rest')} />}
-    {open?.area && <AreaDetail key={open.domain} arc={open} product={product} tasks={tasks} today={currentDay} journalDays={journalDays} onProduct={onProduct} onGoals={onGoals} />}
+    {open?.area && <AreaDetail key={open.domain} arc={open} product={product} tasks={tasks} today={currentDay} journalDays={journalDays} onProduct={onProduct} onGoals={onGoals} onProject={onProject} />}
     {open && !open.money && !open.rest && !open.area && <SliceDetail key={open.domain} arc={open} onGoals={onGoals} />}
 
     {!open && <Card title="this week" aside={receipt && <span className="count">{receipt.paid ? 'paid' : `${hours(receipt.remainingMin)} left`}</span>}>
@@ -150,6 +157,7 @@ export function ProgressView({ domain, product, tasks, currentDay, heldEvents, o
     {log === 'connection' && <SawSomeoneSheet product={product} today={currentDay} onClose={() => setLog(undefined)} onProduct={onProduct} />}
     {log === 'did' && <AreaLogSheet product={product} today={currentDay} journalDays={journalDays} onClose={() => setLog(undefined)} onProduct={onProduct} />}
     {log === 'rest' && <RestSheet onClose={() => setLog(undefined)} onProduct={onProduct} />}
+    {log === 'notes' && findsModel && journalVault?.readNote && <NoteFindsSheet product={product} today={currentDay} vault={{ listNotes: () => journalVault.listNotes(), readNote: (path) => journalVault.readNote!(path) }} model={findsModel} onProduct={onProduct} onClose={() => setLog(undefined)} />}
   </>
 }
 

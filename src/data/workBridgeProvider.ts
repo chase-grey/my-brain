@@ -36,6 +36,17 @@ export type WorkStatus = {
   important: number
 }
 
+/** The bridge answered, with a refusal. */
+export class BridgeStatusError extends Error {
+  constructor(readonly status: number, message: string) {
+    super(message)
+  }
+}
+
+function toBlock({ id, subject, start, end, isAllDay, free }: CalendarBlock): CalendarBlock {
+  return { id, subject, start, end, isAllDay: Boolean(isAllDay), free: Boolean(free) }
+}
+
 export class WorkBridgeProvider implements TaskProvider {
   constructor(private readonly baseUrl = 'http://127.0.0.1:47321', private readonly fetcher: typeof fetch = (input, init) => fetch(input, init)) {}
 
@@ -46,7 +57,32 @@ export class WorkBridgeProvider implements TaskProvider {
   /** Work events from start up to end, both local dates such as 2026-11-02, read from Outlook on the work pc. */
   async events(start: string, end: string): Promise<CalendarBlock[]> {
     const { events } = await this.request<{ events: CalendarBlock[] }>(`/calendar?start=${start}&end=${end}`)
-    return events.map(({ id, subject, start, end, isAllDay, free }) => ({ id, subject, start, end, isAllDay: Boolean(isAllDay), free: Boolean(free) }))
+    return events.map(toBlock)
+  }
+
+  /** Blocks time in the work calendar: a busy appointment in Outlook on the work pc, with no one invited. */
+  async createBlock(subject: string, start: string, end: string): Promise<CalendarBlock> {
+    return toBlock(await this.request<CalendarBlock>('/calendar', { method: 'POST', body: JSON.stringify({ subject, start, end }) }))
+  }
+
+  /** One appointment by the id `createBlock` gave, or nothing once it is gone from the calendar. */
+  async event(id: string): Promise<CalendarBlock | undefined> {
+    try {
+      return toBlock(await this.request<CalendarBlock>(`/calendar/${encodeURIComponent(id)}`))
+    } catch (error) {
+      if (error instanceof BridgeStatusError && error.status === 404) return undefined
+      throw error
+    }
+  }
+
+  /** Takes a block back out. The bridge deletes only an appointment this app made. */
+  async deleteEvent(id: string): Promise<void> {
+    try {
+      await this.request<{ ok: boolean }>(`/calendar/${encodeURIComponent(id)}`, { method: 'DELETE' })
+    } catch (error) {
+      if (error instanceof BridgeStatusError && error.status === 404) return
+      throw error
+    }
   }
 
   async listTasks(): Promise<WorkProviderTask[]> {
@@ -69,7 +105,7 @@ export class WorkBridgeProvider implements TaskProvider {
     const response = await this.fetcher(`${this.baseUrl}${path}`, { ...init, headers: { 'Content-Type': 'application/json', ...init.headers } })
     if (!response.ok) {
       const detail = await response.json().then((body: { error?: string }) => body.error, () => undefined)
-      throw new Error(detail || `work bridge returned ${response.status}`)
+      throw new BridgeStatusError(response.status, detail || `work bridge returned ${response.status}`)
     }
     return await response.json() as T
   }

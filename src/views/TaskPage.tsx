@@ -4,17 +4,24 @@ import type { Attachment } from '../companion/attachments'
 import { taskAttachment } from '../companion/attachments'
 import { localMoment, takesReminder, upcoming } from '../domain/remind'
 import { placeOptions, priorityLabels, type TaskGuess } from '../domain/taskGuess'
+import type { BlockInput, TimeBlock } from '../domain/timeBlock'
 import type { Domain, Energy, Place, Priority, Project, StoreType, Task } from '../domain/types'
 import { duration, newId, parseDuration, today } from '../format'
 import { Icon } from '../navIcons'
 import { Chips, Field, Menu, Segmented } from '../ui'
+import { BlockList, BlockTimeSheet } from './BlockTimeSheet'
 import { energyOptions } from './TodayView'
 
 function toggleValue<T>(values: T[], value: T): T[] {
   return values.includes(value) ? values.filter((item) => item !== value) : [...values, value]
 }
 
-export function TaskPage({ domain: initialDomain, existingTask, guess, projects, onAdd, onUpdate, onDelete, onDone, onNotMine, onChat, onCancel }: {
+export function TaskPage({ domain: initialDomain, existingTask, guess, projects, onAdd, onUpdate, onDelete, onDone, onNotMine, onChat, onCancel, blocks = [], onBlock, onUnblock }: {
+  /** Time already blocked in the calendar for this task. */
+  blocks?: TimeBlock[]
+  /** Blocks time for it in this space's calendar; left out while the calendar cannot be written. */
+  onBlock?: (input: BlockInput) => Promise<unknown>
+  onUnblock?: (id: string) => void
   domain: Domain
   existingTask?: Task
   /** What the ai made of a task still to be sorted. It fills the form; saving is what confirms it. */
@@ -48,6 +55,7 @@ export function TaskPage({ domain: initialDomain, existingTask, guess, projects,
   const [storeType, setStoreType] = useState<StoreType | ''>(start?.storeType ?? existingTask?.storeType ?? '')
   const [projectId, setProjectId] = useState(start?.projectId ?? existingTask?.projectId ?? '')
   const [showDetails, setShowDetails] = useState(Boolean(existingTask))
+  const [blocking, setBlocking] = useState(false)
 
   function chooseStore(next: StoreType | '') {
     setStoreType(next)
@@ -99,6 +107,7 @@ export function TaskPage({ domain: initialDomain, existingTask, guess, projects,
       {existingTask && <Menu label="task options" items={[
         ...(doneAlready ? [] : [{ label: 'mark done', onSelect: () => onDone(existingTask.id) }]),
         ...(untriaged ? [{ label: 'not mine', onSelect: () => onNotMine(existingTask.id) }] : []),
+        ...(onBlock && !doneAlready && !existingTask.recurrence ? [{ label: 'block time', onSelect: () => setBlocking(true) }] : []),
         { label: 'delete', onSelect: () => onDelete(existingTask.id) },
       ]} />}
     </header>
@@ -125,6 +134,8 @@ export function TaskPage({ domain: initialDomain, existingTask, guess, projects,
         <Field label="notes"><textarea rows={4} value={notes} onChange={(event) => setNotes(event.target.value)} /></Field>
       </>}
 
+      {onUnblock && <BlockList blocks={blocks} onUnblock={onUnblock} />}
+
       <div className="actions">
         <button className="primary" type="submit" disabled={!title.trim()}>{existingTask ? 'save' : 'add task'}</button>
         {!showDetails && <button className="secondary" type="button" onClick={() => setShowDetails(true)}>add details</button>}
@@ -132,5 +143,6 @@ export function TaskPage({ domain: initialDomain, existingTask, guess, projects,
         <button className="plain" type="button" onClick={onCancel}>cancel</button>
       </div>
     </form>
+    {blocking && existingTask && onBlock && <BlockTimeSheet title={title.trim() || existingTask.title} minutes={estimateMin} taskId={existingTask.id} onBlock={onBlock} onClose={() => setBlocking(false)} />}
   </>
 }

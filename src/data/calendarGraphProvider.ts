@@ -1,3 +1,4 @@
+import { blockNote } from '../domain/timeBlock'
 import { GraphError, type GraphClient } from './graphClient'
 
 export type CalendarBlock = {
@@ -76,6 +77,11 @@ export class CalendarGraphProvider {
       }),
     })
     return fromGraph(event)
+  }
+
+  /** Time blocked for a task or a project: a busy event at the hour that was picked. */
+  async createBlock(subject: string, start: string, end: string): Promise<CalendarBlock> {
+    return await this.createReservedBlock(subject, start, end, blockNote)
   }
 
   /** Move an event to another day, keeping the hour that was chosen in the calendar. */

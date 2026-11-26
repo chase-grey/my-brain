@@ -31,7 +31,9 @@ import { GitHubVault, normalizeBranch, normalizeRepo, vaultConfigured } from './
 import { offlineNotes, syncNotes, waitingCount } from './notes/offline'
 import type { Attachment } from './companion/attachments'
 import { WorkJournal } from './journal/workJournal'
-import { buildPlanSummary, companionGoal, companionTask, summarizeGoal, summarizeProject, summarizeTask, type CompanionActions, type GoalChanges } from './companion/companionTools'
+import { buildPlanSummary, companionGoal, companionTask, summarizeBlock, summarizeGoal, summarizeProject, summarizeStep, summarizeTask, type CompanionActions, type GoalChanges } from './companion/companionTools'
+import { openSteps, sessionsOn, stepIdOf, stepsDoneOn, stepsOf, withOpenSteps, withSession, withStepToggled, withoutOpenSteps, withoutSession } from './domain/projectSteps'
+import { blockProblem, blockSpan, blocksFor, reconcileBlock, withBlockChange, type BlockCalendar, type BlockInput, type TimeBlock } from './domain/timeBlock'
 import { Icon, type IconName } from './navIcons'
 import { newId, today } from './format'
 import { Menu } from './ui'
@@ -42,7 +44,7 @@ import { localMoment, remindersFor } from './domain/remind'
 import { syncPhoneRest } from './native/health'
 import { moneyBriefing } from './domain/money'
 import { moneyReader } from './companion/moneyRead'
-import { useTaskGuesses } from './companion/taskGuesses'
+import { guessModel, useTaskGuesses } from './companion/taskGuesses'
 import { nextToSort, sortedTask } from './domain/taskGuess'
 import { TodayView } from './views/TodayView'
 import { ProgressView } from './views/ProgressView'
@@ -55,6 +57,7 @@ import { UpdateToast } from './views/UpdateToast'
 import { checkForUpdate, holdUpdates, useAppUpdate } from './appUpdate'
 import { useIssuesWaiting } from './issues/useIssues'
 import { TaskPage } from './views/TaskPage'
+import { ProjectPicker, ProjectSheet } from './views/ProjectSheet'
 import { TripsView } from './views/TripsView'
 import { WorkScreens } from './views/WorkScreens'
 import { WelcomeView } from './views/WelcomeView'
@@ -250,6 +253,8 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
   // Captured before the hash effect normalizes it, like the two above. Mail is personal, so the chat it opens is too.
   const [mailId, setMailId] = useState(() => typeof location === 'undefined' ? undefined : mailIdFromHash(location.hash))
   const [editingTaskId, setEditingTaskId] = useState<string | undefined>(() => parseHash().taskId)
+  // A project open over the screen: its steps, or with `planning` the steps to work on today.
+  const [projectOpen, setProjectOpen] = useState<{ id?: string; planning?: boolean }>()
   const [personalData, setPersonalData] = useState<PersonalGraphData>()
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>(
     activeDomain === 'work' || configuredPersonalClientId() ? 'disconnected' : 'unconfigured',
@@ -563,6 +568,7 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
     try {
       setCalendarEvents(await workBridge.events(currentDay, addDays(currentDay, 7)))
       setCalendarRead(true)
+      await reconcileBlocks(workBridge)
     } catch (error) {
       setSyncError(`calendar: ${workErrorMessage(error)}`)
     }
@@ -607,6 +613,7 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
     const failure = [events, counts].find((result): result is PromiseRejectedResult => result.status === 'rejected')
     if (failure) setSyncError((current) => current ?? errorMessage(failure.reason))
     await reconcileHeldGoals(data)
+    await reconcileBlocks(data.calendar)
   }
 
   async function reconcileHeldGoals(data: PersonalGraphData): Promise<void> {
@@ -647,6 +654,82 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
     if (personalData && connectionStatus === 'connected') await personalData.calendar.deleteEvent(goal.calendarEventId)
     setHeldEvents((current) => { const next = { ...current }; delete next[goal.id]; return next })
     updateGoal(id, { calendarEventId: undefined })
+  }
+
+  /** Changes the saved state at once, for a caller that reads it back before the next draw. */
+  function applyProduct(change: (state: ProductState) => ProductState): void {
+    productRef.current = change(productRef.current)
+    setProduct(change)
+  }
+
+  /** This space's calendar while it can be written: Microsoft for personal, Outlook through the bridge for work. */
+  function blockCalendar(): BlockCalendar | undefined {
+    if (connectionStatus !== 'connected') return undefined
+    return activeDomain === 'personal' ? personalData?.calendar : workBridge
+  }
+
+  const noCalendar = () => new Error(activeDomain === 'work' ? 'start the work bridge to block time' : 'connect microsoft to block time')
+
+  /** Writes a busy event for a task or a project into this space's calendar, and keeps what is needed to take it back. */
+  async function blockTime(input: BlockInput): Promise<TimeBlock> {
+    const problem = blockProblem(input)
+    if (problem) throw new Error(problem)
+    const calendar = blockCalendar()
+    if (!calendar) throw noCalendar()
+    const span = blockSpan(input.start, input.minutes)
+    const event = await calendar.createBlock(input.title.trim(), span.start, span.end)
+    // A task or project the block names has to be one of this space's own.
+    const taskId = tasksRef.current.some((task) => task.id === input.taskId && task.domain === activeDomain) ? input.taskId : undefined
+    const projectId = productRef.current.projects.some((project) => project.id === input.projectId && project.domain === activeDomain) ? input.projectId : undefined
+    const block: TimeBlock = { id: newId('block'), domain: activeDomain, title: input.title.trim(), start: event.start, end: event.end, eventId: event.id, ...(taskId ? { taskId } : {}), ...(projectId ? { projectId } : {}), ...(event.webLink ? { webLink: event.webLink } : {}) }
+    applyProduct((current) => ({ ...current, timeBlocks: [...current.timeBlocks, block] }))
+    setCalendarEvents((current) => [...current, event].sort((a, b) => a.start.localeCompare(b.start)))
+    return block
+  }
+
+  async function unblockTime(id: string): Promise<void> {
+    const block = productRef.current.timeBlocks.find((item) => item.id === id && item.domain === activeDomain)
+    if (!block) return
+    const calendar = blockCalendar()
+    if (!calendar) throw noCalendar()
+    await calendar.deleteEvent(block.eventId)
+    applyProduct((current) => ({ ...current, timeBlocks: current.timeBlocks.filter((item) => item.id !== id) }))
+    setCalendarEvents((current) => current.filter((event) => !event.id.startsWith(block.eventId)))
+  }
+
+  /** A task that is done or gone, and a project that is finished, give the time blocked for them back. */
+  function releaseBlocks(target: { taskId?: string; projectId?: string }): void {
+    for (const block of blocksFor(productRef.current.timeBlocks.filter((item) => item.domain === activeDomain), target)) holdAction(() => unblockTime(block.id))
+  }
+
+  /** A block moved in the calendar comes back with its new time; one deleted there is gone here too. */
+  async function reconcileBlocks(calendar: BlockCalendar): Promise<void> {
+    for (const block of productRef.current.timeBlocks.filter((item) => item.domain === activeDomain)) {
+      try {
+        const change = reconcileBlock(block, await calendar.event(block.eventId))
+        if (change.kind !== 'unchanged') applyProduct((current) => withBlockChange(current, block.id, change))
+      } catch (error) {
+        setSyncError((current) => current ?? errorMessage(error))
+      }
+    }
+  }
+
+  function toggleStep(stepId: string): void {
+    applyProduct((current) => withStepToggled(current, stepId, new Date().toISOString(), () => newId('activity')))
+  }
+
+  /** A finished project leaves the lists, drops the steps it never got to, and gives its blocked time back. */
+  function finishProject(id: string): void {
+    releaseBlocks({ projectId: id })
+    applyProduct((current) => withoutOpenSteps({ ...current, projects: current.projects.map((item) => item.id === id ? { ...item, status: 'done' } : item) }, id))
+  }
+
+  const ownProject = (id: string) => productRef.current.projects.some((project) => project.id === id && project.domain === activeDomain)
+  const stepSummaries = (projectId: string) => stepsOf(productRef.current, projectId).map((step) => summarizeStep(step, currentDay))
+  /** The way back for a change to one project's steps: its steps as they were, the rest left alone. */
+  function stepsUndo(projectId: string): () => void {
+    const before = stepsOf(productRef.current, projectId)
+    return () => applyProduct((current) => ({ ...current, projectSteps: [...current.projectSteps.filter((step) => step.projectId !== projectId), ...before] }))
   }
 
   function holdAction(action: () => Promise<void>): void {
@@ -744,6 +827,7 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
     const previous = tasksRef.current.find((task) => task.id === id)
     if (!previous) return undefined
     commitTasks(tasksRef.current.filter((task) => task.id !== id))
+    releaseBlocks({ taskId: id })
     // Neither adapter deletes; completing the task remotely keeps it from syncing back.
     const remote = remoteTasks()
     if (remote && previous.providerListId && !previous.completed) {
@@ -822,6 +906,20 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
     updateGoal,
     removeGoal,
     listProjects: () => productRef.current.projects.filter((project) => project.domain === activeDomain && project.status === 'active').map(summarizeProject),
+    listProjectSteps: (projectId) => ownProject(projectId) ? stepSummaries(projectId) : undefined,
+    setProjectSteps: (projectId, steps) => {
+      if (!ownProject(projectId)) return undefined
+      const undo = stepsUndo(projectId)
+      applyProduct((current) => withOpenSteps(current, projectId, steps, () => newId('step')))
+      return { steps: stepSummaries(projectId), undo }
+    },
+    planProjectSession: (projectId, stepIds) => {
+      if (!ownProject(projectId)) return undefined
+      const undo = stepsUndo(projectId)
+      applyProduct((current) => withSession(current, projectId, stepIds, currentDay))
+      return { steps: stepSummaries(projectId), undo }
+    },
+    ...(blockCalendar() ? { blockTime: async (input: BlockInput) => summarizeBlock(await blockTime(input)), unblockTime } : {}),
     listCalendar: () => activeDomain === 'personal' ? calendarEvents : [],
     holdGoal: async (id) => { await holdGoal(id); return summarizeGoal(productRef.current.goals.find((goal) => goal.id === id)!) },
     releaseGoal,
@@ -836,6 +934,13 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
   }
 
   function editTask(id: string) {
+    // A project's step on today opens its project, where steps are changed.
+    const stepId = stepIdOf(id)
+    if (stepId) {
+      const step = productRef.current.projectSteps.find((item) => item.id === stepId)
+      if (step) setProjectOpen({ id: step.projectId })
+      return
+    }
     setEditingTaskId(id)
     setView('task')
   }
@@ -900,6 +1005,8 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
   }
 
   function toggleComplete(id: string) {
+    const stepId = stepIdOf(id)
+    if (stepId) return toggleStep(stepId)
     const previous = tasksRef.current.find((task) => task.id === id)
     if (!previous) return
     const next = tasksRef.current.map((task) => {
@@ -909,6 +1016,7 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
     })
     commitTasks(next)
     if (!previous.recurrence && !previous.completed) {
+      releaseBlocks({ taskId: id })
       setProduct((current) => ({ ...current, activities: [...current.activities, {
         id: crypto.randomUUID(), domain: previous.domain, kind: 'task-completed', taskId: previous.id,
         projectId: previous.projectId, mode: previous.mode, occurredAt: new Date().toISOString(),
@@ -947,6 +1055,12 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
   const untriaged = tasks.filter((task) => task.domain === activeDomain && toSort(task))
   const activeProjects = product.projects.filter((project) => project.domain === activeDomain && project.status === 'active')
   const guesses = useTaskGuesses({ domain: activeDomain, tasks: untriaged, projects: activeProjects, settings })
+  // The projects that could be worked on today: ones with steps left.
+  const planProjects = activeProjects.filter((project) => openSteps(product, project.id).length > 0)
+  const sessions = sessionsOn(product, currentDay, activeDomain)
+  const shownProject = projectOpen && (activeProjects.find((project) => project.id === projectOpen.id) ?? (projectOpen.planning && planProjects.length === 1 ? planProjects[0] : undefined))
+  const canBlock = Boolean(blockCalendar())
+  const openProject = (id: string) => setProjectOpen({ id })
   function confirmGuess(id: string): void {
     const task = tasksRef.current.find((item) => item.id === id)
     if (task && guesses[id]) updateTask(sortedTask(task, guesses[id], currentDay))
@@ -1007,17 +1121,18 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
           weekPaid={weekPaid} floorToday={floorToday} strategicTodayMin={strategicTodayMin}
           onFloorNight={() => setProduct((current) => ({ ...current, dayOverrides: [...current.dayOverrides, { date: currentDay, domain: activeDomain, kind: 'floor' }] }))}
           onStrategic={(minutes) => setProduct((current) => ({ ...current, activities: [...current.activities, { id: newId('activity'), domain: activeDomain, kind: 'strategic', occurredAt: new Date().toISOString(), minutes }] }))}
-          untriaged={untriaged} guesses={guesses} projects={activeProjects} onConfirm={confirmGuess} openCount={openTasks.length} openMin={openEstimate} onToggle={toggleComplete} onOpen={editTask} doneTasks={doneToday(tasks, product.activities, currentDay, activeDomain)}
+          untriaged={untriaged} guesses={guesses} projects={activeProjects} onConfirm={confirmGuess} openCount={openTasks.length} openMin={openEstimate} onToggle={toggleComplete} onOpen={editTask} doneTasks={doneToday(tasks, product.activities, currentDay, activeDomain, stepsDoneOn(product, currentDay, activeDomain))}
+          sessions={sessions} canPlanProject={planProjects.some((project) => !sessions.some((session) => session.project.id === project.id && session.open.length))} onPlanProject={() => setProjectOpen({ planning: true })} onProject={openProject} onProjectOff={(id) => setProduct((current) => withoutSession(current, id, currentDay))}
           calendar={eventsOn(calendarEvents, currentDay)} inbox={activeDomain === 'personal' ? inboxCounts : undefined} mailAppUrl={activeDomain === 'personal' ? besideThisApp(settings.mailAppUrl) : ''} />}
         {shownView === 'dashboard' && <WorkScreens currentDay={currentDay} />}
-        {shownView === 'progress' && <ProgressView domain={activeDomain} product={product} tasks={tasks} journalVault={activeDomain === 'personal' ? tripVault ?? (connectionStatus === 'connected' ? personalData?.notes : undefined) : undefined} currentDay={currentDay} heldEvents={heldEvents} onProduct={setProduct} onGoals={() => setView('goals')} onReview={reviews.open} readMoney={activeDomain === 'personal' ? moneyReader(settings) : undefined} />}
+        {shownView === 'progress' && <ProgressView domain={activeDomain} product={product} tasks={tasks} journalVault={activeDomain === 'personal' ? tripVault ?? (connectionStatus === 'connected' ? personalData?.notes : undefined) : undefined} currentDay={currentDay} heldEvents={heldEvents} onProduct={setProduct} onGoals={() => setView('goals')} onReview={reviews.open} readMoney={activeDomain === 'personal' ? moneyReader(settings) : undefined} findsModel={activeDomain === 'personal' && settings.aiMode !== 'off' ? () => guessModel('personal', settings) : undefined} onProject={openProject} />}
         {shownView === 'chat' && chat}
-        {shownView === 'goals' && <GoalsView domain={activeDomain} product={product} tasks={tasks} currentDay={currentDay} heldEvents={heldEvents} canHold={activeDomain === 'personal' && connectionStatus === 'connected'} holdError={syncError} onProduct={setProduct} onEditGoal={(id, changes) => { updateGoal(id, changes) }} onHold={(id) => holdAction(() => holdGoal(id))} onRelease={(id) => holdAction(() => releaseGoal(id))} />}
+        {shownView === 'goals' && <GoalsView domain={activeDomain} product={product} tasks={tasks} currentDay={currentDay} heldEvents={heldEvents} canHold={activeDomain === 'personal' && connectionStatus === 'connected'} holdError={syncError} onProduct={setProduct} onEditGoal={(id, changes) => { updateGoal(id, changes) }} onHold={(id) => holdAction(() => holdGoal(id))} onRelease={(id) => holdAction(() => releaseGoal(id))} onProject={openProject} onProjectDone={finishProject} />}
         {shownView === 'stores' && <StoresView activeStore={activeStore} tasks={tasks} onStore={setActiveStore} onToggle={toggleComplete} onAdd={addTask} />}
         {(shownView === 'notes' || shownView === 'journal') && <Suspense fallback={<header className="view-head"><h1>{shownView}</h1></header>}><NotesView key={activeDomain} domain={activeDomain} settings={settings} vault={activeDomain === 'personal' ? tripVault ?? (connectionStatus === 'connected' ? personalData?.notes : undefined) : workJournal} onSettings={() => setView('settings')} onChat={(attachment) => { setChatAttachment(attachment); setView('chat') }} /></Suspense>}
         {shownView === 'trips' && <TripsView vault={tripVault} currentDay={currentDay} onSettings={() => setView('settings')} />}
         {shownView === 'settings' && <SettingsView domain={activeDomain} accountName={accountName} connectionStatus={connectionStatus} settings={settings} syncing={syncing} syncError={syncError} canInstall={install.canPrompt} onInstall={() => void install.install()} onConnect={connectPersonal} onDisconnect={disconnectPersonal} onSync={() => { void (activeDomain === 'work' ? syncWork() : syncPersonal(personalData, true)) }} onSettings={changeSettings} account={account} onAccount={markAccountChanged} />}
-        {shownView === 'task' && <TaskPage key={editingTaskId ?? 'new'} domain={activeDomain} existingTask={tasks.find((task) => task.id === editingTaskId)} guess={editingTaskId ? guesses[editingTaskId] : undefined} projects={activeProjects} onAdd={addTask} onUpdate={updateTask} onDelete={deleteTask} onDone={finishTask} onNotMine={delegateTask} onChat={(attachment) => { setChatAttachment(attachment); if (!docked) setView('chat') }} onCancel={() => { setEditingTaskId(undefined); setView('today') }} />}
+        {shownView === 'task' && <TaskPage key={editingTaskId ?? 'new'} domain={activeDomain} existingTask={tasks.find((task) => task.id === editingTaskId)} guess={editingTaskId ? guesses[editingTaskId] : undefined} projects={activeProjects} onAdd={addTask} onUpdate={updateTask} onDelete={deleteTask} onDone={finishTask} onNotMine={delegateTask} onChat={(attachment) => { setChatAttachment(attachment); if (!docked) setView('chat') }} onCancel={() => { setEditingTaskId(undefined); setView('today') }} blocks={editingTaskId ? blocksFor(product.timeBlocks, { taskId: editingTaskId }) : []} onBlock={canBlock ? blockTime : undefined} onUnblock={(id) => holdAction(() => unblockTime(id))} />}
       </div>
 
       {shownView !== 'task' && <nav className="tabbar" aria-label="primary">
@@ -1027,6 +1142,8 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
     </div>
 
     {docked && <aside className="dock">{chat}</aside>}
+    {projectOpen && shownProject && <ProjectSheet key={shownProject.id} project={shownProject} product={product} today={currentDay} planning={projectOpen.planning} canBlock={canBlock} onProduct={setProduct} onBlock={blockTime} onUnblock={(id) => holdAction(() => unblockTime(id))} onDone={() => finishProject(shownProject.id)} onClose={() => setProjectOpen(undefined)} />}
+    {projectOpen && !shownProject && projectOpen.planning && planProjects.length > 0 && <ProjectPicker projects={planProjects} product={product} onPick={(id) => setProjectOpen({ id, planning: true })} onClose={() => setProjectOpen(undefined)} />}
     {reviews.overlay}
     {touring && <Tour view={view} aiOn={settings.aiMode !== 'off'} onView={setView} />}
     <UpdateToast />

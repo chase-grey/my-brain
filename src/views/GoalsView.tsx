@@ -3,6 +3,7 @@ import { useState } from 'react'
 import type { CalendarBlock } from '../data/calendarGraphProvider'
 import { timeRange } from '../domain/calendar'
 import { RING_DOMAINS, type RingCommitment } from '../domain/lifeRing'
+import { stepsLeftMin } from '../domain/projectSteps'
 import { restReading } from '../domain/rest'
 import type { Commitment, Domain, Goal, GoalShape, LifeDomain, Project, Task } from '../domain/types'
 import { duration, newId, shortDate } from '../format'
@@ -36,7 +37,10 @@ function GoalFields({ shape, title, hoursValue, date, onShape, onTitle, onHours,
   </>
 }
 
-export function GoalsView({ domain, product, tasks, currentDay, heldEvents, canHold, holdError, onProduct, onEditGoal, onHold, onRelease }: {
+export function GoalsView({ domain, product, tasks, currentDay, heldEvents, canHold, holdError, onProduct, onEditGoal, onHold, onRelease, onProject, onProjectDone }: {
+  /** Opens a project: its steps, working on it today, and blocking time for it. */
+  onProject?: (id: string) => void
+  onProjectDone?: (id: string) => void
   domain: Domain
   product: ProductState
   tasks: Task[]
@@ -139,12 +143,15 @@ export function GoalsView({ domain, product, tasks, currentDay, heldEvents, canH
 
     <Card title="projects">
       {projects.length > 0 && <ul className="rows">{projects.map((project) => {
-        const remaining = tasks.filter((task) => task.projectId === project.id && !task.completed).reduce((sum, task) => sum + task.estimateMin, 0)
+        const remaining = tasks.filter((task) => task.projectId === project.id && !task.completed).reduce((sum, task) => sum + task.estimateMin, 0) + stepsLeftMin(product, project.id)
         const goal = product.goals.find((item) => item.id === project.goalId)
         return <li className="row" key={project.id}>
-          <div className="row-main"><span className="row-title">{project.title}</span><small>{[project.mode, goal?.title].filter(Boolean).join(' · ')}</small></div>
+          <button className="row-main" type="button" onClick={() => onProject?.(project.id)}><span className="row-title">{project.title}</span><small>{[project.mode, goal?.title].filter(Boolean).join(' · ')}</small></button>
           <span className="row-meta">{duration(remaining)}</span>
-          <Menu label={`options for ${project.title}`} items={[{ label: 'mark done', onSelect: () => onProduct((current) => ({ ...current, projects: current.projects.map((item) => item.id === project.id ? { ...item, status: 'done' } : item) })) }]} />
+          <Menu label={`options for ${project.title}`} items={[
+            { label: 'steps', onSelect: () => onProject?.(project.id) },
+            { label: 'mark done', onSelect: () => onProjectDone ? onProjectDone(project.id) : onProduct((current) => ({ ...current, projects: current.projects.map((item) => item.id === project.id ? { ...item, status: 'done' } : item) })) },
+          ]} />
         </li>
       })}</ul>}
       <form className="stack" onSubmit={addProject}>
