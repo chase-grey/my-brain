@@ -74,6 +74,34 @@ export function welcomeSettings(base: AppSettings, ai: AiAnswers, picked: readon
   return { ...newPersonSettings({ ...base, ...aiSettings(ai) }), ...(picked.includes('email') ? { mailAppUrl: defaultSettings.mailAppUrl } : {}) }
 }
 
+/** How long the install steps stand alone before staying in the browser is offered. */
+export const browserDelayMs = 4000
+
+/**
+ * The first screen on an iPhone still in a Safari tab. Installing is the way on, so staying in
+ * the browser is held back for {@link browserDelayMs} and then offered quietly, marked not recommended.
+ * `shown` is for rendering a state directly; on screen the timer decides.
+ */
+export function InstallSteps({ onContinue, shown }: { onContinue: () => void; shown?: boolean }) {
+  const [late, setLate] = useState(false)
+  useEffect(() => {
+    const timer = setTimeout(() => setLate(true), browserDelayMs)
+    return () => clearTimeout(timer)
+  }, [])
+  return <main className="welcome">
+    <h1>steps to install</h1>
+    <ol className="welcome-steps">
+      <li>tap share</li>
+      <li>add to home screen</li>
+      <li>open my brain from the home screen</li>
+    </ol>
+    {(shown ?? late) && <div className="welcome-later">
+      <button className="link-button" type="button" onClick={onContinue}>continue in the browser</button>
+      <small>not recommended</small>
+    </div>}
+  </main>
+}
+
 const headings: Record<Exclude<Step, 'start'>, string> = { name: 'about you', uses: 'what for?', apps: 'get the apps', chat: 'use ai?' }
 
 /**
@@ -104,7 +132,7 @@ export function WelcomeView({ onDone }: { onDone: (account: DeviceAccount, setti
   const [error, setError] = useState<string>()
   const data = useRef<PersonalGraphData | undefined>(undefined)
   const checking = useRef(false)
-  // Android: chrome's install dialog, or the way over to chrome, offered before anything is typed. iOS gets "install first" above.
+  // Android: chrome's install dialog, or the way over to chrome, offered before anything is typed. iOS gets the install steps above.
   const install = useInstallPrompt()
   const [installSkipped, setInstallSkipped] = useState(false)
   // One thing to do at a time: the install while there is one to do, and connecting only after it.
@@ -188,17 +216,7 @@ export function WelcomeView({ onDone }: { onDone: (account: DeviceAccount, setti
     }
   }
 
-  if (installFirst) {
-    return <main className="welcome">
-      <h1>install first</h1>
-      <ol className="welcome-steps">
-        <li>tap share</li>
-        <li>add to home screen</li>
-        <li>open my brain from the home screen</li>
-      </ol>
-      <button className="plain" type="button" onClick={() => setInstallFirst(false)}>continue in the browser</button>
-    </main>
-  }
+  if (installFirst) return <InstallSteps onContinue={() => setInstallFirst(false)} />
 
   if (step === 'start') {
     return <main className="welcome">
