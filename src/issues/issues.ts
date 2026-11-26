@@ -5,11 +5,11 @@
  * The app talks to GitHub itself, with a token of its own kept in settings: issues only, on these repos only. It is
  * not the vault token, which can write files; a token that could write to these repos would deploy whatever it pushed.
  */
-export const issueApps = ['my-brain', 'my-mail'] as const
+export const issueApps = ['my-brain', 'my-mail', 'workout-tracker'] as const
 export type IssueApp = typeof issueApps[number]
 
-export const issueRepos: Record<IssueApp, string> = { 'my-brain': 'chase-grey/my-brain', 'my-mail': 'chase-grey/my-mail' }
-export const issueAppNames: Record<IssueApp, string> = { 'my-brain': 'my brain', 'my-mail': 'my mail' }
+export const issueRepos: Record<IssueApp, string> = { 'my-brain': 'chase-grey/my-brain', 'my-mail': 'chase-grey/my-mail', 'workout-tracker': 'chase-grey/workout-tracker' }
+export const issueAppNames: Record<IssueApp, string> = { 'my-brain': 'my brain', 'my-mail': 'my mail', 'workout-tracker': 'workout tracker' }
 
 /** The labels scripts/autofix.mjs reads and sets. */
 export const appLabel = 'from-app'
@@ -115,7 +115,7 @@ export class GitHubIssues implements IssueStore {
   }
 
   async list(): Promise<TrackedIssue[]> {
-    const perApp = await Promise.all(issueApps.map(async (app) => {
+    const perApp = await Promise.allSettled(issueApps.map(async (app) => {
       const issues = await this.request<GitHubIssue[]>(app, 'GET', `/issues?labels=${appLabel}&state=all&per_page=50&sort=created&direction=desc`)
       // The list endpoint mixes pull requests in with issues.
       return issues.filter((issue) => !issue.pull_request).map((issue): TrackedIssue => ({
@@ -128,7 +128,13 @@ export class GitHubIssues implements IssueStore {
         closedAt: issue.closed_at ?? '',
       }))
     }))
-    return perApp.flat()
+    // A token not yet given one of the repos still lists the others; only when none can be read is the list an error.
+    const read = perApp.flatMap((result) => result.status === 'fulfilled' ? [result.value] : [])
+    if (read.length === 0) {
+      const failed = perApp.find((result): result is PromiseRejectedResult => result.status === 'rejected')
+      throw failed?.reason ?? new IssueError('github returned nothing')
+    }
+    return read.flat()
   }
 
   /** What the fixer asked: the newest comment, without the bold line it leads with for anyone reading on GitHub. */
