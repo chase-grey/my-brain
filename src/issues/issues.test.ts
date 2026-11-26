@@ -3,7 +3,7 @@ import { describeAction } from '../companion/actions'
 import { buildSystemPrompt } from '../companion/companionPrompt'
 import { companionTools, executeTool, type CompanionActions, type PlanSummary } from '../companion/companionTools'
 import { syncedFields } from '../settingsSync'
-import { GitHubIssues, issueBodyLimit, issueProgress, issuesWaiting, shownIssues, type IssueStore, type TrackedIssue } from './issues'
+import { GitHubIssues, issueBodyLimit, mayReportIssues, issueProgress, issuesWaiting, shownIssues, type IssueStore, type TrackedIssue } from './issues'
 
 const actions = {} as CompanionActions
 const summary: PlanSummary = { today: '2026-11-25', openCount: 0, dueToday: [], overdue: [], thisWeek: [], suggested: [], goals: [], projects: [] }
@@ -32,6 +32,14 @@ describe('reporting an issue from chat', () => {
     expect(companionTools({ hasVault: false, hasIssues: true }).map((tool) => tool.name)).toContain('report_issue')
   })
 
+  it('is only ever for the owner, in the personal space', () => {
+    expect(mayReportIssues({ domain: 'personal', owner: true, token: 'token' })).toBe(true)
+    // Someone else's device, even holding a token that came over in a setup link.
+    expect(mayReportIssues({ domain: 'personal', owner: false, token: 'token' })).toBe(false)
+    expect(mayReportIssues({ domain: 'work', owner: true, token: 'token' })).toBe(false)
+    expect(mayReportIssues({ domain: 'personal', owner: true, token: '' })).toBe(false)
+  })
+
   it('waits for approval on a card that shows every word that will be public', async () => {
     const description = await describeAction('report_issue', { app: 'my-mail', title: 'archive leaves the thread open', body: 'after archive the thread stays on screen.\nit should go back to the inbox.' }, { actions })
     expect(description).toEqual({
@@ -53,7 +61,7 @@ describe('reporting an issue from chat', () => {
     expect(await executeTool('report_issue', { app: 'workout-tracker', title: 'x', body: 'y' }, { actions, issues })).toEqual({ ok: false, error: 'app must be one of my-brain, my-mail' })
     // A report too long to file whole is refused, so what goes up is never a cut version of what was approved.
     expect((await executeTool('report_issue', { app: 'my-brain', title: 'x', body: 'y'.repeat(issueBodyLimit + 1) }, { actions, issues })).ok).toBe(false)
-    expect(await executeTool('report_issue', { app: 'my-brain', title: 'x', body: 'y' }, { actions })).toEqual({ ok: false, error: 'there is no issue token in settings' })
+    expect(await executeTool('report_issue', { app: 'my-brain', title: 'x', body: 'y' }, { actions })).toEqual({ ok: false, error: 'report issues is off' })
     expect(file).toHaveBeenCalledTimes(1)
   })
 

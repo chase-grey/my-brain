@@ -20,6 +20,14 @@ const reviewLabel = 'autofix-review'
 const stalledLabel = 'autofix-failed'
 
 export const issueTitleLimit = 120
+/**
+ * Who the chat may file an issue for: the owner, in the personal space, with an issue token. Anyone else's chat is never
+ * given the tool or told about it, whatever their settings hold.
+ */
+export function mayReportIssues({ domain, owner, token }: { domain: 'personal' | 'work'; owner: boolean; token: string }): boolean {
+  return domain === 'personal' && owner && token.length > 0
+}
+
 export const issueBodyLimit = 4000
 
 export type TrackedIssue = {

@@ -269,6 +269,7 @@ button.row-main { min-height: 3rem; }
 .journal-problem { margin: 0; padding: 0.25rem 0; color: var(--danger); font-size: 0.9rem; }
 /* the chat's … menu: model and effort above new chat, past chats and upload */
 .menu-field { display: flex; align-items: center; justify-content: space-between; gap: 1rem; min-height: 2.6rem; padding: 0 0.35rem 0 0.75rem; }
+.menu-field input[role="switch"] { width: 1.25rem; height: 1.25rem; margin: 0 0.5rem 0 0; accent-color: var(--accent); }
 .picker { min-height: 2rem; padding: 0 1.4rem 0 0.7rem; border: 1px solid var(--border); border-radius: 999px; background: var(--surface-2) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") no-repeat right 0.45rem center / 0.8rem; color: var(--muted); font-size: 0.85rem; appearance: none; -webkit-appearance: none; }
 .icon-button { display: grid; place-items: center; width: 2.25rem; height: 2.25rem; border: 1px solid var(--border); border-radius: 50%; color: var(--muted); background: var(--surface-2); }
 .icon-button[aria-pressed="true"] { border-color: var(--accent); color: var(--text); background: color-mix(in srgb, var(--accent) 12%, var(--surface)); }

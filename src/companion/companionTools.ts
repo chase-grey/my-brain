@@ -427,7 +427,7 @@ async function run(name: string, input: Args, { actions, vault, memoryFolder = '
       return done({ ok: true, saved }, async () => undo())
     }
     case 'report_issue': {
-      if (!issues) throw new Error('there is no issue token in settings')
+      if (!issues) throw new Error('report issues is off')
       const app = arg(input, 'app')
       if (!isIssueApp(app)) throw new Error(`app must be one of ${issueApps.join(', ')}`)
       const title = requireString(input, 'title')

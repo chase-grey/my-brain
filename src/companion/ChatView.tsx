@@ -27,7 +27,7 @@ import { memoryFolders } from './memory'
 import { clearHistory, conversationTitle, conversationUpdatedAt, deleteConversation, loadHistory, newConversation, saveConversation, type CompanionConversation, type CompanionTurn } from './companionStore'
 import type { CompanionActions, PlanSummary } from './companionTools'
 import { GitHubVault, normalizeBranch, normalizeRepo, vaultConfigured, type VaultStore } from './githubVault'
-import { GitHubIssues, type IssueStore } from '../issues/issues'
+import { GitHubIssues, mayReportIssues, type IssueStore } from '../issues/issues'
 import { JevClient } from './jev'
 import { OpenAiCompatClient } from './openAiClient'
 import { routeWithJev } from './route'
@@ -133,8 +133,10 @@ function withStatusForAll(turns: CompanionTurn[], from: ActionStatus[], to: Acti
     : turn)
 }
 
-export function ChatView({ domain, settings, actions, summary, hasCalendar = false, onSettings, onChangeSettings, docked = false, talk = false, onTalkStarted, notesVault, userName, prefill, onPrefilled, mail, mailId, mailOff = false, onMailTaken, attach: handed, onAttached }: {
+export function ChatView({ domain, owner = false, settings, actions, summary, hasCalendar = false, onSettings, onChangeSettings, docked = false, talk = false, onTalkStarted, notesVault, userName, prefill, onPrefilled, mail, mailId, mailOff = false, onMailTaken, attach: handed, onAttached }: {
   domain: Domain
+  /** One of Chase's own devices: the only ones that can file an issue. */
+  owner?: boolean
   settings: AppSettings
   /** Notes in the account's OneDrive, used when no github vault is set up. */
   notesVault?: VaultStore
@@ -226,15 +228,21 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
 
   const vault = useMemo<VaultStore | undefined>(() => hasGitHubVault ? new GitHubVault(vaultConfig) : fallbackVault, [hasGitHubVault, fallbackVault, vaultConfig.repo, vaultConfig.token, vaultConfig.branch])
 
-  // Reports about the apps are filed from the personal chat only: a work conversation never goes to a public repo.
-  const issueToken = domain === 'personal' ? compact(settings.issueToken) : ''
-  const issues = useMemo<IssueStore | undefined>(() => issueToken ? new GitHubIssues(issueToken) : undefined, [issueToken])
+  // Reports about the apps are filed from the owner's personal chat only, and only while he has switched it on here:
+  // the switch starts off every time the chat opens and goes off again once a report is filed.
+  const issueToken = compact(settings.issueToken)
+  const canReport = mayReportIssues({ domain, owner, token: issueToken })
+  const [reporting, setReporting] = useState(false)
+  const issues = useMemo<IssueStore | undefined>(() => canReport && reporting ? new GitHubIssues(issueToken) : undefined, [canReport, reporting, issueToken])
+  // Read when a message is sent and when a card is approved, so switching it off also stops a card already on screen.
+  const issuesRef = useRef(issues)
+  issuesRef.current = issues
 
   // Where this space's journal is kept: the notes vault, or for work the vault on the work pc.
   const journalStore = useMemo<JournalStore | undefined>(() => domain === 'work' ? new WorkJournal() : vault, [domain, vault])
 
   const companion = useMemo<Companion | undefined>(() => {
-    const systemPrompt = (memoryIndex?: string) => buildSystemPrompt({ domain, summary: summaryRef.current, vaultAvailable: domain === 'work' ? true : hasVault, memoryIndex, notes: fallbackVault ? 'onedrive' : 'homebase', userName, mailAvailable: domain === 'personal' && Boolean(mailRef.current), issuesAvailable: Boolean(issues), mail: conversationRef.current.mail, canBlockTime: domain === 'work' ? Boolean(actionsRef.current.blockTime) : hasCalendarRef.current && Boolean(actionsRef.current.blockTime) })
+    const systemPrompt = (memoryIndex?: string) => buildSystemPrompt({ domain, summary: summaryRef.current, vaultAvailable: domain === 'work' ? true : hasVault, memoryIndex, notes: fallbackVault ? 'onedrive' : 'homebase', userName, mailAvailable: domain === 'personal' && Boolean(mailRef.current), issuesAvailable: Boolean(issuesRef.current), mail: conversationRef.current.mail, canBlockTime: domain === 'work' ? Boolean(actionsRef.current.blockTime) : hasCalendarRef.current && Boolean(actionsRef.current.blockTime) })
     if (domain === 'work') {
       return createBridgeCompanion({ client: new BridgeCompanionClient(), sessionId: () => conversationRef.current.sessionId, systemPrompt, model: modelShortName(model), effort: settings.chatEffort, actions: () => actionsRef.current })
     }
@@ -254,9 +262,9 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
       memoryFolder: memoryFolders[domain],
       hasCalendar: () => hasCalendarRef.current,
       mail: () => domain === 'personal' ? mailRef.current : undefined,
-      issues: () => issues,
+      issues: () => issuesRef.current,
     })
-  }, [domain, hasKey, viaBridge, keyReady, hasGitHubVault, fallbackVault, userName, settings.aiMode, settings.aiProvider, baseUrl, model, settings.anthropicApiKey, settings.jevApiKey, settings.chatEffort, vaultConfig.repo, vaultConfig.token, vaultConfig.branch, issues])
+  }, [domain, hasKey, viaBridge, keyReady, hasGitHubVault, fallbackVault, userName, settings.aiMode, settings.aiProvider, baseUrl, model, settings.anthropicApiKey, settings.jevApiKey, settings.chatEffort, vaultConfig.repo, vaultConfig.token, vaultConfig.branch])
 
   useEffect(() => {
     if (domain !== 'work') return
@@ -452,6 +460,7 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
     try {
       const decision = await pending.decide(approvalId, approved)
       if (decision.undo) undosRef.current.set(approvalId, decision.undo)
+      if (decision.action.tool === 'report_issue' && decision.action.status === 'done') setReporting(false)
       update({ ...conversationRef.current, turns: withAction(conversationRef.current.turns, approvalId, decision.action) })
       if (decision.reply) absorb(decision.reply)
     } catch (error) {
@@ -603,6 +612,7 @@ export function ChatView({ domain, settings, actions, summary, hasCalendar = fal
           {anthropic && model !== autoModel && <label className="menu-field">effort<select className="picker" aria-label="effort" value={settings.chatEffort} onChange={(event) => onChangeSettings?.({ chatEffort: event.target.value as AppSettings['chatEffort'] })}>
             {effortOptions.map((level) => <option key={level} value={level}>{level}</option>)}
           </select></label>}
+          {canReport && <label className="menu-field">report issues<input type="checkbox" role="switch" checked={reporting} onChange={(event) => setReporting(event.target.checked)} /></label>}
         </>}
         items={[
           { label: 'new chat', onSelect: startNew, disabled: !conversation.turns.length && !conversation.mail },
