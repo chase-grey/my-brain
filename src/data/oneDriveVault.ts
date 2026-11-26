@@ -10,7 +10,7 @@ import { GraphError, type GraphClient } from './graphClient'
  */
 export const oneDriveNotesFolder = 'notes'
 
-type DriveItem = { name: string; eTag?: string; file?: unknown; folder?: unknown }
+type DriveItem = { name: string; eTag?: string; lastModifiedDateTime?: string; file?: unknown; folder?: unknown }
 
 function encodePath(path: string): string {
   const clean = path.split('/').filter(Boolean).map(encodeURIComponent).join('/')
@@ -35,7 +35,7 @@ export class OneDriveVault implements VaultStore {
     const walk = async (folder: string): Promise<void> => {
       let items: DriveItem[]
       try {
-        items = await this.graph.collection<DriveItem>(`/me/drive/special/approot:/${encodePath(folder)}:/children?$select=name,eTag,file,folder`)
+        items = await this.graph.collection<DriveItem>(`/me/drive/special/approot:/${encodePath(folder)}:/children?$select=name,eTag,lastModifiedDateTime,file,folder`)
       } catch (error) {
         if (error instanceof GraphError && error.status === 404) return
         throw error
@@ -43,7 +43,7 @@ export class OneDriveVault implements VaultStore {
       for (const item of items) {
         const full = `${folder}/${item.name}`
         if (item.folder) await walk(full)
-        else if (item.file) notes.push({ path: full.slice(this.root.length + 1), sha: item.eTag ?? '' })
+        else if (item.file) notes.push({ path: full.slice(this.root.length + 1), sha: item.eTag ?? '', ...(item.lastModifiedDateTime ? { edited: item.lastModifiedDateTime } : {}) })
       }
     }
     await walk(this.root)

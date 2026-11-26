@@ -1,5 +1,6 @@
 export type VaultConfig = { repo: string; token: string; branch: string }
-export type VaultNote = { path: string; sha: string }
+/** `edited` is when the note was last changed, where the vault's list says so. */
+export type VaultNote = { path: string; sha: string; edited?: string }
 
 export class GitHubError extends Error {
   constructor(readonly status: number, readonly responseBody: string, message = describeGitHubStatus(status)) {
@@ -59,6 +60,7 @@ export function vaultConfigured(config: Partial<VaultConfig>): config is VaultCo
 }
 
 export class GitHubVault implements VaultStore {
+  // Every file, not only the notes: a file beside them (the notes' arrangement) needs its sha to be written over.
   private tree?: Promise<VaultNote[]>
 
   constructor(
@@ -71,14 +73,42 @@ export class GitHubVault implements VaultStore {
     this.tree = undefined
   }
 
-  listNotes(): Promise<VaultNote[]> {
+  private files(): Promise<VaultNote[]> {
     this.tree ??= this.request<TreeResponse>(`/git/trees/${encodeURIComponent(this.config.branch)}?recursive=1`)
-      .then((response) => response.tree.filter((item) => item.type === 'blob' && item.path.endsWith('.md')).map(({ path, sha }) => ({ path, sha })))
+      .then((response) => response.tree.filter((item) => item.type === 'blob').map(({ path, sha }) => ({ path, sha })))
       .catch((error: unknown) => {
         this.tree = undefined
         throw error
       })
     return this.tree
+  }
+
+  async listNotes(): Promise<VaultNote[]> {
+    return (await this.files()).filter((file) => file.path.endsWith('.md'))
+  }
+
+  /** When each of these files was last changed: the date of the last commit that touched it. One request for all of them. */
+  async editedDates(paths: string[]): Promise<Record<string, string>> {
+    if (!paths.length) return {}
+    const [owner, name] = this.config.repo.split('/')
+    const fields = paths.map((path, index) => `n${index}: history(first: 1, path: ${JSON.stringify(path)}) { nodes { committedDate } }`).join(' ')
+    const response = await this.fetcher(`${this.baseUrl}/graphql`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${this.config.token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        query: `query($owner: String!, $name: String!, $ref: String!) { repository(owner: $owner, name: $name) { object(expression: $ref) { ... on Commit { ${fields} } } } }`,
+        variables: { owner, name, ref: this.config.branch },
+      }),
+    })
+    if (!response.ok) throw new GitHubError(response.status, await response.text())
+    const answer = await response.json() as { data?: { repository?: { object?: Record<string, { nodes?: { committedDate?: string }[] } | undefined> | null } | null } }
+    const found = answer.data?.repository?.object ?? {}
+    const dates: Record<string, string> = {}
+    paths.forEach((path, index) => {
+      const date = found[`n${index}`]?.nodes?.[0]?.committedDate
+      if (date) dates[path] = date
+    })
+    return dates
   }
 
   async readNote(path: string): Promise<{ content: string; sha: string }> {
@@ -120,8 +150,8 @@ export class GitHubVault implements VaultStore {
 
   private async currentSha(path: string, fresh = false): Promise<string | undefined> {
     if (fresh) this.invalidate()
-    const notes = await this.listNotes()
-    return notes.find((note) => note.path === path)?.sha
+    const files = await this.files()
+    return files.find((file) => file.path === path)?.sha
   }
 
   private async put(path: string, content: string, sha?: string): Promise<{ sha: string }> {

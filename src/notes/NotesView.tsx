@@ -10,7 +10,9 @@ import type { AppSettings } from '../settings'
 import { Empty, Menu } from '../ui'
 import { dictate, recognitionSupported, voiceAllowed } from '../voice/speech'
 import { endMessage } from '../voice/useVoice'
+import { arrange, followDelete, followMove, keepArrangement, keepEmptied, loadArrangement, loadEdited, readEdited, syncArrangement, tidied, toggleFavorite, withGroup, withOrder, withoutGroup, type Arrangement } from './arrange'
 import { NoteEditor } from './NoteEditor'
+import { NotesList } from './NotesList'
 import { findNotes, folderLabel, folderName, folderPath, inJournal, keepUnsaved, listFolder, loadOps, loadUnsaved, mergeNote, movedPath, newNotePath, noteAttachment, noteFolders, notesFolder, noteTitle, renamedPath, withPending } from './notes'
 import { moveNote, offlineNotes, openNotes, removeNote, syncNotes, unreachable, waitingCount, type OfflineVault } from './offline'
 import { tidy, tidyModel, tidyTools, type TidyTool } from './tidy'
@@ -68,8 +70,12 @@ function TidyBar({ working, offered, onKeep, onUndo }: { working: boolean; offer
 }
 
 /** One note, always editable: type or talk straight into it. It saves itself. */
-function NotePage({ path, newEntry, notes, domain, vault, settings, onBack, onChat, onSaved, onMove, onDelete }: {
+function NotePage({ path, newEntry, notes, groups, favorite, onFavorite, domain, vault, settings, onBack, onChat, onSaved, onMove, onDelete }: {
   path: string
+  /** Groups made on the list that hold nothing yet: a note can be moved into one. */
+  groups: string[]
+  favorite: boolean
+  onFavorite: () => void
   /** Every note, for the names already taken and the folders there are. */
   notes: VaultNote[]
   /** Rename or move: the note is at this path from now on. */
@@ -324,6 +330,7 @@ function NotePage({ path, newEntry, notes, domain, vault, settings, onBack, onCh
       {shown && <Menu items={[
         ...tidyTools.map((tool) => ({ label: tool.label, onSelect: () => { stop(); void tidying.run(tool.id) }, disabled: pending })),
         { label: 'add to chat', onSelect: () => onChat(noteAttachment(path, text.current)) },
+        { label: favorite ? 'remove from favorites' : 'add to favorites', onSelect: onFavorite },
         ...(inJournal(path) ? [] : [{ label: 'rename', onSelect: () => ask('rename'), disabled: pending }, { label: 'move', onSelect: () => ask('move'), disabled: pending }]),
         { label: 'delete', onSelect: () => { void remove() }, disabled: pending },
       ]} />}
@@ -334,7 +341,7 @@ function NotePage({ path, newEntry, notes, domain, vault, settings, onBack, onCh
       <button className="primary" type="submit" disabled={!name.trim()}>rename</button>
     </form>}
     {asking === 'move' && <div className="notes-move">
-      <div className="notes-folders" role="group" aria-label="folder">{noteFolders(notes).map((item) => <button key={item} className="pill" type="button" aria-pressed={item === folder} disabled={item === folder} onClick={() => { void moveTo(movedPath(notes, path, item)) }}>{folderLabel(item)}</button>)}</div>
+      <div className="notes-folders" role="group" aria-label="folder">{[...new Set([...noteFolders(notes), ...groups])].map((item) => <button key={item} className="pill" type="button" aria-pressed={item === folder} disabled={item === folder} onClick={() => { void moveTo(movedPath(notes, path, item)) }}>{folderLabel(item)}</button>)}</div>
       <form className="add-line" onSubmit={(event) => { event.preventDefault(); const to = folderPath(name); void moveTo(to && movedPath(notes, path, to)) }}>
         <input aria-label="new folder" placeholder="new folder" value={name} onChange={(event) => setName(event.target.value)} />
         <button className="primary" type="submit" disabled={!name.trim()}>move</button>
@@ -448,6 +455,9 @@ export function NotesView({ domain, vault, settings, onSettings, onChat }: {
   const [newName, setNewName] = useState('')
   const [problem, setProblem] = useState<string>()
   const [sync, setSync] = useState({ offline: false, waiting: 0 })
+  const [arrangement, setArrangement] = useState<Arrangement>(() => loadArrangement().value)
+  const [edited, setEdited] = useState(() => loadEdited())
+  const [grouping, setGrouping] = useState(false)
   // Notes that can be changed are also kept on the device, so they are there with no connection. The work journal is not.
   const kept = useMemo<OfflineVault | undefined>(() => (vault && editable ? offlineNotes(vault as VaultStore) : undefined), [editable, vault])
   const store: JournalStore | undefined = kept ?? vault
@@ -458,6 +468,8 @@ export function NotesView({ domain, vault, settings, onSettings, onChat }: {
       setNotes([...all])
       setProblem(undefined)
       if (kept) setSync({ offline: kept.offline, waiting: waitingCount() })
+      // When each note was last edited, which the list is read by. Only what is new or changed is asked about.
+      if (kept && !kept.offline) void readEdited(kept.remote, all).then(setEdited)
     }).catch((error: unknown) => {
       setNotes((current) => current ?? [])
       if (kept && unreachable(error)) setSync({ offline: true, waiting: waitingCount() })
@@ -480,7 +492,36 @@ export function NotesView({ domain, vault, settings, onSettings, onChat }: {
 
   // The list as it stands here: what is waiting to go up already shows.
   const shown = useMemo(() => (notes && kept ? withPending(notes, Object.keys(loadUnsaved()), loadOps()) : notes), [kept, notes])
-  const listing = useMemo(() => listFolder(shown ?? [], folder), [shown, folder])
+  // What was arranged by hand (favorites, groups and their order) is kept in the vault, so every device shows the same.
+  useEffect(() => {
+    if (!kept) return
+    let live = true
+    const settle = () => { void syncArrangement(kept.remote).then((value) => { if (live) setArrangement(value) }) }
+    settle()
+    window.addEventListener('online', settle)
+    return () => { live = false; window.removeEventListener('online', settle) }
+  }, [kept])
+  const rearrange = useCallback((change: (was: Arrangement) => Arrangement, list = shown) => {
+    if (!kept) return
+    const was = loadArrangement().value
+    const next = change(was)
+    // With the vault's own list in hand, what points at nothing any more is dropped on the way. A star just put on, or just moved with its note, stays.
+    const fresh = next.favorites.filter((path) => !was.favorites.includes(path)).map((path) => ({ path, sha: '' }))
+    const now = list && !kept.offline ? tidied(next, [...list, ...fresh]) : next
+    keepArrangement(now, true)
+    setArrangement(now)
+    void syncArrangement(kept.remote)
+  }, [kept, shown])
+  /** A note leaves its place, for another or for good. Its star follows it, and a group it leaves empty stays until it is deleted. */
+  const left = useCallback((from: string, to?: string) => {
+    const after = (shown ?? []).filter((note) => note.path !== from)
+    rearrange((was) => keepEmptied(to ? followMove(was, from, to) : followDelete(was, from), after, from), to ? [...after, { path: to, sha: '' }] : after)
+  }, [rearrange, shown])
+  const listing = useMemo(() => {
+    if (kept) return arrange(shown ?? [], folder, arrangement, edited, Object.keys(loadUnsaved()))
+    const plain = listFolder(shown ?? [], folder)
+    return { favorites: [], groups: plain.folders, notes: plain.notes }
+  }, [arrangement, edited, folder, kept, shown])
   const found = useMemo(() => (query.trim() ? findNotes(shown ?? [], root, query) : undefined), [shown, query, root])
 
   if (!vault) return <section className="chat notes" aria-label={name}>
@@ -492,9 +533,10 @@ export function NotesView({ domain, vault, settings, onSettings, onChat }: {
   if (open === 'draft') return <DraftPage domain={domain} vault={vault} settings={settings} onBack={close} onSaved={close} />
   if (open && kept) {
     const from = open.path
-    return <NotePage key={`${from} ${open.newEntry ? 'new' : ''}`} path={from} newEntry={open.newEntry} notes={shown ?? []} domain={domain} vault={kept} settings={settings} onBack={close} onChat={onChat} onSaved={load}
+    return <NotePage key={`${from} ${open.newEntry ? 'new' : ''}`} path={from} newEntry={open.newEntry} notes={shown ?? []} groups={arrangement.groups} favorite={arrangement.favorites.includes(from)} onFavorite={() => rearrange((was) => toggleFavorite(was, from))} domain={domain} vault={kept} settings={settings} onBack={close} onChat={onChat} onSaved={load}
       onMove={async (to) => {
         await moveNote(kept, from, to)
+        left(from, to)
         // Online this is over in a moment. With no connection the note reopens from this device and the vault follows later.
         await Promise.race([syncNotes(kept), new Promise((resolve) => setTimeout(resolve, moveWaitMs))])
         setOpen({ path: to })
@@ -502,6 +544,7 @@ export function NotesView({ domain, vault, settings, onSettings, onChat }: {
       }}
       onDelete={async () => {
         await removeNote(kept, from)
+        left(from)
         close()
       }} />
   }
@@ -515,16 +558,38 @@ export function NotesView({ domain, vault, settings, onSettings, onChat }: {
     setNewName('')
     setOpen({ path })
   }
+  function addGroup(event: FormEvent) {
+    event.preventDefault()
+    const to = folderPath(`${folderLabel(folder)}/${newName}`)
+    if (!to || to === folder) return
+    rearrange((was) => withGroup(was, shown ?? [], to))
+    setGrouping(false)
+    setNewName('')
+  }
+  /** A note carried onto a group or the folder above goes there, its star with it. */
+  async function carryInto(from: string, to: string) {
+    const path = kept && movedPath(shown ?? [], from, to)
+    if (!kept || !path) return
+    await moveNote(kept, from, path)
+    left(from, path)
+    load()
+  }
+  const emptyGroup = arrangement.groups.includes(folder) && !listing.groups.length && !listing.notes.length
 
   return <section className="chat notes" aria-label={name}>
     <header className="view-head">
       {folder !== root && <button className="icon-button" type="button" aria-label="back" onClick={() => setFolder(folder.slice(0, folder.lastIndexOf('/')))}><Icon name="back" /></button>}
       <h1>{folder === root ? name : folderName(folder)}</h1>
-      {editable && !inJournal(folder) && <button className="pill" type="button" aria-pressed={naming} onClick={() => setNaming(!naming)}>new note</button>}
+      {editable && !inJournal(folder) && <button className="pill" type="button" aria-pressed={naming} onClick={() => { setGrouping(false); setNewName(''); setNaming(!naming) }}>new note</button>}
       <button className="pill" type="button" onClick={() => setOpen(editable ? { path: journalPath(today()), newEntry: true } : 'draft')}>{inJournal(folder) ? 'new entry' : 'new journal entry'}</button>
+      {kept && !inJournal(folder) && <Menu items={[
+        { label: 'new group', onSelect: () => { setNaming(false); setNewName(''); setGrouping(true) } },
+        ...(emptyGroup ? [{ label: 'delete group', onSelect: () => { rearrange((was) => withoutGroup(was, folder)); setFolder(folder.slice(0, folder.lastIndexOf('/'))) } }] : []),
+      ]} />}
     </header>
     <div className="chat-history">
       {naming && <form className="add-line" onSubmit={addNote}><input autoFocus aria-label="note name" placeholder="note name" value={newName} onChange={(event) => setNewName(event.target.value)} /><button className="primary" type="submit" disabled={!newName.trim()}>add</button></form>}
+      {grouping && <form className="add-line" onSubmit={addGroup}><input autoFocus aria-label="group name" placeholder="group name" value={newName} onChange={(event) => setNewName(event.target.value)} /><button className="primary" type="submit" disabled={!newName.trim()}>add</button></form>}
       <input className="notes-search" type="search" aria-label="search" placeholder="search" value={query} onChange={(event) => setQuery(event.target.value)} />
       {problem && <p className="journal-problem" role="alert">{problem}</p>}
       {(sync.offline || sync.waiting > 0) && <p className="notes-bar">{[sync.offline && 'offline', sync.waiting > 0 && `${sync.waiting} waiting`].filter(Boolean).join(' · ')}</p>}
@@ -532,13 +597,16 @@ export function NotesView({ domain, vault, settings, onSettings, onChat }: {
         ? <Empty>loading</Empty>
         : found
           ? found.length
-            ? <ul className="history-list" aria-label="found">{found.map((note) => <li key={note.path}><button className="history-main" type="button" onClick={() => setOpen({ path: note.path })}><span className="history-title">{note.title}</span>{note.folder && <small>{note.folder.replace(/\//g, ' · ')}</small>}</button></li>)}</ul>
+            ? <ul className="notes-list" aria-label="found">{found.map((note) => <li key={note.path}><button className="note-card" type="button" onClick={() => setOpen({ path: note.path })}><span className="note-card-title">{note.title}</span>{note.folder && <small>{note.folder.replace(/\//g, ' · ')}</small>}</button></li>)}</ul>
             : <Empty>nothing found</Empty>
-          : listing.folders.length || listing.notes.length
-            ? <ul className="history-list" aria-label={folderName(folder)}>
-              {listing.folders.map((item) => <li key={item.path}><button className="history-main notes-folder" type="button" onClick={() => setFolder(item.path)}><span className="history-title">{item.name}</span><small>{item.count}</small></button></li>)}
-              {listing.notes.map((note) => <li key={note.path}><button className="history-main" type="button" onClick={() => setOpen({ path: note.path })}><span className="history-title">{note.title}</span></button></li>)}
-            </ul>
+          : listing.groups.length || listing.notes.length || (folder === root && listing.favorites.length)
+            ? <NotesList arranged={folder === root ? listing : { ...listing, favorites: [] }} label={folder === root ? name : folderName(folder)} canArrange={Boolean(kept) && !inJournal(folder)}
+              above={folder !== root ? { path: folder.slice(0, folder.lastIndexOf('/')), name: folderName(folder.slice(0, folder.lastIndexOf('/'))) } : undefined}
+              onOpen={(path) => setOpen({ path })} onFolder={setFolder}
+              onFavorites={(paths) => rearrange((was) => ({ ...was, favorites: [...paths, ...was.favorites.filter((path) => !paths.includes(path))] }))}
+              onGroups={(paths) => rearrange((was) => withOrder(was, folder, paths.map(folderName)))}
+              onInto={(note, to) => { void carryInto(note, to) }}
+              onFavorite={(note) => rearrange((was) => was.favorites.includes(note) ? was : toggleFavorite(was, note))} />
             : <Empty>{inJournal(folder) ? 'no entries yet' : 'no notes yet'}</Empty>}
     </div>
   </section>

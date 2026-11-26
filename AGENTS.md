@@ -146,6 +146,20 @@ Chase, 2026-11-25. `notes.test.ts` and `journal.test.ts` hold these. Notes is un
 - A work dump is spoken on the phone into the Transcribe app, which writes it down on the phone itself. A recording titled `journal` (alone, or followed by a dash, colon or number) sent with `send transcript` is added by the bridge to that day's work journal under the time it was recorded, words only, instead of to the meeting transcripts (`work/bridge/transcript-inbox.ps1`). This is the only way speech reaches the work journal.
 - A note reaches the chat only when Chase adds it to a message by hand, as an attachment: `add to chat` in the note's menu, or `add journal entry` in the chat menu.
 
+## arranging notes
+
+Chase, 2026-11-25. `arrange.test.ts` holds these; the rules are in `src/notes/arrange.ts` and the list is `NotesList.tsx`.
+
+- Every title on the notes list is a card: a note, a group, a search result.
+- Notes read last edited first. The date is the vault's own (the last commit on GitHub, the file's date on OneDrive), asked once a note and kept on the device, so an edit from the pc or the ai counts. Notes are never put in an order by hand; favorites are for that.
+- Favorites work as Notion's do: `add to favorites` in a note's menu stars it, it shows in `favorites` above everything on the first screen in the order he drags it to, and it stays in its own place in the list as well. Any note can be one, a journal entry too.
+- A group is a folder. `new group` in the … menu makes one, a note is carried onto a group to move it in and onto the folder above to move it out, and groups are dragged into an order of his own. Until one is dragged they read last edited first, and a group newer than his order sits above it.
+- A group goes only when he deletes it (`delete group`, offered once it is empty). One left empty by its last note stays.
+- With a mouse a card is carried as soon as it is pulled; with a finger after a short hold, so the list still scrolls. A press that carried a card does not also open it.
+- The journal is left alone: years and days newest first, entries stay in their year, and nothing is carried in or out.
+- What he arranged is one file in the vault, `notes/.arrange.json`, so every device shows the same. A change made with no connection shows at once and goes up later, and the last change made stands.
+- Work has none of this: its journal is a list of cards and nothing more.
+
 ## where i am, and gone
 
 Chase, 2026-11-25. `whereabouts.test.ts` and `Whereabouts.test.tsx` hold these.
