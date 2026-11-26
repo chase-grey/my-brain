@@ -98,6 +98,10 @@ Chase, 2026-11-25. `signInReturn.test.ts` holds these.
 - Microsoft's answer is taken out of the address before the app starts and handed to msal from memory. Never leave it for msal to read from the address: the app writes its own hash there first.
 - A popup or a hidden renewal frame hands its answer to the window that asked, in the shell too (`signInArrival`). Only the shell's own top page keeps it.
 - A sign-in window may stay open ten minutes (`signInWindowMs`; my-mail sets the same). msal's default minute ends while a password and a code are still being typed, and shows as `timed_out`.
+- msal empties the address once it has read an answer, even one handed to it from memory, and the app follows an emptied address to today. The screen that was put back is held from before the app starts until the answer has been read (`holdPlace`, `placeHeld`).
+- The android shell brings the page back to the app only when it is away at another site (`ReturnPlugin.java`). The app moving within itself, as a reload onto an update does, is left to the webview: loading the address it is already on would reload nothing.
+- The phone app cannot be inspected from a computer, so a sign-in writes down what it did (`src/signInLog.ts`, and the shell's side in `ReturnPlugin.java`): steps, msal's error codes with the reason under them, and addresses without anything after ? or #. Never a token, a code or an email. `sign-in log` shows it beside a failed or missing connection, to read or copy. A new step in signing in adds its line. `signInLog.test.ts` holds what it may keep.
+- `.scratch/pw/redirect-signin.mjs` and `redirect-place.mjs` run the shell's whole-page sign-in in desktop Edge against the real account. They cover the app's side, not the webview's.
 
 ## restarting the bridge
 

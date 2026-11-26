@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isSignInResponse, keptSignInResponse, rememberPlace, signInArrival, signInWindowMs, takeSignInResponse } from './signInReturn'
+import { holdPlace, isSignInResponse, keptSignInResponse, rememberPlace, signInArrival, signInWindowMs, takeSignInResponse } from './signInReturn'
 
 function memory(): Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> & { values: Map<string, string> } {
   const values = new Map<string, string>()
@@ -54,6 +54,31 @@ describe('coming back from a microsoft sign-in', () => {
     takeSignInResponse(memory(), { hash: '#code=abc&state=xyz', pathname: '/', search: '' }, (url) => { address = url })
     expect(address).toBe('/')
     keptSignInResponse()
+  })
+
+  it('keeps the screen when msal empties the address, and tells the app nothing', () => {
+    const heard: Record<string, ((event: Event) => void)[]> = {}
+    const page = {
+      location: { hash: '#settings', pathname: '/', search: '' },
+      history: { replaceState: (_state: unknown, _title: string, url: string) => { page.location.hash = url.slice(url.indexOf('#')) } },
+      addEventListener: (type: string, listener: (event: Event) => void) => { (heard[type] ??= []).push(listener) },
+      removeEventListener: (type: string, listener: (event: Event) => void) => { heard[type] = (heard[type] ?? []).filter((item) => item !== listener) },
+      setTimeout: () => 0,
+    }
+    holdPlace(page as unknown as Window)
+    let stopped = 0
+    const event = { stopImmediatePropagation: () => { stopped += 1 } } as unknown as Event
+
+    page.location.hash = ''
+    for (const type of ['popstate', 'hashchange']) heard[type].forEach((listener) => listener(event))
+    expect(page.location.hash).toBe('#settings')
+    expect(stopped).toBe(1)
+
+    // Somewhere he went himself is left alone.
+    page.location.hash = '#goals'
+    heard.hashchange.forEach((listener) => listener(event))
+    expect(page.location.hash).toBe('#goals')
+    expect(stopped).toBe(1)
   })
 
   it('leaves a sign-in window open long enough to type a password and a code', () => {

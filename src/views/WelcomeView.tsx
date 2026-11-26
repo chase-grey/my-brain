@@ -7,6 +7,8 @@ import { defaultSettings, loadSettings, type AiMode, type AppSettings } from '..
 import { accountFile, accountFileFrom, mergeAccountFile, type AccountFile } from '../settingsSync'
 import { appOffers, saveGuide, uses, type Use } from '../tour'
 import { Chips, Field, Segmented } from '../ui'
+import { cameBackFromSignIn } from '../signInReturn'
+import { SignInLog } from './SignInLog'
 
 /** How setup ended: a new account opens on chat with a request typed, when it has a key to answer it. */
 export type WelcomeFinish = { kickoff?: string }
@@ -142,8 +144,9 @@ export function WelcomeView({ onDone }: { onDone: (account: DeviceAccount, setti
       if (!signedIn.auth.account()) return
       setBusy(true)
       void afterSignIn(signedIn)
-    }).catch(() => {
-      // Signing in from the button reports its own error.
+    }).catch((caught: unknown) => {
+      // Signing in from the button reports its own error. Coming back from microsoft there is no button waiting.
+      if (cameBackFromSignIn()) fail(caught, 'sign in failed')
     })
   }, [])
 
@@ -202,6 +205,7 @@ export function WelcomeView({ onDone }: { onDone: (account: DeviceAccount, setti
       <h1>my brain</h1>
       <div className="welcome-fill" />
       {error && <p className="note is-error" role="alert">{error}</p>}
+      {error && <SignInLog />}
       {installStep && install.installed && <p className="note is-good" role="status">✓ installed! search for My Brain from your apps to open</p>}
       {installStep
         ? <div className="actions welcome-actions">

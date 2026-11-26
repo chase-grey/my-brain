@@ -12,6 +12,7 @@ import { Card, Field, Segmented } from '../ui'
 import { AccentPicker } from './AccentPicker'
 import { IssuesCard } from './IssuesCard'
 import { ShareCard } from './ShareCard'
+import { SignInLog } from './SignInLog'
 import { WifiCard } from './Whereabouts'
 
 /** Where each account that chat bills shows its spend. The key pages break it down per key. */
@@ -55,6 +56,7 @@ export function SettingsView({ domain, accountName, connectionStatus, settings, 
         ? <><p className="note">{accountName}</p><div className="actions row-actions"><button className="primary" disabled={syncing} type="button" onClick={onSync}>{syncing ? 'syncing' : 'sync now'}</button><button className="plain" disabled={syncing} type="button" onClick={() => void onDisconnect()}>disconnect</button></div></>
         : <div className="actions"><button className="primary" disabled={syncing || connectionStatus === 'unconfigured'} type="button" onClick={() => void onConnect()}>{syncing ? 'connecting' : connectionStatus === 'unconfigured' ? 'no microsoft app id' : 'connect microsoft'}</button></div>}
       {syncError && <p className="note is-error" role="alert">{syncError}</p>}
+      {(syncError || connectionStatus === 'disconnected') && <SignInLog />}
       {(account.owner || settings.mailAppUrl) && <Field label="mail app"><input autoComplete="off" inputMode="url" value={settings.mailAppUrl} onChange={set('mailAppUrl')} placeholder="https://" /></Field>}
     </Card>}
 
