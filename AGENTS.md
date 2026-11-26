@@ -196,6 +196,19 @@ Chase, 2026-11-25. A task new to sort arrives with the ai's guess at its time, p
 - Second-hand goes to one of two stores (Chase, 2026-11-25): thrift for clothes, marketplace for everything else.
 - A kept guess leaves when its task is sorted, and after 30 days in any case.
 
+## sorting on every device
+
+Chase, 2026-11-25: a task sorted on one device is sorted on all of them. `taskMetaSync.test.ts` holds these; the rules are in `src/data/taskMetaSync.ts` and the log is `src/data/remoteEventLog.ts`.
+
+- What he chose for a task (its time, priority, where, that it is sorted at all) is kept in the account, one record a task, in the app folder's `events/` with a file for each device.
+- A change sends only the tasks it changed, in one read and one write. A device never sends a task it did not touch, so one holding an old picture cannot put a task back under new to sort.
+- A change that could not be sent waits on the device and goes up at the next sync, under the time it was made. The account's record stands over the device's, except for a change still waiting.
+- A task sorted on a device that the account has no record of is sent up at the next sync, never thrown away.
+- Personal tasks are read again when the app comes back to the front after a minute away, not only when it starts. A task being written is left alone until it is saved.
+- A device's file holds only its newest record for each task. A deleted task's record leaves at the next write, and a finished task's after 400 days.
+- The `events` folder is made by writing a file into it. Never ask OneDrive to make a folder in the app folder first: a personal account refuses, which kept every sort on the device it was made on from the first build until 2026-11-25.
+- Anything new that he sets on one device and expects on another goes through this log or `settings.json`, and is checked on a second device against the real account (`.scratch/pw/sort-live.mjs`), not only in a test.
+
 ## the task form and the chat
 
 Chase, 2026-11-25. `format.test.ts`, `TaskPage.test.tsx` and `attachments.test.ts` hold these.

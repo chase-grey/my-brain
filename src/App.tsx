@@ -4,7 +4,9 @@ import type { CalendarBlock } from './data/calendarGraphProvider'
 import type { InboxCounts } from './data/mailGraphProvider'
 import { addDays, blockWindow, eventsOn, keptPick, reconcileHeldGoal, timeNow } from './domain/calendar'
 import { configuredPersonalClientId, createPersonalGraphData, type PersonalGraphData } from './data/personalGraphData'
-import { mergePersonalTasks, personalTaskMetaFile, taskMetadata } from './data/personalTaskSync'
+import { mergePersonalTasks } from './data/personalTaskSync'
+import { afterSending, changedIds, keepsRecord, loadWaiting, metaSnapshot, reconcileMeta, saveWaiting, waitingEntries } from './data/taskMetaSync'
+import type { TaskMeta } from './domain/types'
 import type { TaskProvider } from './data/taskProvider'
 import { WorkBridgeProvider, outlookTaskList } from './data/workBridgeProvider'
 import { mergeWorkTasks } from './data/workTaskSync'
@@ -133,6 +135,8 @@ function workErrorMessage(error: unknown): string {
 }
 
 const workResyncAfterMs = 5 * 60 * 1000
+// Personal tasks are read again when the app comes back to the front, so what was sorted on another device shows without a restart.
+const personalResyncAfterMs = 60 * 1000
 
 /** The owner's starting tasks. Anyone else starts with none: these are Chase's errands, not theirs. */
 function initialTasks(domain: Domain, owner: boolean): Task[] {
@@ -262,6 +266,11 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
   )
   const workBridge = useMemo(() => new WorkBridgeProvider(), [])
   const workSyncedAt = useRef(0)
+  const personalSyncedAt = useRef(0)
+  const personalSyncing = useRef(false)
+  // Each personal task's record as it last stood, to tell which ones a change touched: only those are sent.
+  const metaBase = useRef<Map<string, string> | undefined>(undefined)
+  if (!metaBase.current) metaBase.current = metaSnapshot(tasks)
   const [accountName, setAccountName] = useState<string>()
   const [syncing, setSyncing] = useState(false)
   const [syncedAt, setSyncedAt] = useState(() => ({ personal: loadLastSync('personal'), work: loadLastSync('work') }))
@@ -339,6 +348,17 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
       void syncPersonal(data)
     }).catch((error: unknown) => setSyncError(errorMessage(error)))
   }, [])
+
+  // Sorting done on another device is read when the app comes back to the front, not only when it starts. A task
+  // being written is left alone until it is saved.
+  useEffect(() => {
+    if (activeDomain !== 'personal' || !personalData || connectionStatus !== 'connected') return
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && view !== 'task' && Date.now() - personalSyncedAt.current > personalResyncAfterMs) void syncPersonal(personalData)
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [activeDomain, personalData, connectionStatus, view])
 
   // Work tasks live in Outlook (where Microsoft To Do keeps them); the bridge reads them on open and whenever the tab comes back after a while.
   useEffect(() => {
@@ -468,10 +488,33 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
     }
   }
 
+  /** Sends up every task record still waiting on this device, in one write. What cannot be sent stays waiting. */
+  async function sendWaiting(data: PersonalGraphData): Promise<void> {
+    const sent = loadWaiting()
+    const entries = waitingEntries(sent, tasksRef.current)
+    if (entries.length) {
+      const now = new Date().toISOString()
+      const here = new Map(tasksRef.current.map((task) => [task.id, task]))
+      await data.events.append(entries, (event) => {
+        if (event.entityType !== 'taskMeta') return true
+        const task = here.get(event.entityId)
+        return Boolean(task && keepsRecord(task, now))
+      })
+    }
+    saveWaiting(afterSending(loadWaiting(), sent, tasksRef.current))
+  }
+
+  /** Only the tasks this change touched are marked and sent: see taskMetaSync. */
   async function persistPersonalMetadata(next: Task[], data = personalData): Promise<void> {
+    if (activeDomain !== 'personal') return
+    const changed = changedIds(metaBase.current ?? new Map(), next)
+    metaBase.current = metaSnapshot(next)
+    if (!changed.length) return
+    const at = new Date().toISOString()
+    saveWaiting({ ...loadWaiting(), ...Object.fromEntries(changed.map((id) => [id, at])) })
     if (!data || connectionStatus !== 'connected') return
     try {
-      for (const meta of taskMetadata(next)) await data.events.append('taskMeta', meta.taskId, 'set', meta)
+      await sendWaiting(data)
       setSyncError(undefined)
     } catch (error) {
       setSyncError(errorMessage(error))
@@ -536,7 +579,9 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
 
   /** `reconnect` is for a sync the user asked for: an expired sign-in opens microsoft again instead of failing. */
   async function syncPersonal(data = personalData, reconnect = false): Promise<void> {
-    if (activeDomain !== 'personal' || !data) return
+    if (activeDomain !== 'personal' || !data || personalSyncing.current) return
+    personalSyncing.current = true
+    personalSyncedAt.current = Date.now()
     setSyncing(true)
     setSyncError(undefined)
     if (reconnect) {
@@ -545,6 +590,7 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
       } catch (error) {
         setSyncError(errorMessage(error))
         setSyncing(false)
+        personalSyncing.current = false
         return
       }
     }
@@ -554,21 +600,23 @@ export function Workspace({ activeDomain, onDomain, account, onAccount, kickoff,
       setSyncError(errorMessage(error))
     }
     try {
-      const [providerTasks, replay, legacyMetadata] = await Promise.all([
-        data.tasks.listTasks(),
-        data.events.replay(),
-        data.sidecar.readJson<ReturnType<typeof taskMetadata>>(personalTaskMetaFile),
-      ])
+      const [providerTasks, replay] = await Promise.all([data.tasks.listTasks(), data.events.replay()])
       const current = tasksRef.current
-      const replayedMetadata = Object.values(replay.state.taskMeta ?? {}) as ReturnType<typeof taskMetadata>
-      const metadata = replayedMetadata.length ? replayedMetadata : legacyMetadata ?? taskMetadata(current)
+      const now = new Date().toISOString()
+      const { metadata, unsent } = reconcileMeta(Object.values(replay.state.taskMeta ?? {}) as TaskMeta[], current, loadWaiting(), now)
       const personal = mergePersonalTasks(providerTasks, metadata, current)
       commitTasks(personal)
       markSynced('personal')
+      metaBase.current = metaSnapshot(personal)
+      // A task sorted here that the account has not heard of goes up now, with anything that was waiting.
+      const kept = new Set(personal.map((task) => task.id))
+      saveWaiting({ ...Object.fromEntries(unsent.filter((id) => kept.has(id)).map((id) => [id, now])), ...loadWaiting() })
+      await sendWaiting(data)
     } catch (error) {
       setSyncError(errorMessage(error))
     } finally {
       setSyncing(false)
+      personalSyncing.current = false
     }
     await syncGlance(data)
   }
